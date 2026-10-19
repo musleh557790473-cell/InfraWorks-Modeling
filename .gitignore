@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.next/
+.turbo/
+.env
+.env.local
+data/uploads/*
+data/artifacts/*
+!data/uploads/.gitkeep
+!data/artifacts/.gitkeep
+data/db/*
+!data/db/.gitkeep
+*.log
+.DS_Store
+coverage/
+*.tsbuildinfo
