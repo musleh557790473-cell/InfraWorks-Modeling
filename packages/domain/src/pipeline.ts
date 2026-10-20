@@ -12,12 +12,35 @@ export interface BuildResult {
   validation: ValidationReport;
   collection: DomainFeatureCollection;
   manifestPathHint: string;
+  aps?: {
+    previewUrn?: string;
+    previewStatus?: string;
+    daLayers?: string[];
+    daMessage?: string;
+    mocked: boolean;
+  };
+}
+
+/** Optional APS hooks (Model Derivative preview + Design Automation layer list). */
+export interface ApsPipelineHooks {
+  preparePreview?: (filePath: string, filename: string) => Promise<{
+    urn?: string;
+    status?: string;
+    mocked: boolean;
+    message?: string;
+  }>;
+  listLayers?: (opts: {
+    filePath: string;
+    filename: string;
+    fallbackLayers: string[];
+  }) => Promise<{ layers?: string[]; message?: string; mocked: boolean }>;
 }
 
 export async function runBuildPipeline(
   store: DomainStore,
   projectId: string,
   jobId?: string,
+  apsHooks?: ApsPipelineHooks,
 ): Promise<BuildResult> {
   const project = store.getProject(projectId);
   if (!project) throw new Error(`Project not found: ${projectId}`);
@@ -41,6 +64,37 @@ export async function runBuildPipeline(
           format: "synthetic" as const,
           notes: ["No CAD upload"],
         };
+
+    let apsMeta: BuildResult["aps"] = { mocked: true };
+    if (cad && apsHooks) {
+      const fallbackLayers =
+        parsed.layers.map((l) => l.name).filter(Boolean).length > 0
+          ? parsed.layers.map((l) => l.name)
+          : project.mappingProfile.layers.map((l) => l.dwgLayer);
+
+      if (apsHooks.listLayers) {
+        const da = await apsHooks.listLayers({
+          filePath: cad.path,
+          filename: cad.filename,
+          fallbackLayers,
+        });
+        apsMeta = {
+          ...apsMeta,
+          daLayers: da.layers,
+          daMessage: da.message,
+          mocked: da.mocked,
+        };
+      }
+      if (apsHooks.preparePreview) {
+        const preview = await apsHooks.preparePreview(cad.path, cad.filename);
+        apsMeta = {
+          ...apsMeta,
+          previewUrn: preview.urn,
+          previewStatus: preview.status,
+          mocked: apsMeta.mocked && preview.mocked,
+        };
+      }
+    }
 
     let reportRowCount = 0;
     let joinedCount = 0;
@@ -130,6 +184,7 @@ export async function runBuildPipeline(
       validation,
       collection,
       manifestPathHint: `manifest.json (${manifest.layers.length} layers)`,
+      aps: apsMeta,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

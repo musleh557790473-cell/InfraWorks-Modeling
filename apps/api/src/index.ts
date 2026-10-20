@@ -12,10 +12,12 @@ import {
   DEFAULT_MAPPING_PROFILE,
 } from "@infraworks/domain";
 import { createApsClientFromEnv } from "@infraworks/aps-client";
+import { createApsPipelineHooks } from "./aps-hooks.js";
 
 const dataDir = process.env.DATA_DIR || join(process.cwd(), "../../data");
 const store = createFileStore(dataDir);
 const aps = createApsClientFromEnv();
+const apsHooks = createApsPipelineHooks(aps);
 const port = Number(process.env.API_PORT || 8787);
 
 const app = new OpenAPIHono();
@@ -26,8 +28,21 @@ app.get("/health", (c) =>
     ok: true,
     localMode: process.env.LOCAL_MODE !== "0",
     apsConfigured: aps.isConfigured,
+    apsMode: aps.isConfigured ? "live" : "mock",
+    bucketKey: aps.bucketKey,
   }),
 );
+
+/** Viewer token (viewables:read) — mock token when APS not configured. */
+app.get("/aps/token", async (c) => {
+  const token = await aps.getViewerToken();
+  return c.json({
+    access_token: token.access_token,
+    expires_in: token.expires_in,
+    token_type: token.token_type,
+    mocked: token.mocked,
+  });
+});
 
 const createProjectRoute = createRoute({
   method: "post",
@@ -110,11 +125,12 @@ app.post("/projects/:id/jobs", async (c) => {
   if (!store.getProject(projectId)) return c.json({ error: "Not found" }, 404);
   const job = store.createJob(projectId);
 
-  // In LOCAL_MODE run inline; worker also polls for queued jobs
+  // In LOCAL_MODE run inline with APS hooks (mock or live); worker also polls queued jobs
   if (process.env.LOCAL_MODE !== "0") {
     try {
-      const result = await runBuildPipeline(store, projectId, job.id);
-      return c.json(store.getJob(result.jobId), 201);
+      const result = await runBuildPipeline(store, projectId, job.id, apsHooks);
+      const record = store.getJob(result.jobId);
+      return c.json({ ...record, aps: result.aps }, 201);
     } catch {
       return c.json(store.getJob(job.id), 201);
     }
@@ -162,13 +178,45 @@ app.get("/jobs/:id/package-url", (c) => {
   });
 });
 
+/**
+ * DWG preview: uploads CAD to OSS (or mock), starts Model Derivative, returns URN + viewer token.
+ */
 app.get("/projects/:id/preview", async (c) => {
   const projectId = c.req.param("id");
   const uploads = store.listUploads(projectId);
   const cad = uploads.find((u) => u.kind === "dwg" || u.kind === "dxf");
   if (!cad) return c.json({ error: "No CAD upload" }, 404);
-  const preview = await aps.translateForPreview(cad.filename);
-  return c.json(preview);
+
+  try {
+    const preview = await aps.prepareDwgPreview(cad.path, cad.filename);
+    return c.json(preview);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ error: message, status: "failed", mocked: !aps.isConfigured }, 502);
+  }
+});
+
+app.get("/projects/:id/layers-da", async (c) => {
+  const projectId = c.req.param("id");
+  const project = store.getProject(projectId);
+  if (!project) return c.json({ error: "Not found" }, 404);
+  const uploads = store.listUploads(projectId);
+  const cad = uploads.find((u) => u.kind === "dwg" || u.kind === "dxf");
+  if (!cad) return c.json({ error: "No CAD upload" }, 404);
+
+  const fallback = project.mappingProfile.layers.map((l) => l.dwgLayer);
+  let inputObjectId: string | undefined;
+  try {
+    const uploaded = await aps.uploadObject(cad.path);
+    inputObjectId = uploaded.objectId;
+  } catch {
+    /* mock path */
+  }
+  const result = await aps.listDwgLayersViaDesignAutomation({
+    inputObjectId,
+    fallbackLayers: fallback,
+  });
+  return c.json(result);
 });
 
 app.doc("/openapi.json", {
@@ -186,8 +234,11 @@ app.get("/", (c) =>
     name: "InfraWorks Modeling API",
     openapi: "/openapi.json",
     health: "/health",
+    apsToken: "/aps/token",
   }),
 );
 
-console.log(`API listening on http://127.0.0.1:${port}`);
+console.log(
+  `API listening on http://127.0.0.1:${port} (APS ${aps.isConfigured ? "live" : "mock"})`,
+);
 serve({ fetch: app.fetch, port });

@@ -95,6 +95,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@infraworks/aps-client':
+        specifier: workspace:*
+        version: link:../../packages/aps-client
       '@infraworks/domain':
         specifier: workspace:*
         version: link:../../packages/domain

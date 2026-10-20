@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DwgPreview, type PreviewPayload } from "../components/DwgPreview";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8787";
 
@@ -22,6 +23,7 @@ type Job = {
     warningCount: number;
     issues: Array<{ severity: string; message: string; code: string }>;
   };
+  aps?: unknown;
 };
 
 export default function HomePage() {
@@ -32,13 +34,15 @@ export default function HomePage() {
   const [files, setFiles] = useState<FileList | null>(null);
   const [message, setMessage] = useState<string>("");
   const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState<unknown>(null);
+  const [preview, setPreview] = useState<PreviewPayload | null>(null);
+  const [apsMode, setApsMode] = useState<string>("…");
 
   useEffect(() => {
     fetch(`${API}/health`)
       .then((r) => r.json())
       .then((h) => {
         if (!h.ok) setMessage("API unhealthy");
+        setApsMode(h.apsMode || (h.apsConfigured ? "live" : "mock"));
       })
       .catch(() => setMessage("API not reachable — start with pnpm dev"));
   }, []);
@@ -56,6 +60,7 @@ export default function HomePage() {
       if (!res.ok) throw new Error(data.error || "Create failed");
       setProject(data);
       setJob(null);
+      setPreview(null);
       setMessage(`Project ${data.id} created`);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : String(e));
@@ -129,13 +134,23 @@ export default function HomePage() {
 
   async function loadPreview() {
     if (!project) return;
-    const data = await fetch(`${API}/projects/${project.id}/preview`).then((r) => r.json());
-    setPreview(data);
+    setBusy(true);
+    try {
+      const res = await fetch(`${API}/projects/${project.id}/preview`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Preview failed");
+      setPreview(data);
+      setMessage(data.mocked ? "Mock DWG preview ready" : `Preview ${data.status}`);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <main>
-      <p className="badge">NOT FOR ISSUE · package builder</p>
+      <p className="badge">NOT FOR ISSUE · package builder · APS {apsMode}</p>
       <h1 className="brand">InfraWorks Modeling</h1>
       <p className="lede">
         Turn 2D DWG and CSV/XLSX/PDF reports into an InfraWorks-ready import package
@@ -145,7 +160,7 @@ export default function HomePage() {
       <ol className="steps">
         <li>Create project (CRS EPSG:32638 / UTM84-38N)</li>
         <li>Upload DWG + roads_report.csv</li>
-        <li>Apply layer mapping → run build → download ZIP</li>
+        <li>Preview DWG (mock URN or live Model Derivative) → map → build → download ZIP</li>
       </ol>
 
       <section className="panel">
@@ -175,7 +190,7 @@ export default function HomePage() {
       </section>
 
       <section className="panel">
-        <h2>2 · Upload & map</h2>
+        <h2>2 · Upload, preview & map</h2>
         <div className="row">
           <label>
             Files
@@ -203,10 +218,10 @@ export default function HomePage() {
             onClick={loadPreview}
             type="button"
           >
-            DWG preview status
+            DWG preview
           </button>
         </div>
-        {preview != null && <pre>{JSON.stringify(preview, null, 2)}</pre>}
+        <DwgPreview preview={preview} apiBase={API} />
       </section>
 
       <section className="panel">
@@ -230,6 +245,7 @@ export default function HomePage() {
                 : ""}
             </p>
             {job.validation && <pre>{JSON.stringify(job.validation, null, 2)}</pre>}
+            {job.aps != null && <pre>{JSON.stringify(job.aps, null, 2)}</pre>}
           </div>
         )}
       </section>
