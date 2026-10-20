@@ -9,7 +9,11 @@ import {
   createFileStore,
   detectKind,
   runBuildPipeline,
-  DEFAULT_MAPPING_PROFILE,
+  LDIP_PROFILE,
+  GENERIC_PROFILE,
+  loadProfileById,
+  listShippedProfileIds,
+  ParseError,
 } from "@infraworks/domain";
 import { createApsClientFromEnv } from "@infraworks/aps-client";
 import { createApsPipelineHooks } from "./aps-hooks.js";
@@ -119,7 +123,10 @@ const createProjectRoute = createRoute({
 
 app.openapi(createProjectRoute, async (c) => {
   const body = c.req.valid("json");
-  const project = store.createProject(body.name, body.epsg);
+  const project = store.createProject(body.name, {
+    epsg: body.epsg,
+    profileId: body.profileId,
+  });
   return c.json(project, 201);
 });
 
@@ -171,7 +178,34 @@ app.put("/projects/:id/mapping", async (c) => {
   return c.json(project);
 });
 
-app.get("/mapping-profiles/default", (c) => c.json(DEFAULT_MAPPING_PROFILE));
+app.get("/mapping-profiles/default", (c) => c.json(LDIP_PROFILE));
+app.get("/profiles", (c) =>
+  c.json({
+    ids: listShippedProfileIds(),
+    generic: GENERIC_PROFILE.id,
+    ldip: LDIP_PROFILE.id,
+  }),
+);
+app.get("/profiles/:id", (c) => {
+  try {
+    return c.json(loadProfileById(c.req.param("id")));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 404);
+  }
+});
+app.put("/projects/:id/profile", async (c) => {
+  const projectId = c.req.param("id");
+  if (!store.getProject(projectId)) return c.json({ error: "Not found" }, 404);
+  const body = await c.req.json();
+  const profileId = typeof body?.profileId === "string" ? body.profileId : undefined;
+  try {
+    const profile = profileId ? loadProfileById(profileId) : body;
+    const project = store.setProjectProfile(projectId, profile);
+    return c.json(project);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
 
 app.post("/projects/:id/jobs", async (c) => {
   const projectId = c.req.param("id");
@@ -303,9 +337,12 @@ app.get("/projects/:id/preview", async (c) => {
     try {
       const preview = buildLocalPreview({
         cad,
-        profile: project.mappingProfile,
+        profile: project.projectProfile,
         epsg: project.epsg,
       });
+      if (preview.status === "failed") {
+        return c.json(preview, 422);
+      }
       return c.json(preview);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -344,14 +381,17 @@ app.get("/projects/:id/layers-da", async (c) => {
   if (!cad) return c.json({ error: "No CAD upload" }, 404);
 
   const mode = modeFromRequest(c);
-  const fallback = project.mappingProfile.layers.map((l) => l.dwgLayer);
+  const fallback = project.projectProfile.layers.map((l) => l.dwgLayer);
 
   if (mode === "local") {
     const local = buildLocalPreview({
       cad,
-      profile: project.mappingProfile,
+      profile: project.projectProfile,
       epsg: project.epsg,
     });
+    if (local.status === "failed") {
+      return c.json(local, 422);
+    }
     const layers =
       local.layers.map((l) => l.name).filter(Boolean).length > 0
         ? local.layers.map((l) => l.name)

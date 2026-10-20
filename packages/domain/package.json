@@ -15,17 +15,22 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "dev": "tsc -p tsconfig.json --watch"
   },
   "dependencies": {
+    "@mlightcad/libredwg-web": "^0.8.1",
     "archiver": "^7.0.1",
     "csv-parse": "^5.6.0",
+    "dxf-parser": "^1.1.2",
     "nanoid": "^5.1.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/archiver": "^6.0.3",
     "@types/node": "^22.13.10",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "^5.0.5"
   }
 }

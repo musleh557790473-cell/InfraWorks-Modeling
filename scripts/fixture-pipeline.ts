@@ -1,14 +1,14 @@
 /**
- * End-to-end fixture: sample DWG + roads_report.csv → InfraWorks package ZIP.
- * Does not require the API server — uses domain pipeline directly.
+ * End-to-end fixture: sample DXF + roads_report.csv → InfraWorks package ZIP.
+ * Uses LDIP profile explicitly (not a domain default).
  */
-import { copyFileSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createFileStore,
   runBuildPipeline,
-  DEFAULT_MAPPING_PROFILE,
+  LDIP_PROFILE,
 } from "@infraworks/domain";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -17,22 +17,23 @@ const fixtures = join(root, "fixtures");
 
 async function main() {
   const store = createFileStore(dataDir);
-  const project = store.createProject("Fixture LDIP Al Narjis", 32638);
-  store.setMappingProfile(project.id, DEFAULT_MAPPING_PROFILE);
+  const project = store.createProject("Fixture LDIP Al Narjis", {
+    epsg: LDIP_PROFILE.crs.epsg,
+    profileId: LDIP_PROFILE.id,
+  });
+  store.setProjectProfile(project.id, LDIP_PROFILE);
 
   const uploadDir = join(store.uploadDir, project.id);
   mkdirSync(uploadDir, { recursive: true });
 
-  const cadSrc = existsSync(join(fixtures, "sample.dwg"))
-    ? join(fixtures, "sample.dwg")
-    : join(fixtures, "sample.dxf");
-  const cadName = cadSrc.endsWith(".dxf") ? "sample.dxf" : "sample.dwg";
+  // Prefer DXF — binary DWG fails loud per IGN-001 / §6.4
+  const cadName = "sample.dxf";
   const cadDest = join(uploadDir, cadName);
-  copyFileSync(cadSrc, cadDest);
+  copyFileSync(join(fixtures, cadName), cadDest);
   store.addUpload({
     projectId: project.id,
     filename: cadName,
-    kind: cadName.endsWith(".dxf") ? "dxf" : "dwg",
+    kind: "dxf",
     path: cadDest,
     size: 0,
   });
@@ -54,6 +55,7 @@ async function main() {
     packagePath: result.packagePath,
     validation: result.validation,
     featureCount: result.collection.features.length,
+    skipped: result.validation.skipped,
   };
   const summaryPath = join(store.artifactDir, "fixture-pipeline-summary.json");
   writeFileSync(summaryPath, JSON.stringify(summary, null, 2));

@@ -132,7 +132,7 @@ export default function HomePage() {
       const res = await fetch(`${apiBase()}/projects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, epsg }),
+        body: JSON.stringify({ name, epsg, profileId: "ldip-tawazun" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Create failed");
@@ -172,16 +172,15 @@ export default function HomePage() {
     if (!project) return;
     setBusy(true);
     try {
-      const profile = await fetch(`${apiBase()}/mapping-profiles/default`).then((r) => r.json());
-      const res = await fetch(`${apiBase()}/projects/${project.id}/mapping`, {
+      const res = await fetch(`${apiBase()}/projects/${project.id}/profile`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(profile),
+        body: JSON.stringify({ profileId: "ldip-tawazun" }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Mapping failed");
+      if (!res.ok) throw new Error(data.error || "Profile failed");
       setProject(data);
-      setMessage("Default LDIP mapping profile applied");
+      setMessage("LDIP profile applied (profiles/ldip.ts)");
     } catch (e) {
       setMessage(e instanceof Error ? e.message : String(e));
     } finally {

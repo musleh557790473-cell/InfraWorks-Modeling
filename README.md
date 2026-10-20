@@ -4,10 +4,18 @@ MVP that turns **2D DWG + CSV/XLSX/PDF reports** into an **InfraWorks-ready impo
 
 Autodesk has no reliable public API to create an InfraWorks model from arbitrary 2D DWG. This product validates CRS/geometry/joins and ships a ZIP a coordinator can import (GeoJSON layers, overlay DWG, `manifest.json`, import checklist).
 
-## Defaults (LDIP / Al Narjis)
+## Profiles (no domain default CRS)
 
-- CRS: **EPSG:32638** (`UTM84-38N` in InfraWorks)
-- Outputs are **NOT FOR ISSUE** until Human Review Gate approval
+Project CRS, envelopes, tolerances, and layer maps live in **profiles** (`packages/domain/src/profiles/`), not in domain core.
+
+| Profile | Purpose |
+| --- | --- |
+| `generic` | Structural rules only; §6.2 fallback when none supplied |
+| `ldip-tawazun` | LDIP / Tawazun fixture example (`profiles/ldip.ts`) |
+
+Validation rules: [`docs/VALIDATION-RULES.md`](docs/VALIDATION-RULES.md). Working agreement: [`CLAUDE.md`](CLAUDE.md).
+
+Outputs are **NOT FOR ISSUE** until Human Review Gate approval (`notForIssue: true` always).
 
 ## Modes: Local free vs APS live
 
