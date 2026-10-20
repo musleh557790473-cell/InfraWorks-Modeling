@@ -171,14 +171,12 @@ export default function HomePage() {
     setBusy(true);
     try {
       const res = await fetch(
-        `${apiBase()}/projects/${project.id}/jobs?previewMode=${previewMode}`,
+        `${apiBase()}/projects/${project.id}/jobs?previewMode=${encodeURIComponent(previewMode)}`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Preview-Mode": previewMode,
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ previewMode }),
+          signal: AbortSignal.timeout(120_000),
         },
       );
       const data = await res.json();
@@ -205,10 +203,13 @@ export default function HomePage() {
   async function loadPreview() {
     if (!project) return;
     setBusy(true);
+    setMessage(
+      previewMode === "local" ? "Loading local free preview…" : "Loading APS preview…",
+    );
     try {
       const res = await fetch(
-        `${apiBase()}/projects/${project.id}/preview?previewMode=${previewMode}`,
-        { headers: { "X-Preview-Mode": previewMode } },
+        `${apiBase()}/projects/${project.id}/preview?previewMode=${encodeURIComponent(previewMode)}`,
+        { signal: AbortSignal.timeout(60_000) },
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Preview failed");
@@ -219,6 +220,7 @@ export default function HomePage() {
           : `APS preview ${data.status}`,
       );
     } catch (e) {
+      setPreview(null);
       setMessage(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
