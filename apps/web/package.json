@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0 -p ${WEB_PORT:-3000}",
+    "dev": "next dev -H :: -p ${WEB_PORT:-3000}",
     "build": "next build",
-    "start": "next start -H 0.0.0.0 -p ${WEB_PORT:-3000}",
+    "start": "next start -H :: -p ${WEB_PORT:-3000}",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
