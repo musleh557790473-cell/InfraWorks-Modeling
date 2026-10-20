@@ -43,13 +43,36 @@ export default function HomePage() {
   const [apsMode, setApsMode] = useState<string>("…");
 
   useEffect(() => {
-    fetch(`${apiBase()}/health`)
+    const base = apiBase();
+    fetch(`${base}/health`)
       .then((r) => r.json())
       .then((h) => {
         if (!h.ok) setMessage("API unhealthy");
         setApsMode(h.apsMode || (h.apsConfigured ? "live" : "mock"));
       })
       .catch(() => setMessage("API not reachable — start with pnpm dev"));
+
+    // Resume latest project + succeeded job so Download ZIP stays visible after refresh.
+    fetch(`${base}/projects`)
+      .then((r) => r.json())
+      .then(async (projects: Array<{ id: string; updatedAt?: string }>) => {
+        if (!Array.isArray(projects) || projects.length === 0) return;
+        const sorted = [...projects].sort((a, b) =>
+          String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")),
+        );
+        const detail = await fetch(`${base}/projects/${sorted[0].id}`).then((r) => r.json());
+        if (!detail?.id) return;
+        setProject(detail);
+        const jobs = Array.isArray(detail.jobs) ? detail.jobs : [];
+        const succeeded = [...jobs]
+          .reverse()
+          .find((j: Job) => j.status === "succeeded");
+        if (succeeded) {
+          setJob(succeeded);
+          setMessage(`Resumed ${detail.name} — package ready`);
+        }
+      })
+      .catch(() => undefined);
   }, []);
 
   async function createProject() {
