@@ -21,11 +21,12 @@ function featuresByClass(features: DomainFeature[]) {
   return map;
 }
 
-function toGeoJson(features: DomainFeature[]) {
+/** Standard GeoJSON FeatureCollection for package layers and local SVG preview. */
+export function toGeoJson(features: DomainFeature[]) {
   return {
-    type: "FeatureCollection",
+    type: "FeatureCollection" as const,
     features: features.map((f) => ({
-      type: "Feature",
+      type: "Feature" as const,
       id: f.id,
       geometry: f.geometry,
       properties: {

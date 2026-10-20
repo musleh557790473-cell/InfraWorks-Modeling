@@ -10,6 +10,8 @@ function apiBase(): string {
   return window.location.port === "3000" ? "http://127.0.0.1:8787" : "";
 }
 
+type PreviewMode = "local" | "aps";
+
 type Project = {
   id: string;
   name: string;
@@ -29,7 +31,10 @@ type Job = {
     issues: Array<{ severity: string; message: string; code: string }>;
   };
   aps?: unknown;
+  previewMode?: string;
 };
+
+const MODE_KEY = "infraworks-preview-mode";
 
 export default function HomePage() {
   const [name, setName] = useState("LDIP Al Narjis sample");
@@ -41,6 +46,26 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
   const [apsMode, setApsMode] = useState<string>("…");
+  const [badge, setBadge] = useState<string>("FREE · local");
+  const [apsConfigured, setApsConfigured] = useState(false);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("local");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(MODE_KEY);
+      if (saved === "local" || saved === "aps") setPreviewMode(saved);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MODE_KEY, previewMode);
+    } catch {
+      /* ignore */
+    }
+  }, [previewMode]);
 
   useEffect(() => {
     const base = apiBase();
@@ -48,7 +73,9 @@ export default function HomePage() {
       .then((r) => r.json())
       .then((h) => {
         if (!h.ok) setMessage("API unhealthy");
-        setApsMode(h.apsMode || (h.apsConfigured ? "live" : "mock"));
+        setApsMode(h.apsMode || "off");
+        setBadge(h.badge || (h.previewMode === "local" ? "FREE · local" : "APS"));
+        setApsConfigured(Boolean(h.apsConfigured));
       })
       .catch(() => setMessage("API not reachable — start with pnpm dev"));
 
@@ -143,11 +170,26 @@ export default function HomePage() {
     if (!project) return;
     setBusy(true);
     try {
-      const res = await fetch(`${apiBase()}/projects/${project.id}/jobs`, { method: "POST" });
+      const res = await fetch(
+        `${apiBase()}/projects/${project.id}/jobs?previewMode=${previewMode}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Preview-Mode": previewMode,
+          },
+          body: JSON.stringify({ previewMode }),
+        },
+      );
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Build failed");
       setJob(data);
       if (data.status === "succeeded") {
-        setMessage("Build succeeded — package ready");
+        setMessage(
+          previewMode === "local"
+            ? "Build succeeded — package ready (Local free · no APS)"
+            : "Build succeeded — package ready (APS live)",
+        );
       } else if (data.status === "failed") {
         setMessage(data.error || "Build failed");
       } else {
@@ -164,11 +206,18 @@ export default function HomePage() {
     if (!project) return;
     setBusy(true);
     try {
-      const res = await fetch(`${apiBase()}/projects/${project.id}/preview`);
+      const res = await fetch(
+        `${apiBase()}/projects/${project.id}/preview?previewMode=${previewMode}`,
+        { headers: { "X-Preview-Mode": previewMode } },
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Preview failed");
       setPreview(data);
-      setMessage(data.mocked ? "Mock DWG preview ready" : `Preview ${data.status}`);
+      setMessage(
+        previewMode === "local"
+          ? `Local free preview ready · ${data.featureCount ?? 0} features`
+          : `APS preview ${data.status}`,
+      );
     } catch (e) {
       setMessage(e instanceof Error ? e.message : String(e));
     } finally {
@@ -176,19 +225,59 @@ export default function HomePage() {
     }
   }
 
+  const statusBadge =
+    previewMode === "local"
+      ? "FREE · local · محلي مجاني"
+      : apsConfigured
+        ? "APS live · APS حي"
+        : "APS live (needs keys) · يحتاج مفاتيح";
+
   return (
     <main>
-      <p className="badge">NOT FOR ISSUE · package builder · APS {apsMode}</p>
+      <p className="badge">{statusBadge}</p>
       <h1 className="brand">InfraWorks Modeling</h1>
       <p className="lede">
         Turn 2D DWG and CSV/XLSX/PDF reports into an InfraWorks-ready import package
         (GeoJSON layers, overlay DWG, manifest, validation). Same flow via web, REST, and MCP.
       </p>
 
+      <section className="panel mode-panel">
+        <h2>Mode · الوضع</h2>
+        <div className="mode-toggle" role="group" aria-label="Preview mode">
+          <button
+            type="button"
+            className={previewMode === "local" ? "mode-btn active" : "mode-btn"}
+            onClick={() => {
+              setPreviewMode("local");
+              setPreview(null);
+            }}
+          >
+            Local free · محلي مجاني
+          </button>
+          <button
+            type="button"
+            className={previewMode === "aps" ? "mode-btn active" : "mode-btn"}
+            onClick={() => {
+              setPreviewMode("aps");
+              setPreview(null);
+            }}
+          >
+            APS live · APS حي
+          </button>
+        </div>
+        <p className="status">
+          {previewMode === "local"
+            ? "No Autodesk calls — local DXF/DWG-stub parse + 2D map. Package build works offline."
+            : apsConfigured
+              ? `Server apsMode=${apsMode} · ${badge}. Uses OSS + Model Derivative Viewer.`
+              : "Credentials missing — set APS_CLIENT_ID / APS_CLIENT_SECRET or stay on Local free."}
+        </p>
+      </section>
+
       <ol className="steps">
         <li>Create project (CRS EPSG:32638 / UTM84-38N)</li>
-        <li>Upload DWG + roads_report.csv</li>
-        <li>Preview DWG (mock URN or live Model Derivative) → map → build → download ZIP</li>
+        <li>Upload DWG/DXF + roads_report.csv</li>
+        <li>Preview (local map or APS Viewer) → map → build → download ZIP</li>
       </ol>
 
       <section className="panel">
@@ -246,7 +335,7 @@ export default function HomePage() {
             onClick={loadPreview}
             type="button"
           >
-            DWG preview
+            {previewMode === "local" ? "Local preview" : "APS preview"}
           </button>
         </div>
         <DwgPreview preview={preview} apiBase={apiBase()} />

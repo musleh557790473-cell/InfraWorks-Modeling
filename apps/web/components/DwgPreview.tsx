@@ -1,6 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+export type PreviewGeoJson = {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    id?: string | number;
+    geometry: {
+      type: string;
+      coordinates: unknown;
+    };
+    properties?: Record<string, unknown>;
+  }>;
+};
 
 export type PreviewPayload = {
   status: string;
@@ -12,6 +25,13 @@ export type PreviewPayload = {
   mocked?: boolean;
   progress?: string;
   objectKey?: string;
+  previewMode?: "local" | "aps";
+  geojson?: PreviewGeoJson;
+  featureCount?: number;
+  layers?: Array<{ name: string; entityCount: number }>;
+  format?: string;
+  apsCalled?: boolean;
+  error?: string;
 };
 
 declare global {
@@ -39,6 +59,15 @@ declare global {
   }
 }
 
+const CLASS_COLORS: Record<string, string> = {
+  road_centerline: "#c4a35a",
+  coverage: "#3d8f6e",
+  water: "#5b8def",
+  parcel: "#9bb5a8",
+  annotation: "#e07a5f",
+  unmapped: "#889988",
+};
+
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[src="${src}"]`);
@@ -63,21 +92,97 @@ function loadCss(href: string): void {
   document.head.appendChild(link);
 }
 
+function collectCoords(geom: { type: string; coordinates: unknown }): number[][] {
+  const out: number[][] = [];
+  const walk = (c: unknown, depth: number) => {
+    if (!Array.isArray(c)) return;
+    if (typeof c[0] === "number" && typeof c[1] === "number") {
+      out.push([c[0] as number, c[1] as number]);
+      return;
+    }
+    for (const item of c) walk(item, depth + 1);
+  };
+  walk(geom.coordinates, 0);
+  return out;
+}
+
+function LocalMapPreview({ geojson }: { geojson: PreviewGeoJson }) {
+  const paths = useMemo(() => {
+    const all: Array<{ d: string; color: string; cls: string }> = [];
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    const feats = geojson.features || [];
+    for (const f of feats) {
+      for (const [x, y] of collectCoords(f.geometry)) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+    if (!Number.isFinite(minX)) {
+      return { paths: all, viewBox: "0 0 100 100" };
+    }
+    const pad = 0.08;
+    const w = Math.max(maxX - minX, 1e-6);
+    const h = Math.max(maxY - minY, 1e-6);
+    const sx = 1000 / w;
+    const sy = 1000 / h;
+    const s = Math.min(sx, sy) * (1 - pad * 2);
+    const ox = (1000 - w * s) / 2;
+    const oy = (1000 - h * s) / 2;
+    const tx = (x: number, y: number) => {
+      const px = ox + (x - minX) * s;
+      const py = 1000 - (oy + (y - minY) * s);
+      return `${px.toFixed(1)},${py.toFixed(1)}`;
+    };
+
+    for (const f of feats) {
+      const cls = String(f.properties?.infraFeatureClass || "unmapped");
+      const color = CLASS_COLORS[cls] || CLASS_COLORS.unmapped;
+      const coords = collectCoords(f.geometry);
+      if (coords.length < 2) continue;
+      const d = coords.map((c, i) => `${i === 0 ? "M" : "L"}${tx(c[0], c[1])}`).join(" ");
+      all.push({ d, color, cls });
+    }
+    return { paths: all, viewBox: "0 0 1000 1000" };
+  }, [geojson]);
+
+  return (
+    <div className="viewer-host local-map-host">
+      <svg viewBox={paths.viewBox} className="local-map-svg" role="img" aria-label="Local layer map">
+        <rect width="1000" height="1000" fill="rgba(0,0,0,0.25)" />
+        {paths.paths.map((p, i) => (
+          <path key={i} d={p.d} fill="none" stroke={p.color} strokeWidth="3" strokeLinecap="round" />
+        ))}
+      </svg>
+      <div className="local-map-legend">
+        {Object.entries(CLASS_COLORS)
+          .filter(([k]) => k !== "unmapped")
+          .map(([k, c]) => (
+            <span key={k}>
+              <i style={{ background: c }} /> {k}
+            </span>
+          ))}
+      </div>
+    </div>
+  );
+}
+
 /**
- * DWG preview: mock URN panel locally; Autodesk Viewer when live MD URN + token.
+ * Preview: local GeoJSON/SVG map (free) or Autodesk Viewer when APS live.
  */
 export function DwgPreview({ preview, apiBase }: { preview: PreviewPayload | null; apiBase: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [viewerError, setViewerError] = useState<string>("");
 
-  useEffect(() => {
-    if (!preview?.urn) return;
-    setViewerError("");
+  const isLocal = preview?.previewMode === "local" || Boolean(preview?.geojson);
 
-    // Mock path: no real Viewer session — show URN status panel only.
-    if (preview.mocked || preview.status === "mocked") {
-      return;
-    }
+  useEffect(() => {
+    if (!preview?.urn || isLocal) return;
+    setViewerError("");
 
     if (preview.status !== "ready" && preview.status !== "pending") {
       return;
@@ -92,14 +197,15 @@ export function DwgPreview({ preview, apiBase }: { preview: PreviewPayload | nul
         if (preview!.viewerScriptUrl) await loadScript(preview!.viewerScriptUrl);
         if (cancelled || !hostRef.current || !window.Autodesk) return;
 
-        const tokenRes = await fetch(`${apiBase}/aps/token`);
+        const tokenRes = await fetch(`${apiBase}/aps/token?previewMode=aps`);
         const tokenJson = (await tokenRes.json()) as {
-          access_token: string;
-          expires_in: number;
+          access_token?: string;
+          expires_in?: number;
           mocked?: boolean;
+          error?: string;
         };
-        if (tokenJson.mocked) {
-          setViewerError("Viewer token is mocked — set APS credentials for live Viewer");
+        if (!tokenRes.ok || !tokenJson.access_token) {
+          setViewerError(tokenJson.error || "APS token failed");
           return;
         }
 
@@ -107,7 +213,7 @@ export function DwgPreview({ preview, apiBase }: { preview: PreviewPayload | nul
           {
             env: "AutodeskProduction2",
             getAccessToken: (cb) => {
-              cb(tokenJson.access_token, tokenJson.expires_in || 3600);
+              cb(tokenJson.access_token!, tokenJson.expires_in || 3600);
             },
           },
           () => {
@@ -138,35 +244,31 @@ export function DwgPreview({ preview, apiBase }: { preview: PreviewPayload | nul
       cancelled = true;
       viewer?.finish?.();
     };
-  }, [preview, apiBase]);
+  }, [preview, apiBase, isLocal]);
 
   if (!preview) return null;
-
-  const isMock = Boolean(preview.mocked || preview.status === "mocked");
 
   return (
     <div className="preview-wrap">
       <div className="preview-meta">
-        <span className={isMock ? "pill mock" : "pill live"}>
-          {isMock ? "mock URN" : "live MD"}
+        <span className={isLocal ? "pill free" : "pill live"}>
+          {isLocal ? "FREE · local" : "APS · live"}
         </span>
         <span className="status">{preview.status}</span>
         {preview.progress && <span className="status">· {preview.progress}</span>}
-        <p className="status">{preview.message}</p>
-        {preview.urn && (
-          <code className="urn">{preview.urn}</code>
+        {typeof preview.featureCount === "number" && (
+          <span className="status">· {preview.featureCount} features</span>
         )}
+        <p className="status">{preview.message}</p>
+        {preview.urn && <code className="urn">{preview.urn}</code>}
         {viewerError && <p className="status err">{viewerError}</p>}
+        {preview.error && <p className="status err">{preview.error}</p>}
       </div>
-      {!isMock && (preview.status === "ready" || preview.status === "pending") && (
+      {isLocal && preview.geojson ? (
+        <LocalMapPreview geojson={preview.geojson} />
+      ) : !isLocal && (preview.status === "ready" || preview.status === "pending") ? (
         <div ref={hostRef} className="viewer-host" />
-      )}
-      {isMock && (
-        <div className="viewer-host mock-host">
-          <p>Local mock preview</p>
-          <p>Viewer loads Autodesk SVF2 when APS credentials + MD translation succeed.</p>
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }

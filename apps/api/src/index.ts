@@ -14,12 +14,30 @@ import {
 import { createApsClientFromEnv } from "@infraworks/aps-client";
 import { createApsPipelineHooks } from "./aps-hooks.js";
 import { isApiPath, proxyToNext, WEB_ORIGIN } from "./web-proxy.js";
+import { buildLocalPreview } from "./local-preview.js";
+import {
+  defaultPreviewMode,
+  reportApsMode,
+  resolvePreviewMode,
+  type PreviewMode,
+} from "./preview-mode.js";
 
 const dataDir = process.env.DATA_DIR || join(process.cwd(), "../../data");
 const store = createFileStore(dataDir);
 const aps = createApsClientFromEnv();
 const apsHooks = createApsPipelineHooks(aps);
 const port = Number(process.env.API_PORT || 8787);
+
+function modeFromRequest(
+  c: { req: { query: (k: string) => string | undefined; header: (k: string) => string | undefined } },
+  bodyMode?: string | null,
+): PreviewMode {
+  return resolvePreviewMode({
+    query: c.req.query("previewMode") ?? c.req.query("mode"),
+    header: c.req.header("x-preview-mode") ?? c.req.header("X-Preview-Mode"),
+    body: bodyMode,
+  });
+}
 
 const app = new OpenAPIHono();
 // CORS only on API JSON routes — do not wrap proxied Next HTML/assets
@@ -37,19 +55,45 @@ app.get("/health", (c) =>
     ok: true,
     localMode: process.env.LOCAL_MODE !== "0",
     apsConfigured: aps.isConfigured,
-    apsMode: aps.isConfigured ? "live" : "mock",
-    bucketKey: aps.bucketKey,
+    /** Product APS status: off (local free / no keys) · mock (auto, no keys) · live */
+    apsMode: reportApsMode(aps.isConfigured),
+    /** Default preview path when client omits previewMode */
+    previewMode: defaultPreviewMode(),
+    bucketKey: aps.isConfigured ? aps.bucketKey : null,
+    badge: defaultPreviewMode() === "local" ? "FREE · local" : aps.isConfigured ? "APS · live" : "APS · needs keys",
   }),
 );
 
-/** Viewer token (viewables:read) — mock token when APS not configured. */
+/** Viewer token (viewables:read). Local free mode skips APS — returns 400. */
 app.get("/aps/token", async (c) => {
+  const mode = modeFromRequest(c);
+  if (mode === "local") {
+    return c.json(
+      {
+        error: "Local free mode — APS token not used. Switch previewMode=aps for live Viewer.",
+        previewMode: "local",
+        mocked: false,
+      },
+      400,
+    );
+  }
+  if (!aps.isConfigured) {
+    return c.json(
+      {
+        error: "APS credentials missing — set APS_CLIENT_ID and APS_CLIENT_SECRET for live mode.",
+        previewMode: "aps",
+        mocked: false,
+      },
+      401,
+    );
+  }
   const token = await aps.getViewerToken();
   return c.json({
     access_token: token.access_token,
     expires_in: token.expires_in,
     token_type: token.token_type,
     mocked: token.mocked,
+    previewMode: "aps",
   });
 });
 
@@ -134,12 +178,46 @@ app.post("/projects/:id/jobs", async (c) => {
   if (!store.getProject(projectId)) return c.json({ error: "Not found" }, 404);
   const job = store.createJob(projectId);
 
-  // In LOCAL_MODE run inline with APS hooks (mock or live); worker also polls queued jobs
+  let bodyMode: string | null = null;
+  const ct = c.req.header("content-type") || "";
+  if (ct.includes("application/json")) {
+    try {
+      const body = (await c.req.json()) as { previewMode?: string };
+      if (body?.previewMode) bodyMode = String(body.previewMode);
+    } catch {
+      /* empty / invalid body */
+    }
+  }
+  const mode = modeFromRequest(c, bodyMode);
+  if (mode === "aps" && !aps.isConfigured) {
+    return c.json(
+      {
+        error:
+          "APS live selected but credentials are missing. Set APS_CLIENT_ID and APS_CLIENT_SECRET, or use Local free.",
+        previewMode: "aps",
+      },
+      401,
+    );
+  }
+  // Local free: package build unchanged but never call APS hooks
+  const hooks = mode === "aps" ? apsHooks : undefined;
+
+  // In LOCAL_MODE run inline; worker also polls queued jobs
   if (process.env.LOCAL_MODE !== "0") {
     try {
-      const result = await runBuildPipeline(store, projectId, job.id, apsHooks);
+      const result = await runBuildPipeline(store, projectId, job.id, hooks);
       const record = store.getJob(result.jobId);
-      return c.json({ ...record, aps: result.aps }, 201);
+      return c.json(
+        {
+          ...record,
+          previewMode: mode,
+          aps:
+            mode === "local"
+              ? { mocked: false, skipped: true, message: "Local free — APS skipped" }
+              : result.aps,
+        },
+        201,
+      );
     } catch {
       return c.json(store.getJob(job.id), 201);
     }
@@ -207,20 +285,53 @@ app.get("/jobs/:id/package-url", (c) => {
 });
 
 /**
- * DWG preview: uploads CAD to OSS (or mock), starts Model Derivative, returns URN + viewer token.
+ * DWG/DXF preview.
+ * - previewMode=local (default): local parse → GeoJSON for 2D map (never calls APS)
+ * - previewMode=aps: OSS + Model Derivative + Viewer URN (requires credentials)
  */
 app.get("/projects/:id/preview", async (c) => {
   const projectId = c.req.param("id");
+  const project = store.getProject(projectId);
+  if (!project) return c.json({ error: "Not found" }, 404);
   const uploads = store.listUploads(projectId);
   const cad = uploads.find((u) => u.kind === "dwg" || u.kind === "dxf");
   if (!cad) return c.json({ error: "No CAD upload" }, 404);
 
+  const mode = modeFromRequest(c);
+
+  if (mode === "local") {
+    try {
+      const preview = buildLocalPreview({
+        cad,
+        profile: project.mappingProfile,
+        epsg: project.epsg,
+      });
+      return c.json(preview);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message, status: "failed", previewMode: "local" }, 502);
+    }
+  }
+
+  if (!aps.isConfigured) {
+    return c.json(
+      {
+        error:
+          "APS live selected but credentials are missing. Set APS_CLIENT_ID and APS_CLIENT_SECRET, or switch to Local free.",
+        status: "failed",
+        previewMode: "aps",
+        mocked: false,
+      },
+      401,
+    );
+  }
+
   try {
     const preview = await aps.prepareDwgPreview(cad.path, cad.filename);
-    return c.json(preview);
+    return c.json({ ...preview, previewMode: "aps", apsCalled: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return c.json({ error: message, status: "failed", mocked: !aps.isConfigured }, 502);
+    return c.json({ error: message, status: "failed", previewMode: "aps", mocked: false }, 502);
   }
 });
 
@@ -232,19 +343,53 @@ app.get("/projects/:id/layers-da", async (c) => {
   const cad = uploads.find((u) => u.kind === "dwg" || u.kind === "dxf");
   if (!cad) return c.json({ error: "No CAD upload" }, 404);
 
+  const mode = modeFromRequest(c);
   const fallback = project.mappingProfile.layers.map((l) => l.dwgLayer);
+
+  if (mode === "local") {
+    const local = buildLocalPreview({
+      cad,
+      profile: project.mappingProfile,
+      epsg: project.epsg,
+    });
+    const layers =
+      local.layers.map((l) => l.name).filter(Boolean).length > 0
+        ? local.layers.map((l) => l.name)
+        : fallback;
+    return c.json({
+      status: "succeeded",
+      layers,
+      mocked: false,
+      previewMode: "local",
+      apsCalled: false,
+      message: "Local free layer list from CAD parse — APS skipped",
+    });
+  }
+
+  if (!aps.isConfigured) {
+    return c.json(
+      {
+        error: "APS credentials missing for Design Automation. Use Local free or set APS_* keys.",
+        previewMode: "aps",
+        mocked: false,
+      },
+      401,
+    );
+  }
+
   let inputObjectId: string | undefined;
   try {
     const uploaded = await aps.uploadObject(cad.path);
     inputObjectId = uploaded.objectId;
-  } catch {
-    /* mock path */
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ error: `OSS upload failed: ${message}`, previewMode: "aps" }, 502);
   }
   const result = await aps.listDwgLayersViaDesignAutomation({
     inputObjectId,
     fallbackLayers: fallback,
   });
-  return c.json(result);
+  return c.json({ ...result, previewMode: "aps", apsCalled: true });
 });
 
 app.doc("/openapi.json", {
@@ -282,6 +427,6 @@ app.all("*", async (c) => {
 
 const hostname = process.env.API_HOST || "0.0.0.0";
 console.log(
-  `API+UI on http://${hostname}:${port} (APS ${aps.isConfigured ? "live" : "mock"}; UI ← ${WEB_ORIGIN})`,
+  `API+UI on http://${hostname}:${port} (preview=${defaultPreviewMode()} apsMode=${reportApsMode(aps.isConfigured)}; UI ← ${WEB_ORIGIN})`,
 );
 serve({ fetch: app.fetch, port, hostname });

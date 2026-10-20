@@ -9,35 +9,36 @@ Autodesk has no reliable public API to create an InfraWorks model from arbitrary
 - CRS: **EPSG:32638** (`UTM84-38N` in InfraWorks)
 - Outputs are **NOT FOR ISSUE** until Human Review Gate approval
 
-## APS: mock vs live
+## Modes: Local free vs APS live
 
-| Mode | When | Behavior |
-| --- | --- | --- |
-| **Mock** | `APS_CLIENT_ID` or `APS_CLIENT_SECRET` empty | 2-legged token, OSS upload, Model Derivative URN, and Design Automation layer list are mocked. Package pipeline and web preview still work (`LOCAL_MODE=1`). |
-| **Live** | Both credentials set | Real 2-legged OAuth, OSS signed upload, MD SVF2 translate + manifest, Viewer token (`viewables:read`). DA workitems run only if `APS_DA_ACTIVITY_ID` is set (AutoCAD ListLayers-style activity). |
+| Mode | UI label | When | Behavior |
+| --- | --- | --- | --- |
+| **Local free** (default) | Local free · محلي مجاني | UI toggle **or** `APS_MODE=local` / `?previewMode=local` | **Never calls APS.** Local DXF parse (DWG stub) → 2D SVG map of GeoJSON layers. Package ZIP build unchanged. Works with empty `APS_*` keys. |
+| **APS live** | APS live · APS حي | UI toggle **or** `?previewMode=aps` with credentials | Real 2-legged OAuth, OSS upload, Model Derivative SVF2 + Viewer. Clear **401** if keys missing. DA workitems only if `APS_DA_ACTIVITY_ID` is set. |
 
-Patterns adapted from Autodesk APS samples (simple viewer Node, Design Automation Node, list-layers DA) — copied into `packages/aps-client`, not linked as a submodule.
+Server default: `APS_MODE=local|auto|live` in `.env` (default **local**). Per-request override: query `previewMode=local|aps`, header `X-Preview-Mode`, or JSON body `{ "previewMode": "…" }`.
+
+`GET /health` reports `previewMode`, `apsMode` (`off` \| `mock` \| `live`), `apsConfigured`, and `badge` (e.g. `FREE · local`).
 
 ```bash
-# Mock (default)
-cp .env.example .env   # leave APS_* empty
+cp .env.example .env   # APS_MODE=local — free use, no keys required
 
-# Live preview
+# Optional APS live
 # APS_CLIENT_ID=...
 # APS_CLIENT_SECRET=...
 # APS_BUCKET=optional-override
-# APS_DA_ACTIVITY_ID=YourClientId.ListLayersActivity+dev   # optional
-# APS_CALLBACK_URL=http://127.0.0.1:8787/oauth/callback    # optional 3LO
+# APS_DA_ACTIVITY_ID=YourClientId.ListLayersActivity+dev
+# APS_MODE=local   # keep free default; switch to live in the UI when needed
 ```
 
-Useful endpoints: `GET /health` (`apsMode`), `GET /aps/token`, `GET /projects/:id/preview`, `GET /projects/:id/layers-da`.
+Useful endpoints: `GET /health`, `GET /projects/:id/preview?previewMode=local|aps`, `GET /aps/token?previewMode=aps`, `GET /projects/:id/layers-da`.
 
 ## Quick start
 
 ```bash
 git clone https://github.com/musleh557790473-cell/InfraWorks-Modeling.git
 cd InfraWorks-Modeling
-cp .env.example .env   # LOCAL_MODE=1, APS mocked
+cp .env.example .env   # LOCAL_MODE=1, APS_MODE=local
 pnpm install
 pnpm --filter @infraworks/domain build && pnpm --filter @infraworks/aps-client build
 pnpm fixture:pipeline  # sample DWG + CSV → ZIP under data/artifacts/
@@ -49,18 +50,18 @@ pnpm dev               # web :3000 · API :8787 · worker · MCP (stdio)
 - OpenAPI: http://127.0.0.1:8787/openapi.json
 - Health: http://127.0.0.1:8787/health
 
-### Test without APS keys
+### Test Local free (no APS keys)
 
-1. Leave `APS_CLIENT_ID` / `APS_CLIENT_SECRET` empty.
+1. Leave `APS_*` empty; keep `APS_MODE=local`.
 2. `pnpm fixture:pipeline` → ZIP with zero blocking issues.
-3. `pnpm dev` → upload fixture DWG + CSV → **DWG preview** shows mock URN → run build → download ZIP.
+3. `pnpm dev` → UI badge **FREE · local** → **Local preview** shows 2D layer map → run build → download ZIP.
 
-### Test with APS keys
+### Test APS live
 
-1. Set `APS_CLIENT_ID` and `APS_CLIENT_SECRET` in `.env` (APS app with OSS + Model Derivative + optional Design Automation).
-2. Restart API/worker. `GET /health` should report `apsMode: "live"`.
-3. Upload a real `.dwg`, open **DWG preview** — waits for MD translation, then Autodesk Viewer loads the URN.
-4. Optional: set `APS_DA_ACTIVITY_ID` to your ListLayers (or overlay-normalize) activity to submit live DA workitems during build.
+1. Set `APS_CLIENT_ID` and `APS_CLIENT_SECRET` in `.env`.
+2. Restart API. Switch UI toggle to **APS live · APS حي** (or `?previewMode=aps`).
+3. Upload a real `.dwg` → **APS preview** waits for MD, then Autodesk Viewer.
+4. Optional: set `APS_DA_ACTIVITY_ID` for live Design Automation during build.
 
 ## Monorepo layout
 
