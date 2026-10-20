@@ -13,6 +13,7 @@ import {
 } from "@infraworks/domain";
 import { createApsClientFromEnv } from "@infraworks/aps-client";
 import { createApsPipelineHooks } from "./aps-hooks.js";
+import { isApiPath, proxyToNext, WEB_ORIGIN } from "./web-proxy.js";
 
 const dataDir = process.env.DATA_DIR || join(process.cwd(), "../../data");
 const store = createFileStore(dataDir);
@@ -21,7 +22,15 @@ const apsHooks = createApsPipelineHooks(aps);
 const port = Number(process.env.API_PORT || 8787);
 
 const app = new OpenAPIHono();
-app.use("*", cors());
+// CORS only on API JSON routes — do not wrap proxied Next HTML/assets
+app.use("/health", cors());
+app.use("/aps/*", cors());
+app.use("/projects/*", cors());
+app.use("/projects", cors());
+app.use("/jobs/*", cors());
+app.use("/mapping-profiles/*", cors());
+app.use("/openapi.json", cors());
+app.use("/api", cors());
 
 app.get("/health", (c) =>
   c.json({
@@ -229,17 +238,31 @@ app.doc("/openapi.json", {
   },
 });
 
-app.get("/", (c) =>
+/** Machine-readable API index (UI lives at `/` via Next proxy). */
+app.get("/api", (c) =>
   c.json({
     name: "InfraWorks Modeling API",
     openapi: "/openapi.json",
     health: "/health",
     apsToken: "/aps/token",
+    ui: "/",
+    webOrigin: WEB_ORIGIN,
   }),
 );
 
+/**
+ * Proxy non-API routes to Next.js so the web UI is reachable on :8787
+ * (same port as /health — works in Try Live when :3000 is awkward).
+ */
+app.all("*", async (c) => {
+  if (isApiPath(c.req.path)) {
+    return c.json({ error: "Not found" }, 404);
+  }
+  return proxyToNext(c);
+});
+
 const hostname = process.env.API_HOST || "0.0.0.0";
 console.log(
-  `API listening on http://${hostname}:${port} (APS ${aps.isConfigured ? "live" : "mock"})`,
+  `API+UI on http://${hostname}:${port} (APS ${aps.isConfigured ? "live" : "mock"}; UI ← ${WEB_ORIGIN})`,
 );
 serve({ fetch: app.fetch, port, hostname });

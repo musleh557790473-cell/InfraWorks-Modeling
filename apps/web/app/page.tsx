@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { DwgPreview, type PreviewPayload } from "../components/DwgPreview";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8787";
+/** API base: same-origin when UI is served via :8787 proxy; absolute when on :3000. */
+function apiBase(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window === "undefined") return "http://127.0.0.1:8787";
+  return window.location.port === "3000" ? "http://127.0.0.1:8787" : "";
+}
 
 type Project = {
   id: string;
@@ -38,7 +43,7 @@ export default function HomePage() {
   const [apsMode, setApsMode] = useState<string>("…");
 
   useEffect(() => {
-    fetch(`${API}/health`)
+    fetch(`${apiBase()}/health`)
       .then((r) => r.json())
       .then((h) => {
         if (!h.ok) setMessage("API unhealthy");
@@ -51,7 +56,7 @@ export default function HomePage() {
     setBusy(true);
     setMessage("");
     try {
-      const res = await fetch(`${API}/projects`, {
+      const res = await fetch(`${apiBase()}/projects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, epsg }),
@@ -76,7 +81,7 @@ export default function HomePage() {
       for (const file of Array.from(files)) {
         const form = new FormData();
         form.append("file", file);
-        const res = await fetch(`${API}/projects/${project.id}/uploads`, {
+        const res = await fetch(`${apiBase()}/projects/${project.id}/uploads`, {
           method: "POST",
           body: form,
         });
@@ -94,8 +99,8 @@ export default function HomePage() {
     if (!project) return;
     setBusy(true);
     try {
-      const profile = await fetch(`${API}/mapping-profiles/default`).then((r) => r.json());
-      const res = await fetch(`${API}/projects/${project.id}/mapping`, {
+      const profile = await fetch(`${apiBase()}/mapping-profiles/default`).then((r) => r.json());
+      const res = await fetch(`${apiBase()}/projects/${project.id}/mapping`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profile),
@@ -115,7 +120,7 @@ export default function HomePage() {
     if (!project) return;
     setBusy(true);
     try {
-      const res = await fetch(`${API}/projects/${project.id}/jobs`, { method: "POST" });
+      const res = await fetch(`${apiBase()}/projects/${project.id}/jobs`, { method: "POST" });
       const data = await res.json();
       setJob(data);
       if (data.status === "succeeded") {
@@ -136,7 +141,7 @@ export default function HomePage() {
     if (!project) return;
     setBusy(true);
     try {
-      const res = await fetch(`${API}/projects/${project.id}/preview`);
+      const res = await fetch(`${apiBase()}/projects/${project.id}/preview`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Preview failed");
       setPreview(data);
@@ -221,7 +226,7 @@ export default function HomePage() {
             DWG preview
           </button>
         </div>
-        <DwgPreview preview={preview} apiBase={API} />
+        <DwgPreview preview={preview} apiBase={apiBase()} />
       </section>
 
       <section className="panel">
@@ -231,7 +236,7 @@ export default function HomePage() {
             Run build
           </button>
           {job?.status === "succeeded" && (
-            <a className="btn" href={`${API}/jobs/${job.id}/package`}>
+            <a className="btn" href={`${apiBase()}/jobs/${job.id}/package`}>
               Download ZIP
             </a>
           )}

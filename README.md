@@ -44,8 +44,10 @@ pnpm fixture:pipeline  # sample DWG + CSV → ZIP under data/artifacts/
 pnpm dev               # web :3000 · API :8787 · worker · MCP (stdio)
 ```
 
-- Web: http://127.0.0.1:3000
+- **UI (recommended):** http://127.0.0.1:8787/ — API reverse-proxies Next so one port works in Try Live
+- Direct Next: http://127.0.0.1:3000 (also dual-stack)
 - OpenAPI: http://127.0.0.1:8787/openapi.json
+- Health: http://127.0.0.1:8787/health
 
 ### Test without APS keys
 
