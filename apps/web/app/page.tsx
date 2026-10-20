@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DwgPreview, type PreviewPayload } from "../components/DwgPreview";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8787";
+/** API base: same-origin when UI is served via :8787 proxy; absolute when on :3000. */
+function apiBase(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window === "undefined") return "http://127.0.0.1:8787";
+  return window.location.port === "3000" ? "http://127.0.0.1:8787" : "";
+}
+
+type PreviewMode = "local" | "aps";
 
 type Project = {
   id: string;
@@ -22,7 +30,11 @@ type Job = {
     warningCount: number;
     issues: Array<{ severity: string; message: string; code: string }>;
   };
+  aps?: unknown;
+  previewMode?: string;
 };
+
+const MODE_KEY = "infraworks-preview-mode";
 
 export default function HomePage() {
   const [name, setName] = useState("LDIP Al Narjis sample");
@@ -32,30 +44,101 @@ export default function HomePage() {
   const [files, setFiles] = useState<FileList | null>(null);
   const [message, setMessage] = useState<string>("");
   const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState<unknown>(null);
+  const [preview, setPreview] = useState<PreviewPayload | null>(null);
+  const [apsMode, setApsMode] = useState<string>("…");
+  const [badge, setBadge] = useState<string>("FREE · local");
+  const [apsConfigured, setApsConfigured] = useState(false);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("local");
 
   useEffect(() => {
-    fetch(`${API}/health`)
+    try {
+      const saved = localStorage.getItem(MODE_KEY);
+      if (saved === "local" || saved === "aps") setPreviewMode(saved);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MODE_KEY, previewMode);
+    } catch {
+      /* ignore */
+    }
+  }, [previewMode]);
+
+  useEffect(() => {
+    const base = apiBase();
+    fetch(`${base}/health`)
       .then((r) => r.json())
       .then((h) => {
         if (!h.ok) setMessage("API unhealthy");
+        setApsMode(h.apsMode || "off");
+        setBadge(h.badge || (h.previewMode === "local" ? "FREE · local" : "APS"));
+        setApsConfigured(Boolean(h.apsConfigured));
       })
       .catch(() => setMessage("API not reachable — start with pnpm dev"));
+
+    // Resume latest project + succeeded job so Download ZIP stays visible after refresh.
+    fetch(`${base}/projects`)
+      .then((r) => r.json())
+      .then(async (projects: Array<{ id: string; updatedAt?: string }>) => {
+        if (!Array.isArray(projects) || projects.length === 0) return;
+        const sorted = [...projects].sort((a, b) =>
+          String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")),
+        );
+        const detail = await fetch(`${base}/projects/${sorted[0].id}`).then((r) => r.json());
+        if (!detail?.id) return;
+        setProject(detail);
+        const jobs = Array.isArray(detail.jobs) ? detail.jobs : [];
+        const succeeded = [...jobs]
+          .reverse()
+          .find((j: Job) => j.status === "succeeded");
+        if (succeeded) {
+          setJob(succeeded);
+          setMessage(`Resumed ${detail.name} — package ready`);
+        }
+        // Auto local preview so FREE mode shows the 2D map without an extra click
+        const savedMode = (() => {
+          try {
+            return localStorage.getItem(MODE_KEY);
+          } catch {
+            return null;
+          }
+        })();
+        if (savedMode !== "aps") {
+          void fetch(
+            `${base}/projects/${detail.id}/preview?previewMode=local`,
+            { signal: AbortSignal.timeout(60_000) },
+          )
+            .then(async (r) => {
+              const data = await r.json();
+              if (!r.ok) return;
+              setPreview(data);
+              setMessage(
+                `${succeeded ? `Resumed ${detail.name} — package ready · ` : ""}Local free preview ready · ${data.featureCount ?? 0} features`,
+              );
+            })
+            .catch(() => undefined);
+        }
+      })
+      .catch(() => undefined);
   }, []);
 
   async function createProject() {
     setBusy(true);
     setMessage("");
     try {
-      const res = await fetch(`${API}/projects`, {
+      const res = await fetch(`${apiBase()}/projects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, epsg }),
+        body: JSON.stringify({ name, epsg, profileId: "ldip-tawazun" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Create failed");
       setProject(data);
       setJob(null);
+      setPreview(null);
       setMessage(`Project ${data.id} created`);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : String(e));
@@ -71,7 +154,7 @@ export default function HomePage() {
       for (const file of Array.from(files)) {
         const form = new FormData();
         form.append("file", file);
-        const res = await fetch(`${API}/projects/${project.id}/uploads`, {
+        const res = await fetch(`${apiBase()}/projects/${project.id}/uploads`, {
           method: "POST",
           body: form,
         });
@@ -89,16 +172,15 @@ export default function HomePage() {
     if (!project) return;
     setBusy(true);
     try {
-      const profile = await fetch(`${API}/mapping-profiles/default`).then((r) => r.json());
-      const res = await fetch(`${API}/projects/${project.id}/mapping`, {
+      const res = await fetch(`${apiBase()}/projects/${project.id}/profile`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(profile),
+        body: JSON.stringify({ profileId: "ldip-tawazun" }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Mapping failed");
+      if (!res.ok) throw new Error(data.error || "Profile failed");
       setProject(data);
-      setMessage("Default LDIP mapping profile applied");
+      setMessage("LDIP profile applied (profiles/ldip.ts)");
     } catch (e) {
       setMessage(e instanceof Error ? e.message : String(e));
     } finally {
@@ -110,11 +192,24 @@ export default function HomePage() {
     if (!project) return;
     setBusy(true);
     try {
-      const res = await fetch(`${API}/projects/${project.id}/jobs`, { method: "POST" });
+      const res = await fetch(
+        `${apiBase()}/projects/${project.id}/jobs?previewMode=${encodeURIComponent(previewMode)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ previewMode }),
+          signal: AbortSignal.timeout(120_000),
+        },
+      );
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Build failed");
       setJob(data);
       if (data.status === "succeeded") {
-        setMessage("Build succeeded — package ready");
+        setMessage(
+          previewMode === "local"
+            ? "Build succeeded — package ready (Local free · no APS)"
+            : "Build succeeded — package ready (APS live)",
+        );
       } else if (data.status === "failed") {
         setMessage(data.error || "Build failed");
       } else {
@@ -129,23 +224,84 @@ export default function HomePage() {
 
   async function loadPreview() {
     if (!project) return;
-    const data = await fetch(`${API}/projects/${project.id}/preview`).then((r) => r.json());
-    setPreview(data);
+    setBusy(true);
+    setMessage(
+      previewMode === "local" ? "Loading local free preview…" : "Loading APS preview…",
+    );
+    try {
+      const res = await fetch(
+        `${apiBase()}/projects/${project.id}/preview?previewMode=${encodeURIComponent(previewMode)}`,
+        { signal: AbortSignal.timeout(60_000) },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Preview failed");
+      setPreview(data);
+      setMessage(
+        previewMode === "local"
+          ? `Local free preview ready · ${data.featureCount ?? 0} features`
+          : `APS preview ${data.status}`,
+      );
+    } catch (e) {
+      setPreview(null);
+      setMessage(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   }
+
+  const statusBadge =
+    previewMode === "local"
+      ? "FREE · local · محلي مجاني"
+      : apsConfigured
+        ? "APS live · APS حي"
+        : "APS live (needs keys) · يحتاج مفاتيح";
 
   return (
     <main>
-      <p className="badge">NOT FOR ISSUE · package builder</p>
+      <p className="badge">{statusBadge}</p>
       <h1 className="brand">InfraWorks Modeling</h1>
       <p className="lede">
         Turn 2D DWG and CSV/XLSX/PDF reports into an InfraWorks-ready import package
         (GeoJSON layers, overlay DWG, manifest, validation). Same flow via web, REST, and MCP.
       </p>
 
+      <section className="panel mode-panel">
+        <h2>Mode · الوضع</h2>
+        <div className="mode-toggle" role="group" aria-label="Preview mode">
+          <button
+            type="button"
+            className={previewMode === "local" ? "mode-btn active" : "mode-btn"}
+            onClick={() => {
+              setPreviewMode("local");
+              setPreview(null);
+            }}
+          >
+            Local free · محلي مجاني
+          </button>
+          <button
+            type="button"
+            className={previewMode === "aps" ? "mode-btn active" : "mode-btn"}
+            onClick={() => {
+              setPreviewMode("aps");
+              setPreview(null);
+            }}
+          >
+            APS live · APS حي
+          </button>
+        </div>
+        <p className="status">
+          {previewMode === "local"
+            ? "No Autodesk calls — local DXF/DWG-stub parse + 2D map. Package build works offline."
+            : apsConfigured
+              ? `Server apsMode=${apsMode} · ${badge}. Uses OSS + Model Derivative Viewer.`
+              : "Credentials missing — set APS_CLIENT_ID / APS_CLIENT_SECRET or stay on Local free."}
+        </p>
+      </section>
+
       <ol className="steps">
         <li>Create project (CRS EPSG:32638 / UTM84-38N)</li>
-        <li>Upload DWG + roads_report.csv</li>
-        <li>Apply layer mapping → run build → download ZIP</li>
+        <li>Upload DWG/DXF + roads_report.csv</li>
+        <li>Preview (local map or APS Viewer) → map → build → download ZIP</li>
       </ol>
 
       <section className="panel">
@@ -175,7 +331,7 @@ export default function HomePage() {
       </section>
 
       <section className="panel">
-        <h2>2 · Upload & map</h2>
+        <h2>2 · Upload, preview & map</h2>
         <div className="row">
           <label>
             Files
@@ -203,10 +359,10 @@ export default function HomePage() {
             onClick={loadPreview}
             type="button"
           >
-            DWG preview status
+            {previewMode === "local" ? "Local preview" : "APS preview"}
           </button>
         </div>
-        {preview != null && <pre>{JSON.stringify(preview, null, 2)}</pre>}
+        <DwgPreview preview={preview} apiBase={apiBase()} />
       </section>
 
       <section className="panel">
@@ -216,11 +372,23 @@ export default function HomePage() {
             Run build
           </button>
           {job?.status === "succeeded" && (
-            <a className="btn" href={`${API}/jobs/${job.id}/package`}>
+            <a
+              className="btn"
+              href={`${apiBase()}/jobs/${job.id}/package`}
+              download={`${job.id}-infraworks-package.zip`}
+            >
               Download ZIP
             </a>
           )}
         </div>
+        {job?.status === "succeeded" && (
+          <p className="status ok">
+            Package ready — click <strong>Download ZIP</strong>, or open{" "}
+            <code>{`${apiBase() || ""}/jobs/${job.id}/package`}</code> in this
+            Try Live Chrome (not Windows). Also saved on Desktop as{" "}
+            <code>InfraWorks-package.zip</code>.
+          </p>
+        )}
         {job && (
           <div>
             <p className={`status ${job.status === "succeeded" ? "ok" : job.status === "failed" ? "err" : ""}`}>
@@ -230,6 +398,7 @@ export default function HomePage() {
                 : ""}
             </p>
             {job.validation && <pre>{JSON.stringify(job.validation, null, 2)}</pre>}
+            {job.aps != null && <pre>{JSON.stringify(job.aps, null, 2)}</pre>}
           </div>
         )}
       </section>

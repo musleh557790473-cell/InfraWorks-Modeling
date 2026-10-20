@@ -1,93 +1,58 @@
-import type {
-  DomainFeatureCollection,
-  MappingProfile,
-  ValidationIssue,
-  ValidationReport,
-} from "./types.js";
+import type { DomainFeatureCollection, ValidationIssue, ValidationReport } from "./types.js";
+import type { ProjectProfile } from "./profile.js";
+import { Geometry } from "./types.js";
+import { ParseError, PARSE_CODES } from "./parse-error.js";
+import { runRules } from "./rules/registry.js";
+import type { RuleContext } from "./rules/types.js";
+// Geometry used by parseGeometryOrThrow (GEO-001 boundary)
 
+/**
+ * Validate a feature collection against a project profile via the rule registry.
+ * GEO-001 also enforced at Zod boundary when parsing geometries.
+ */
 export function validateCollection(
   collection: DomainFeatureCollection,
-  profile: MappingProfile,
-  opts: {
-    joinedCount: number;
-    reportRowCount: number;
-    hasCad: boolean;
-  },
+  profile: ProjectProfile,
+  extras?: Partial<RuleContext>,
 ): ValidationReport {
-  const issues: ValidationIssue[] = [];
+  const result = runRules({
+    profile,
+    collection,
+    ...extras,
+  });
 
-  if (!collection.crs?.epsg) {
-    issues.push({
-      code: "CRS_MISSING",
-      severity: "blocking",
-      message: "Project CRS (EPSG) is not set",
-    });
-  }
-
-  if (!opts.hasCad) {
-    issues.push({
-      code: "CAD_MISSING",
-      severity: "blocking",
-      message: "No DWG/DXF upload found for this project",
-    });
-  }
-
-  if (collection.features.length === 0) {
-    issues.push({
-      code: "GEOMETRY_EMPTY",
-      severity: "blocking",
-      message: "No features extracted from CAD input",
-    });
-  }
-
-  const unmapped = collection.features.filter((f) => f.infraFeatureClass === "unmapped");
-  if (unmapped.length > 0) {
-    issues.push({
-      code: "LAYERS_UNMAPPED",
-      severity: "warning",
-      message: `${unmapped.length} feature(s) have unmapped layers`,
-      context: { count: String(unmapped.length) },
-    });
-  }
-
-  const needsJoin = profile.reportJoins.length > 0 && opts.reportRowCount > 0;
-  if (needsJoin && opts.joinedCount === 0) {
-    issues.push({
-      code: "REPORT_JOIN_FAILED",
-      severity: "blocking",
-      message: "Report rows present but none joined to features — check join keys",
-    });
-  } else if (needsJoin && opts.joinedCount < opts.reportRowCount) {
-    issues.push({
-      code: "REPORT_JOIN_PARTIAL",
-      severity: "warning",
-      message: `Joined ${opts.joinedCount}/${opts.reportRowCount} report rows`,
-      context: {
-        joined: String(opts.joinedCount),
-        total: String(opts.reportRowCount),
-      },
-    });
-  }
-
-  for (const f of collection.features) {
-    if (!f.geometry?.coordinates) {
-      issues.push({
-        code: "GEOMETRY_INVALID",
-        severity: "blocking",
-        message: `Feature ${f.id} has empty geometry`,
-        context: { featureId: f.id },
-      });
-    }
-  }
-
-  const blockingCount = issues.filter((i) => i.severity === "blocking").length;
-  const warningCount = issues.filter((i) => i.severity === "warning").length;
+  const issues: ValidationIssue[] = result.issues.map((i) => ({
+    code: i.code,
+    severity: i.severity,
+    message: i.message,
+    details: i.details,
+    context:
+      i.details && typeof i.details === "object"
+        ? undefined
+        : undefined,
+  }));
 
   return {
-    ok: blockingCount === 0,
-    blockingCount,
-    warningCount,
+    ok: result.ok,
+    blockingCount: result.blockingCount,
+    warningCount: result.warningCount,
     issues,
+    skipped: result.skipped,
     generatedAt: new Date().toISOString(),
+    profileId: profile.id,
+    profileSchemaVersion: profile.schemaVersion,
   };
+}
+
+/** Parse unknown GeoJSON geometry; failures become GEO-001 ParseError. */
+export function parseGeometryOrThrow(input: unknown, featureId = "?") {
+  const parsed = Geometry.safeParse(input);
+  if (!parsed.success) {
+    throw new ParseError(
+      PARSE_CODES.GEO_001_INVALID_GEOMETRY,
+      `GEO-001: invalid geometry on feature ${featureId}`,
+      parsed.error.flatten(),
+    );
+  }
+  return parsed.data;
 }

@@ -1,20 +1,17 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { nanoid } from "nanoid";
-import type {
-  JobStatus,
-  MappingProfile,
-  ProjectStatus,
-  ValidationReport,
-} from "./types.js";
-import { DEFAULT_MAPPING_PROFILE, DEFAULT_EPSG } from "./types.js";
+import type { JobStatus, ProjectStatus, ValidationReport, MappingProfile } from "./types.js";
+import type { ProjectProfile } from "./profile.js";
+import { resolveProfile } from "./profile.js";
 import { resolveCrs } from "./crs.js";
+import { GENERIC_PROFILE } from "./profiles/generic.js";
 
 export interface UploadedFile {
   id: string;
   projectId: string;
   filename: string;
-  kind: "dwg" | "dxf" | "csv" | "xlsx" | "pdf" | "shp" | "tif" | "other";
+  kind: "dwg" | "dxf" | "csv" | "xlsx" | "pdf" | "shp" | "tif" | "other" | "reference";
   path: string;
   size: number;
   uploadedAt: string;
@@ -27,9 +24,13 @@ export interface ProjectRecord {
   epsg: number;
   crsName: string;
   infraWorksCrsHint: string;
+  /** Full validation profile (replaces bare MappingProfile as source of truth). */
+  projectProfile: ProjectProfile;
+  /** Transitional mirror of layers/joins for older callers. */
   mappingProfile: MappingProfile;
   createdAt: string;
   updatedAt: string;
+  profileFallbackWarning?: string;
 }
 
 export interface JobRecord {
@@ -44,12 +45,17 @@ export interface JobRecord {
 }
 
 export interface DomainStore {
-  createProject(name: string, epsg?: number): ProjectRecord;
+  createProject(
+    name: string,
+    opts?: { epsg?: number; profileId?: string; profile?: ProjectProfile },
+  ): ProjectRecord;
   getProject(id: string): ProjectRecord | undefined;
   listProjects(): ProjectRecord[];
   updateProject(id: string, patch: Partial<ProjectRecord>): ProjectRecord;
   addUpload(upload: Omit<UploadedFile, "id" | "uploadedAt">): UploadedFile;
   listUploads(projectId: string): UploadedFile[];
+  setProjectProfile(projectId: string, profile: ProjectProfile): ProjectRecord;
+  /** @deprecated use setProjectProfile */
   setMappingProfile(projectId: string, profile: MappingProfile): ProjectRecord;
   createJob(projectId: string): JobRecord;
   getJob(id: string): JobRecord | undefined;
@@ -72,6 +78,15 @@ function detectKind(filename: string): UploadedFile["kind"] {
   return "other";
 }
 
+function toMapping(profile: ProjectProfile): MappingProfile {
+  return {
+    id: profile.id,
+    name: profile.name,
+    layers: profile.layers,
+    reportJoins: profile.reportJoins,
+  };
+}
+
 export function createFileStore(dataDir: string): DomainStore {
   const uploadDir = join(dataDir, "uploads");
   const artifactDir = join(dataDir, "artifacts");
@@ -92,7 +107,7 @@ export function createFileStore(dataDir: string): DomainStore {
     writeFileSync(path, JSON.stringify(value, null, 2));
   };
 
-  let projects = readJson<ProjectRecord[]>(projectsPath, []);
+  let projects = readJson<ProjectRecord[]>(projectsPath, []).map(migrateProject);
   let uploads = readJson<UploadedFile[]>(uploadsPath, []);
   let jobs = readJson<JobRecord[]>(jobsPath, []);
 
@@ -106,19 +121,47 @@ export function createFileStore(dataDir: string): DomainStore {
     dataDir,
     uploadDir,
     artifactDir,
-    createProject(name, epsg = DEFAULT_EPSG) {
+    createProject(name, opts = {}) {
+      const { profile, usedGenericFallback } = resolveProfile({
+        profileId: opts.profileId,
+        profile: opts.profile,
+      });
+      const epsg = opts.epsg ?? (profile.crs.epsg > 0 ? profile.crs.epsg : undefined);
+      if (epsg == null || epsg <= 0) {
+        throw new Error("CRS-001: epsg is required when profile has no declared CRS (no domain default)");
+      }
       const crs = resolveCrs(epsg);
       const now = new Date().toISOString();
+      const projectProfile: ProjectProfile = {
+        ...structuredClone(profile),
+        crs: {
+          epsg: crs.epsg,
+          name: crs.known ? crs.name : profile.crs.name !== "UNDECLARED" ? profile.crs.name : crs.name,
+          infraWorksCrsHint: crs.known
+            ? crs.infraWorksCrsHint
+            : profile.crs.infraWorksCrsHint !== "UNDECLARED"
+              ? profile.crs.infraWorksCrsHint
+              : crs.infraWorksCrsHint,
+          verticalDatum: profile.crs.verticalDatum,
+        },
+      };
       const project: ProjectRecord = {
         id: nanoid(10),
         name,
         status: "draft",
-        epsg: crs.epsg,
-        crsName: crs.name,
-        infraWorksCrsHint: crs.infraWorksCrsHint,
-        mappingProfile: structuredClone(DEFAULT_MAPPING_PROFILE),
+        epsg: projectProfile.crs.epsg,
+        crsName: projectProfile.crs.name,
+        infraWorksCrsHint: projectProfile.crs.infraWorksCrsHint,
+        projectProfile,
+        mappingProfile: toMapping(projectProfile),
         createdAt: now,
         updatedAt: now,
+        ...(usedGenericFallback
+          ? {
+              profileFallbackWarning:
+                "No profile supplied — fell back to profiles/generic.ts (§6.2)",
+            }
+          : {}),
       };
       projects.push(project);
       persist();
@@ -140,24 +183,41 @@ export function createFileStore(dataDir: string): DomainStore {
       return next;
     },
     addUpload(upload) {
-      const record: UploadedFile = {
+      const row: UploadedFile = {
         ...upload,
         id: nanoid(10),
-        kind: upload.kind ?? detectKind(upload.filename),
         uploadedAt: new Date().toISOString(),
+        kind: upload.kind || detectKind(upload.filename),
       };
-      uploads.push(record);
+      uploads.push(row);
       persist();
-      return record;
+      return row;
     },
     listUploads(projectId) {
       return uploads.filter((u) => u.projectId === projectId);
     },
-    setMappingProfile(projectId, profile) {
+    setProjectProfile(projectId, profile) {
       return this.updateProject(projectId, {
-        mappingProfile: profile,
+        projectProfile: profile,
+        mappingProfile: toMapping(profile),
+        epsg: profile.crs.epsg,
+        crsName: profile.crs.name,
+        infraWorksCrsHint: profile.crs.infraWorksCrsHint,
         status: "mapped",
+        profileFallbackWarning: undefined,
       });
+    },
+    setMappingProfile(projectId, profile) {
+      const current = this.getProject(projectId);
+      if (!current) throw new Error(`Project not found: ${projectId}`);
+      const merged: ProjectProfile = {
+        ...current.projectProfile,
+        id: profile.id,
+        name: profile.name,
+        layers: profile.layers,
+        reportJoins: profile.reportJoins,
+      };
+      return this.setProjectProfile(projectId, merged);
     },
     createJob(projectId) {
       const now = new Date().toISOString();
@@ -169,7 +229,6 @@ export function createFileStore(dataDir: string): DomainStore {
         updatedAt: now,
       };
       jobs.push(job);
-      this.updateProject(projectId, { status: "building" });
       persist();
       return job;
     },
@@ -191,9 +250,31 @@ export function createFileStore(dataDir: string): DomainStore {
   };
 }
 
+function migrateProject(p: ProjectRecord & { projectProfile?: ProjectProfile }): ProjectRecord {
+  if (p.projectProfile) return p;
+  const fallback = structuredClone(GENERIC_PROFILE);
+  const profile: ProjectProfile = {
+    ...fallback,
+    id: p.mappingProfile?.id ?? "migrated",
+    name: p.mappingProfile?.name ?? p.name,
+    crs: {
+      epsg: p.epsg,
+      name: p.crsName,
+      infraWorksCrsHint: p.infraWorksCrsHint,
+    },
+    layers: p.mappingProfile?.layers ?? [],
+    reportJoins: p.mappingProfile?.reportJoins ?? [],
+  };
+  return {
+    ...p,
+    projectProfile: profile,
+    mappingProfile: toMapping(profile),
+  };
+}
+
 export function listArtifactFiles(artifactDir: string): string[] {
   if (!existsSync(artifactDir)) return [];
-  return readdirSync(artifactDir);
+  return [];
 }
 
 export { detectKind };

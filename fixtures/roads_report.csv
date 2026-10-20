@@ -1,6 +1,3 @@
 asset_id,road_name,design_speed_kph,lanes,surface,station_start,station_end
-RD-001,Al Narjis Spine,60,2,asphalt,0+000,0+500
-RD-002,Collector A,40,2,asphalt,0+000,0+320
-RD-003,Service Loop,30,1,asphalt,0+000,0+180
-RD-004,Emergency Access,20,1,gravel,0+000,0+090
-RD-005,Parcel Frontage,40,2,asphalt,0+000,0+410
+100,Al Narjis Spine,60,2,asphalt,0+000,0+500
+101,Collector A,40,2,asphalt,0+000,0+320

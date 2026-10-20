@@ -1,4 +1,6 @@
 export * from "./types.js";
+export * from "./profile.js";
+export * from "./profiles/index.js";
 export * from "./crs.js";
 export * from "./store.js";
 export * from "./dwg.js";
@@ -6,3 +8,7 @@ export * from "./reports.js";
 export * from "./validate.js";
 export * from "./package.js";
 export * from "./pipeline.js";
+export * from "./parse-error.js";
+export * from "./demo.js";
+export * from "./rules/registry.js";
+export * from "./rules/types.js";
