@@ -238,7 +238,8 @@ app.get("/", (c) =>
   }),
 );
 
+const hostname = process.env.API_HOST || "0.0.0.0";
 console.log(
-  `API listening on http://127.0.0.1:${port} (APS ${aps.isConfigured ? "live" : "mock"})`,
+  `API listening on http://${hostname}:${port} (APS ${aps.isConfigured ? "live" : "mock"})`,
 );
-serve({ fetch: app.fetch, port });
+serve({ fetch: app.fetch, port, hostname });
