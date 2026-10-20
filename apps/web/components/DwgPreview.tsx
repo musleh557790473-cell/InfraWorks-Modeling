@@ -123,7 +123,7 @@ function LocalMapPreview({ geojson }: { geojson: PreviewGeoJson }) {
       }
     }
     if (!Number.isFinite(minX)) {
-      return { paths: all, viewBox: "0 0 100 100" };
+      return { paths: all, circles: [], viewBox: "0 0 1000 1000" };
     }
     const pad = 0.08;
     const w = Math.max(maxX - minX, 1e-6);

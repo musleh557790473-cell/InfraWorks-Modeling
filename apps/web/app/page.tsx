@@ -98,6 +98,29 @@ export default function HomePage() {
           setJob(succeeded);
           setMessage(`Resumed ${detail.name} — package ready`);
         }
+        // Auto local preview so FREE mode shows the 2D map without an extra click
+        const savedMode = (() => {
+          try {
+            return localStorage.getItem(MODE_KEY);
+          } catch {
+            return null;
+          }
+        })();
+        if (savedMode !== "aps") {
+          void fetch(
+            `${base}/projects/${detail.id}/preview?previewMode=local`,
+            { signal: AbortSignal.timeout(60_000) },
+          )
+            .then(async (r) => {
+              const data = await r.json();
+              if (!r.ok) return;
+              setPreview(data);
+              setMessage(
+                `${succeeded ? `Resumed ${detail.name} — package ready · ` : ""}Local free preview ready · ${data.featureCount ?? 0} features`,
+              );
+            })
+            .catch(() => undefined);
+        }
       })
       .catch(() => undefined);
   }, []);
