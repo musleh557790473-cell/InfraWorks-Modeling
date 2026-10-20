@@ -108,7 +108,7 @@ function collectCoords(geom: { type: string; coordinates: unknown }): number[][]
 
 function LocalMapPreview({ geojson }: { geojson: PreviewGeoJson }) {
   const paths = useMemo(() => {
-    const all: Array<{ d: string; color: string; cls: string }> = [];
+    const all: Array<{ d: string; color: string; cls: string; fill?: string }> = [];
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
@@ -139,23 +139,43 @@ function LocalMapPreview({ geojson }: { geojson: PreviewGeoJson }) {
       return `${px.toFixed(1)},${py.toFixed(1)}`;
     };
 
+    const circles: Array<{ cx: string; cy: string; color: string }> = [];
     for (const f of feats) {
       const cls = String(f.properties?.infraFeatureClass || "unmapped");
       const color = CLASS_COLORS[cls] || CLASS_COLORS.unmapped;
       const coords = collectCoords(f.geometry);
-      if (coords.length < 2) continue;
-      const d = coords.map((c, i) => `${i === 0 ? "M" : "L"}${tx(c[0], c[1])}`).join(" ");
-      all.push({ d, color, cls });
+      if (coords.length === 0) continue;
+      if (coords.length === 1 || f.geometry.type === "Point") {
+        const [x, y] = coords[0];
+        const [cx, cy] = tx(x, y).split(",");
+        circles.push({ cx, cy, color });
+        continue;
+      }
+      const closed = f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon";
+      let d = coords.map((c, i) => `${i === 0 ? "M" : "L"}${tx(c[0], c[1])}`).join(" ");
+      if (closed) d += " Z";
+      all.push({ d, color, cls, fill: closed ? `${color}33` : "none" });
     }
-    return { paths: all, viewBox: "0 0 1000 1000" };
+    return { paths: all, circles, viewBox: "0 0 1000 1000" };
   }, [geojson]);
 
   return (
-    <div className="viewer-host local-map-host">
+    <div className="viewer-host local-map-host" data-testid="local-map-preview">
       <svg viewBox={paths.viewBox} className="local-map-svg" role="img" aria-label="Local layer map">
         <rect width="1000" height="1000" fill="rgba(0,0,0,0.25)" />
         {paths.paths.map((p, i) => (
-          <path key={i} d={p.d} fill="none" stroke={p.color} strokeWidth="3" strokeLinecap="round" />
+          <path
+            key={i}
+            d={p.d}
+            fill={p.fill || "none"}
+            stroke={p.color}
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ))}
+        {paths.circles.map((c, i) => (
+          <circle key={`c${i}`} cx={c.cx} cy={c.cy} r="8" fill={c.color} />
         ))}
       </svg>
       <div className="local-map-legend">
