@@ -2,7 +2,7 @@ import { serve } from "@hono/node-server";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { join, basename } from "node:path";
+import { join, basename, isAbsolute, resolve } from "node:path";
 import {
   CreateProjectInput,
   MappingProfile,
@@ -163,14 +163,33 @@ app.get("/jobs/:id/validation", (c) => {
 app.get("/jobs/:id/package", (c) => {
   const job = store.getJob(c.req.param("id"));
   if (!job) return c.json({ error: "Not found" }, 404);
-  if (!job.packagePath || !existsSync(job.packagePath)) {
+  if (!job.packagePath) {
     return c.json({ error: "Package not ready" }, 404);
   }
-  const buf = readFileSync(job.packagePath);
+  // Resolve relative paths against API cwd and common monorepo locations
+  const candidates = [
+    job.packagePath,
+    isAbsolute(job.packagePath) ? job.packagePath : resolve(process.cwd(), job.packagePath),
+    resolve(process.cwd(), "../../data/artifacts", basename(job.packagePath)),
+    resolve(process.cwd(), "data/artifacts", basename(job.packagePath)),
+    join(store.artifactDir, basename(job.packagePath)),
+  ];
+  const filePath = candidates.find((p) => p && existsSync(p));
+  if (!filePath) {
+    return c.json(
+      { error: "Package file missing on disk", packagePath: job.packagePath },
+      404,
+    );
+  }
+  const buf = readFileSync(filePath);
+  const filename = basename(filePath);
   return new Response(buf, {
     headers: {
       "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${basename(job.packagePath)}"`,
+      "Content-Length": String(buf.byteLength),
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 });

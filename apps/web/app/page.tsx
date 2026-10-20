@@ -236,11 +236,23 @@ export default function HomePage() {
             Run build
           </button>
           {job?.status === "succeeded" && (
-            <a className="btn" href={`${apiBase()}/jobs/${job.id}/package`}>
+            <a
+              className="btn"
+              href={`${apiBase()}/jobs/${job.id}/package`}
+              download={`${job.id}-infraworks-package.zip`}
+            >
               Download ZIP
             </a>
           )}
         </div>
+        {job?.status === "succeeded" && (
+          <p className="status ok">
+            Package ready — click <strong>Download ZIP</strong>, or open{" "}
+            <code>{`${apiBase() || ""}/jobs/${job.id}/package`}</code> in this
+            Try Live Chrome (not Windows). Also saved on Desktop as{" "}
+            <code>InfraWorks-package.zip</code>.
+          </p>
+        )}
         {job && (
           <div>
             <p className={`status ${job.status === "succeeded" ? "ok" : job.status === "failed" ? "err" : ""}`}>
