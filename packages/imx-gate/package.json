@@ -1,0 +1,36 @@
+{
+  "name": "@infraworks/imx-gate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Gate G2 - validate and repair a Civil 3D IMX export before it is imported into InfraWorks",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "imx-gate": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.json --watch",
+    "gate": "tsx src/cli.ts",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@infraworks/domain": "workspace:*",
+    "better-sqlite3": "^11.8.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

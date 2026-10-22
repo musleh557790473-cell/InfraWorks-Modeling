@@ -34,8 +34,28 @@ pnpm dev               # web :3000 · API :8787 · worker · MCP (stdio)
 | `apps/worker` | Polls queued jobs (inline in LOCAL_MODE via API) |
 | `apps/mcp` | MCP tools mirroring the API |
 | `packages/domain` | Domain model, DWG/DXF + report ingest, validation, ZIP package |
+| `packages/imx-gate` | **Gate G2** — validate and repair a Civil 3D IMX export before import |
 | `packages/aps-client` | APS auth / Model Derivative (mocked without credentials) |
 | `fixtures/` | Sample DWG/DXF + `roads_report.csv` |
+
+## Conversion gates
+
+Beyond packaging, the repo carries a set of gates that check an exchange **before** it
+can go wrong, because the failures that matter in Civil 3D ⇄ InfraWorks are silent: the
+import succeeds, and part of the model is simply absent.
+
+| Gate | Runs on | Status |
+| --- | --- | --- |
+| G1 | DWG / LandXML, before export | planned |
+| **G2** | **`.imx`, after export and before import** | **`packages/imx-gate`** |
+| G3 | InfraWorks `.sqlite`, after import | planned |
+
+```bash
+pnpm --filter @infraworks/imx-gate gate export.imx --crs 32636 --repair
+```
+
+See [`packages/imx-gate/README.md`](packages/imx-gate/README.md) for the rule list and
+what the auto-repair is allowed to touch.
 
 ## Success check
 
