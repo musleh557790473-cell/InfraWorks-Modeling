@@ -18,6 +18,14 @@ const store = createFileStore(dataDir);
 const aps = createApsClientFromEnv();
 const port = Number(process.env.API_PORT || 8787);
 
+function safeFilename(name: string | undefined): string {
+  const base = basename(String(name ?? "").replace(/\\/g, "/"))
+    .replace(/[\u0000-\u001f<>:"|?*]/g, "_")
+    .replace(/^\.+/, "")
+    .trim();
+  return base || "upload.bin";
+}
+
 const app = new OpenAPIHono();
 app.use("*", cors());
 
@@ -80,7 +88,8 @@ app.post("/projects/:id/uploads", async (c) => {
 
   const projectUploadDir = join(store.uploadDir, projectId);
   mkdirSync(projectUploadDir, { recursive: true });
-  const filename = file.name || "upload.bin";
+  // Never trust the client filename as a path: "../../x" would write outside the project.
+  const filename = safeFilename(file.name);
   const dest = join(projectUploadDir, filename);
   const ab = await file.arrayBuffer();
   writeFileSync(dest, Buffer.from(ab));
@@ -98,7 +107,11 @@ app.post("/projects/:id/uploads", async (c) => {
 app.put("/projects/:id/mapping", async (c) => {
   const projectId = c.req.param("id");
   if (!store.getProject(projectId)) return c.json({ error: "Not found" }, 404);
-  const body = MappingProfile.parse(await c.req.json());
+  const parsed = MappingProfile.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    return c.json({ error: "Invalid mapping profile", issues: parsed.error.issues }, 400);
+  }
+  const body = parsed.data;
   const project = store.setMappingProfile(projectId, body);
   return c.json(project);
 });

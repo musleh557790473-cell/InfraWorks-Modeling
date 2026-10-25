@@ -394,6 +394,20 @@ export function checkCrs(h: ImxHandle, stats: ImxStats, opts: GateOptions): ImxF
         : opts.epsg >= 32701 && opts.epsg <= 32760
           ? opts.epsg - 32700
           : null;
+    const expectSouth = opts.epsg >= 32701 && opts.epsg <= 32760;
+    if (expectedZone !== null && crs.south !== null && crs.south !== expectSouth) {
+      out.push(
+        f(
+          "IMX-009",
+          "Coordinate system matches the project",
+          "blocking",
+          `The export declares a ${crs.south ? "southern" : "northern"}-hemisphere UTM but the project ` +
+            `expects EPSG:${opts.epsg} (${expectSouth ? "southern" : "northern"}). Northings would be ` +
+            `offset by 10 000 km.`,
+          { context: { declared: crs.name, expected: `EPSG:${opts.epsg}` } },
+        ),
+      );
+    }
     if (expectedZone !== null && expectedZone !== crs.utmZone) {
       out.push(
         f(

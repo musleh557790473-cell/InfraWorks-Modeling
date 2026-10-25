@@ -18,7 +18,7 @@ cd InfraWorks-Modeling
 cp .env.example .env   # LOCAL_MODE=1
 pnpm install
 pnpm --filter @infraworks/domain build && pnpm --filter @infraworks/aps-client build
-pnpm fixture:pipeline  # sample DWG + CSV → ZIP under data/artifacts/
+pnpm fixture:pipeline  # sample DXF + CSV → ZIP under data/artifacts/
 pnpm dev               # web :3000 · API :8787 · worker · MCP (stdio)
 ```
 
@@ -59,7 +59,15 @@ what the auto-repair is allowed to touch.
 
 ## Success check
 
-Upload fixture DWG + `roads_report.csv`, map layers, run build → download ZIP with `validation_report.json` and zero blocking issues.
+Upload `fixtures/sample.dxf` + `fixtures/roads_report.csv`, map layers, run build → download ZIP with `validation_report.json` and zero blocking issues.
+
+## CAD input rules
+
+- **DXF (ASCII)** is read for real: `LINE`, `LWPOLYLINE`, `POLYLINE`, `POINT` in the ENTITIES section. Closed polylines become polygons. Arcs (bulges) are written as straight chords. Other entity types are listed in a warning.
+- **Binary DWG is not parsed yet.** It produces synthetic demo geometry, which validation **blocks** (`CAD_GEOMETRY_SYNTHETIC`). Save as DXF until a real DWG reader (e.g. APS Design Automation) is wired.
+- **Asset ids for report joins** come from XDATA: the first `1000` string under application `1001 INFRAWORKS` on each entity. Entities without it are not joined.
+- Coordinates must fall inside the project CRS (`COORDS_OUTSIDE_CRS` blocks drawings left in local coordinates).
+- GeoJSON layers carry a `crs` member (`urn:ogc:def:crs:EPSG::<code>`) so InfraWorks/GDAL read them in the project CRS, not as WGS 84 degrees.
 
 MCP tools: `create_project`, `upload_input`, `set_mapping_profile`, `run_build`, `get_job`, `get_validation`, `get_package_url`.
 

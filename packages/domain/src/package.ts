@@ -21,9 +21,15 @@ function featuresByClass(features: DomainFeature[]) {
   return map;
 }
 
-function toGeoJson(features: DomainFeature[]) {
+/**
+ * Coordinates stay in the project CRS (e.g. UTM metres), which RFC 7946 GeoJSON does not
+ * allow by default. The legacy `crs` member tells GDAL/OGR-based readers — InfraWorks
+ * among them — what the numbers are, instead of reading them as WGS 84 degrees.
+ */
+function toGeoJson(features: DomainFeature[], epsg: number) {
   return {
     type: "FeatureCollection",
+    crs: { type: "name", properties: { name: `urn:ogc:def:crs:EPSG::${epsg}` } },
     features: features.map((f) => ({
       type: "Feature",
       id: f.id,
@@ -57,7 +63,7 @@ export async function buildPackageZip(opts: {
   for (const [infraFeatureClass, feats] of byClass) {
     if (infraFeatureClass === "unmapped") continue;
     const rel = `layers/${infraFeatureClass}.geojson`;
-    writeFileSync(join(stagingDir, rel), JSON.stringify(toGeoJson(feats), null, 2));
+    writeFileSync(join(stagingDir, rel), JSON.stringify(toGeoJson(feats, opts.collection.crs.epsg), null, 2));
     files.push(rel);
     layerEntries.push({
       name: infraFeatureClass,
@@ -136,11 +142,9 @@ export async function buildPackageZip(opts: {
 async function zipDirectory(sourceDir: string, zipPath: string) {
   const output = createWriteStream(zipPath);
   const archive = archiver("zip", { zlib: { level: 9 } });
-  archive.on("error", (err) => {
-    throw err;
-  });
+  // Throwing inside an event handler would crash the process; reject the build instead.
+  const failed = new Promise<never>((_, reject) => archive.on("error", reject));
   archive.pipe(output);
   archive.directory(sourceDir, false);
-  await archive.finalize();
-  await finished(output);
+  await Promise.race([Promise.all([archive.finalize(), finished(output)]), failed]);
 }

@@ -9,6 +9,7 @@ import Database from "better-sqlite3";
 import { lintJson, repairJson } from "../src/jsonlint.js";
 import { parseFgf, partLength2d } from "../src/fgf.js";
 import { runGate } from "../src/gate.js";
+import { repairImx } from "../src/repair.js";
 
 /* ---------------------------------------------------------------- fixtures */
 
@@ -39,6 +40,7 @@ interface FixtureOpts {
   epsgZone?: number;
   sections?: number;
   regionLength?: number;
+  falseNorthing?: number;
 }
 
 function makeImx(dir: string, name: string, o: FixtureOpts = {}): string {
@@ -70,7 +72,9 @@ function makeImx(dir: string, name: string, o: FixtureOpts = {}): string {
     "Default",
     `UTM84-${zone}N`,
     null,
-    `PROJCS["UTM84-${zone}N",PROJECTION["Transverse_Mercator"],PARAMETER["central_meridian",${cm}.0000000]]`,
+    `PROJCS["UTM84-${zone}N",PROJECTION["Transverse_Mercator"],PARAMETER["central_meridian",${cm}.0000000]${
+      o.falseNorthing !== undefined ? `,PARAMETER["false_northing",${o.falseNorthing}]` : ""
+    }]`,
     null,
     null,
   );
@@ -177,6 +181,33 @@ test("IMX-006 warns when sections are sampled too far apart", () => {
     const file = makeImx(dir, "sparse.imx", { sections: 3, regionLength: 300 });
     const r = runGate(file, { epsg: 32636, maxStationGapM: 15 });
     assert.ok(r.findings.some((f) => f.ruleId === "IMX-006"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("IMX-009 blocks a hemisphere mismatch in the right zone", () => {
+  const dir = mkdtempSync(join(tmpdir(), "imx-"));
+  try {
+    const south = makeImx(dir, "south.imx", { epsgZone: 38, falseNorthing: 10000000 });
+    const r = runGate(south, { epsg: 32638 });
+    assert.ok(r.findings.some((f) => f.ruleId === "IMX-009" && /hemisphere/.test(f.message)));
+
+    const north = makeImx(dir, "north.imx", { epsgZone: 38, falseNorthing: 0 });
+    assert.ok(!runGate(north, { epsg: 32638 }).findings.some((f) => /hemisphere/.test(f.message)));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("repair refuses an output path that is the source written differently", () => {
+  const dir = mkdtempSync(join(tmpdir(), "imx-"));
+  try {
+    const file = makeImx(dir, "bad.imx", { badSectionAt: 2 });
+    assert.throws(() => repairImx(file, `${dir}/./sub/../bad.imx`), /in place/);
+    if (process.platform === "win32") {
+      assert.throws(() => repairImx(file, join(dir, "BAD.IMX")), /in place/);
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

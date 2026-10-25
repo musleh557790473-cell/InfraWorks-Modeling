@@ -45,10 +45,12 @@ export interface DeclaredCrs {
   centralMeridian: number | null;
   /** UTM zone derived from the central meridian, when the projection is Transverse Mercator. */
   utmZone: number | null;
+  /** True for a southern-hemisphere UTM (false_northing 10 000 000), null when unknown. */
+  south: boolean | null;
 }
 
 export function declaredCrs(h: ImxHandle): DeclaredCrs {
-  const empty: DeclaredCrs = { name: null, wkt: null, centralMeridian: null, utmZone: null };
+  const empty: DeclaredCrs = { name: null, wkt: null, centralMeridian: null, utmZone: null, south: null };
   if (!has(h, "spatial_ref_sys")) return empty;
   const row = h.db.prepare("select auth_name, sr_name, srtext from spatial_ref_sys limit 1").get() as
     | { auth_name: string | null; sr_name: string | null; srtext: string | null }
@@ -56,9 +58,12 @@ export function declaredCrs(h: ImxHandle): DeclaredCrs {
   if (!row) return empty;
   const wkt = row.srtext ?? null;
   let cm: number | null = null;
+  let south: boolean | null = null;
   if (wkt) {
     const m = /PARAMETER\s*\[\s*"central_meridian"\s*,\s*(-?[\d.]+)/i.exec(wkt);
     if (m) cm = Number(m[1]);
+    const fn = /PARAMETER\s*\[\s*"false_northing"\s*,\s*(-?[\d.]+)/i.exec(wkt);
+    if (fn) south = Number(fn[1]) >= 5_000_000;
   }
   const zone = cm === null ? null : Math.round((cm + 183) / 6);
   return {
@@ -66,6 +71,7 @@ export function declaredCrs(h: ImxHandle): DeclaredCrs {
     wkt,
     centralMeridian: cm,
     utmZone: zone !== null && zone >= 1 && zone <= 60 ? zone : null,
+    south,
   };
 }
 

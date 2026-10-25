@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { nanoid } from "nanoid";
 import type {
@@ -88,13 +88,24 @@ export function createFileStore(dataDir: string): DomainStore {
     if (!existsSync(path)) return fallback;
     return JSON.parse(readFileSync(path, "utf8")) as T;
   };
+  // Write-then-rename so the other process never reads a half-written file.
   const writeJson = (path: string, value: unknown) => {
-    writeFileSync(path, JSON.stringify(value, null, 2));
+    const tmp = `${path}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify(value, null, 2));
+    renameSync(tmp, path);
   };
 
   let projects = readJson<ProjectRecord[]>(projectsPath, []);
   let uploads = readJson<UploadedFile[]>(uploadsPath, []);
   let jobs = readJson<JobRecord[]>(jobsPath, []);
+
+  // API and worker are separate processes sharing these files: re-read before every
+  // operation so neither works from a stale copy or overwrites the other with one.
+  const load = () => {
+    projects = readJson<ProjectRecord[]>(projectsPath, []);
+    uploads = readJson<UploadedFile[]>(uploadsPath, []);
+    jobs = readJson<JobRecord[]>(jobsPath, []);
+  };
 
   const persist = () => {
     writeJson(projectsPath, projects);
@@ -107,6 +118,7 @@ export function createFileStore(dataDir: string): DomainStore {
     uploadDir,
     artifactDir,
     createProject(name, epsg = DEFAULT_EPSG) {
+      load();
       const crs = resolveCrs(epsg);
       const now = new Date().toISOString();
       const project: ProjectRecord = {
@@ -125,12 +137,15 @@ export function createFileStore(dataDir: string): DomainStore {
       return project;
     },
     getProject(id) {
+      load();
       return projects.find((p) => p.id === id);
     },
     listProjects() {
+      load();
       return [...projects].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     },
     updateProject(id, patch) {
+      load();
       const idx = projects.findIndex((p) => p.id === id);
       if (idx < 0) throw new Error(`Project not found: ${id}`);
       const current = projects[idx]!;
@@ -140,6 +155,7 @@ export function createFileStore(dataDir: string): DomainStore {
       return next;
     },
     addUpload(upload) {
+      load();
       const record: UploadedFile = {
         ...upload,
         id: nanoid(10),
@@ -151,6 +167,7 @@ export function createFileStore(dataDir: string): DomainStore {
       return record;
     },
     listUploads(projectId) {
+      load();
       return uploads.filter((u) => u.projectId === projectId);
     },
     setMappingProfile(projectId, profile) {
@@ -160,6 +177,7 @@ export function createFileStore(dataDir: string): DomainStore {
       });
     },
     createJob(projectId) {
+      load();
       const now = new Date().toISOString();
       const job: JobRecord = {
         id: nanoid(10),
@@ -169,17 +187,21 @@ export function createFileStore(dataDir: string): DomainStore {
         updatedAt: now,
       };
       jobs.push(job);
-      this.updateProject(projectId, { status: "building" });
+      // Persist first: updateProject re-reads from disk and would drop the unsaved job.
       persist();
+      this.updateProject(projectId, { status: "building" });
       return job;
     },
     getJob(id) {
+      load();
       return jobs.find((j) => j.id === id);
     },
     listJobs(projectId) {
+      load();
       return jobs.filter((j) => j.projectId === projectId);
     },
     updateJob(id, patch) {
+      load();
       const idx = jobs.findIndex((j) => j.id === id);
       if (idx < 0) throw new Error(`Job not found: ${id}`);
       const current = jobs[idx]!;

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 
 import { runGate } from "./gate.js";
 import { toConsole, toMarkdown } from "./report.js";
@@ -41,11 +41,27 @@ function main(argv: string[]): number {
   const epsgRaw = flag("--crs");
   const gapRaw = flag("--max-gap");
 
+  // A typo here must not silently switch a check off.
+  const epsg = epsgRaw === undefined ? undefined : Number(epsgRaw.replace(/^EPSG:/i, ""));
+  if (epsg !== undefined && !(Number.isInteger(epsg) && epsg > 0)) {
+    process.stderr.write(`imx-gate: --crs expects an EPSG code such as 32638, got "${epsgRaw}"\n`);
+    return 2;
+  }
+  const maxStationGapM = gapRaw === undefined ? undefined : Number(gapRaw);
+  if (maxStationGapM !== undefined && !(maxStationGapM > 0)) {
+    process.stderr.write(`imx-gate: --max-gap expects a positive number of metres, got "${gapRaw}"\n`);
+    return 2;
+  }
+  if (!existsSync(file)) {
+    process.stderr.write(`imx-gate: file not found: ${file}\n`);
+    return 2;
+  }
+
   const report = runGate(file, {
     repair: args.includes("--repair"),
     out: flag("--out"),
-    epsg: epsgRaw ? Number(epsgRaw.replace(/^EPSG:/i, "")) : undefined,
-    maxStationGapM: gapRaw ? Number(gapRaw) : undefined,
+    epsg,
+    maxStationGapM,
   });
 
   if (!args.includes("--quiet")) process.stdout.write(toConsole(report));

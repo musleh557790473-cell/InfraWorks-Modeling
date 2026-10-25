@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@infraworks/domain':
+        specifier: workspace:*
+        version: link:packages/domain
       concurrently:
         specifier: ^9.1.2
         version: 9.2.5
@@ -139,6 +142,9 @@ importers:
       '@types/node':
         specifier: ^22.13.10
         version: 22.20.5
+      tsx:
+        specifier: ^4.19.3
+        version: 4.23.15
       typescript:
         specifier: ^5.8.2
         version: 5.9.3

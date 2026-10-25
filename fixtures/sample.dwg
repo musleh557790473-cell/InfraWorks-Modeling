@@ -1,4 +1,4 @@
 InfraWorks MVP fixture placeholder DWG.
-Binary DWG parsing runs in LOCAL_MODE stub; use sample.dxf for real vector parse.
+Binary DWG is NOT parsed: it yields synthetic geometry that validation blocks. Use sample.dxf.
 Layers expected by default profile: ROADS, COVERAGES, WATER, PARCELS, ANNOTATION.
 Join keys RD-001 … RD-005 match fixtures/roads_report.csv.
