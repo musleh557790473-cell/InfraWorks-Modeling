@@ -5,12 +5,15 @@
   "description": "InfraWorks MVP: 2D DWG + reports → InfraWorks-ready import package",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "build": "pnpm -r --filter @infraworks/domain --filter @infraworks/aps-client build && pnpm -r --filter @infraworks/imx-gate build && pnpm -r --filter @infraworks/api --filter @infraworks/worker --filter @infraworks/mcp --filter @infraworks/web build",
+    "build": "pnpm -r --filter @infraworks/domain --filter @infraworks/aps-client build && pnpm -r --filter @infraworks/imx-gate build && pnpm -r --filter @infraworks/model-gate build && pnpm -r --filter @infraworks/api --filter @infraworks/worker --filter @infraworks/mcp --filter @infraworks/web build",
     "dev": "pnpm --filter @infraworks/domain build && pnpm --filter @infraworks/aps-client build && concurrently -k -n api,web,worker,mcp -c blue,green,yellow,magenta \"pnpm --filter @infraworks/api dev\" \"pnpm --filter @infraworks/web dev\" \"pnpm --filter @infraworks/worker dev\" \"pnpm --filter @infraworks/mcp dev\"",
     "fixture:pipeline": "tsx scripts/fixture-pipeline.ts",
     "typecheck": "pnpm -r typecheck",
     "lint": "echo \"No lint configured yet\"",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "gate:imx": "pnpm --filter @infraworks/imx-gate gate",
+    "gate:model": "pnpm --filter @infraworks/model-gate gate",
+    "fixtures:dwg": "python fixtures/make_fixtures.py"
   },
   "devDependencies": {
     "@infraworks/domain": "workspace:*",

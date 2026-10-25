@@ -8,6 +8,8 @@ import type {
 } from "./types.js";
 import type { ParsedDwg } from "./dwg.js";
 
+const UNIT_NAMES: Record<number, string> = { 1: "inches", 2: "feet", 3: "miles", 4: "millimetres", 5: "centimetres", 6: "metres", 7: "kilometres" };
+
 /** Feature classes InfraWorks expects as closed areas. */
 const AREA_CLASSES: InfraFeatureClass[] = ["coverage", "parcel"];
 
@@ -47,7 +49,8 @@ export function validateCollection(
     joinedCount: number;
     reportRowCount: number;
     hasCad: boolean;
-    cad?: Pick<ParsedDwg, "format" | "notes" | "skippedEntities">;
+    cad?: Partial<Pick<ParsedDwg, "format" | "notes" | "skippedEntities" | "insunits" | "keyStats" | "paperSpaceSkipped">>;
+    conversionError?: string;
   },
 ): ValidationReport {
   const issues: ValidationIssue[] = [];
@@ -68,17 +71,57 @@ export function validateCollection(
     });
   }
 
-  if (opts.cad?.format === "dwg-stub") {
+  if (opts.conversionError) {
     issues.push({
-      code: "CAD_GEOMETRY_SYNTHETIC",
+      code: "CAD_CONVERSION_FAILED",
       severity: "blocking",
       message:
-        "Binary DWG is not parsed in this build — the features are synthetic demo geometry, not your drawing. " +
-        "Save the drawing as ASCII DXF and upload that instead.",
+        `${opts.conversionError}. Install ODA File Converter (free) or ezdwg, or save the drawing as DXF ` +
+        `from AutoCAD and upload that.`,
     });
   }
 
-  const skipped = Object.entries(opts.cad?.skippedEntities ?? {});
+  const units = opts.cad?.insunits;
+  const metric = collection.crs?.epsg ? crsEnvelope(collection.crs.epsg) !== null && collection.crs.epsg !== 4326 : false;
+  if (metric && units !== undefined && units !== 0 && units !== 6) {
+    issues.push({
+      code: "DRAWING_UNITS_NOT_METRES",
+      severity: "warning",
+      message:
+        `The drawing's units are ${UNIT_NAMES[units] ?? `code ${units}`}, but EPSG:${collection.crs.epsg} is in metres. ` +
+        `Coordinates are not rescaled — check the drawing is really in metres or scale it in CAD.`,
+      context: { insunits: String(units) },
+    });
+  }
+
+  const skippedMap = opts.cad?.skippedEntities ?? {};
+  const civil = Object.entries(skippedMap).filter(([t]) => t === "ACAD_PROXY_ENTITY" || t.startsWith("AECC"));
+  if (civil.length) {
+    const n = civil.reduce((s, [, c]) => s + c, 0);
+    issues.push({
+      code: "CIVIL3D_OBJECTS_NOT_READ",
+      severity: "warning",
+      message:
+        `${n} Civil 3D object(s) (alignments, parcels, feature lines, corridors…) cannot be read outside Civil 3D. ` +
+        `In Civil 3D run ExportToAutoCAD (or explode them) before sending the drawing, or send LandXML for alignments and surfaces.`,
+      context: { count: String(n) },
+    });
+  }
+
+  const ks = opts.cad?.keyStats;
+  if (ks && ks.missing > 0) {
+    issues.push({
+      code: "ASSET_ID_MISSING",
+      severity: "warning",
+      message:
+        `${ks.missing} feature(s) on layers that need an asset id have none. Found so far: ${ks.xdata} from XDATA, ` +
+        `${ks.attribute} from block attributes, ${ks.text} from nearby text. Set the team's id pattern, attribute tags ` +
+        `or label layer in the mapping profile.`,
+      context: { missing: String(ks.missing), xdata: String(ks.xdata), attribute: String(ks.attribute), text: String(ks.text) },
+    });
+  }
+
+  const skipped = Object.entries(skippedMap).filter(([t]) => !civil.some(([c]) => c === t));
   if (skipped.length) {
     const total = skipped.reduce((n, [, c]) => n + c, 0);
     issues.push({

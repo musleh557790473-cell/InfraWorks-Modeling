@@ -9,6 +9,8 @@ import {
   createFileStore,
   detectKind,
   runBuildPipeline,
+  scanProjectCad,
+  scanProjectReports,
   DEFAULT_MAPPING_PROFILE,
 } from "@infraworks/domain";
 import { createApsClientFromEnv } from "@infraworks/aps-client";
@@ -59,7 +61,11 @@ const createProjectRoute = createRoute({
 
 app.openapi(createProjectRoute, async (c) => {
   const body = c.req.valid("json");
-  const project = store.createProject(body.name, body.epsg);
+  let project = store.createProject(body.name, body.epsg);
+  if (body.profileId) {
+    const profile = store.getProfile(body.profileId);
+    if (profile) project = store.setMappingProfile(project.id, profile);
+  }
   return c.json(project, 201);
 });
 
@@ -117,6 +123,66 @@ app.put("/projects/:id/mapping", async (c) => {
 });
 
 app.get("/mapping-profiles/default", (c) => c.json(DEFAULT_MAPPING_PROFILE));
+
+/* ---- Team mapping profiles: one per team or consultant, reused across projects ---- */
+
+app.get("/mapping-profiles", (c) => c.json(store.listProfiles()));
+
+app.get("/mapping-profiles/:id", (c) => {
+  const p = store.getProfile(c.req.param("id"));
+  return p ? c.json(p) : c.json({ error: "Not found" }, 404);
+});
+
+app.post("/mapping-profiles", async (c) => {
+  const raw = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  if (raw && !raw.id && typeof raw.name === "string") {
+    raw.id = raw.name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "") || `profile-${Date.now()}`;
+  }
+  const parsed = MappingProfile.safeParse(raw);
+  if (!parsed.success) return c.json({ error: "Invalid mapping profile", issues: parsed.error.issues }, 400);
+  try {
+    return c.json(store.saveProfile(parsed.data), 201);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
+
+app.delete("/mapping-profiles/:id", (c) =>
+  store.deleteProfile(c.req.param("id")) ? c.json({ ok: true }) : c.json({ error: "Not found" }, 404),
+);
+
+/**
+ * Layers of the project's latest drawing, as a profile would map them. Body (optional):
+ * a profile to preview, or {"profileId": "..."}; default is the project's own profile.
+ * A DWG is converted here (once — the DXF is cached for the build).
+ */
+app.post("/projects/:id/scan-layers", async (c) => {
+  const project = store.getProject(c.req.param("id"));
+  if (!project) return c.json({ error: "Not found" }, 404);
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  let profile = project.mappingProfile;
+  if (body?.profileId) {
+    const p = store.getProfile(String(body.profileId));
+    if (!p) return c.json({ error: `Profile not found: ${body.profileId}` }, 404);
+    profile = p;
+  } else if (body?.layers) {
+    const parsed = MappingProfile.safeParse(body);
+    if (!parsed.success) return c.json({ error: "Invalid mapping profile", issues: parsed.error.issues }, 400);
+    profile = parsed.data;
+  }
+  try {
+    return c.json(await scanProjectCad(store, project.id, profile));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 422);
+  }
+});
+
+/** Columns and sheets of each uploaded report, for choosing the join column. */
+app.get("/projects/:id/reports", async (c) => {
+  const project = store.getProject(c.req.param("id"));
+  if (!project) return c.json({ error: "Not found" }, 404);
+  return c.json(await scanProjectReports(store, project.id));
+});
 
 app.post("/projects/:id/jobs", async (c) => {
   const projectId = c.req.param("id");

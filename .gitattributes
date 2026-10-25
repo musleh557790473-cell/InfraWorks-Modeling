@@ -1,0 +1,4 @@
+*.dwg binary
+*.imx binary
+*.xlsx binary
+*.sqlite binary

@@ -55,6 +55,11 @@ export interface DomainStore {
   getJob(id: string): JobRecord | undefined;
   listJobs(projectId: string): JobRecord[];
   updateJob(id: string, patch: Partial<JobRecord>): JobRecord;
+  /** Built-in default first, then the saved team profiles. */
+  listProfiles(): MappingProfile[];
+  getProfile(id: string): MappingProfile | undefined;
+  saveProfile(profile: MappingProfile): MappingProfile;
+  deleteProfile(id: string): boolean;
   dataDir: string;
   uploadDir: string;
   artifactDir: string;
@@ -83,6 +88,8 @@ export function createFileStore(dataDir: string): DomainStore {
   const projectsPath = join(dbDir, "projects.json");
   const uploadsPath = join(dbDir, "uploads.json");
   const jobsPath = join(dbDir, "jobs.json");
+  /** Saved mapping profiles, one per team or consultant, reusable across projects. */
+  const profilesPath = join(dbDir, "profiles.json");
 
   const readJson = <T>(path: string, fallback: T): T => {
     if (!existsSync(path)) return fallback;
@@ -209,6 +216,28 @@ export function createFileStore(dataDir: string): DomainStore {
       jobs[idx] = next;
       persist();
       return next;
+    },
+    listProfiles() {
+      const saved = readJson<MappingProfile[]>(profilesPath, []);
+      return [DEFAULT_MAPPING_PROFILE, ...saved.filter((p) => p.id !== DEFAULT_MAPPING_PROFILE.id)];
+    },
+    getProfile(id) {
+      return this.listProfiles().find((p) => p.id === id);
+    },
+    saveProfile(profile) {
+      if (profile.id === DEFAULT_MAPPING_PROFILE.id) {
+        throw new Error("The built-in default profile cannot be overwritten — save it under a new name");
+      }
+      const saved = readJson<MappingProfile[]>(profilesPath, []).filter((p) => p.id !== profile.id);
+      saved.push(profile);
+      writeJson(profilesPath, saved);
+      return profile;
+    },
+    deleteProfile(id) {
+      const saved = readJson<MappingProfile[]>(profilesPath, []);
+      const next = saved.filter((p) => p.id !== id);
+      writeJson(profilesPath, next);
+      return next.length !== saved.length;
     },
   };
 }

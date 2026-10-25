@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { MappingEditor } from "./MappingEditor";
+import type { Profile } from "./MappingEditor";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8787";
 
@@ -9,7 +11,7 @@ type Project = {
   name: string;
   status: string;
   epsg: number;
-  mappingProfile?: unknown;
+  mappingProfile?: Profile;
 };
 
 type Job = {
@@ -85,27 +87,6 @@ export default function HomePage() {
     }
   }
 
-  async function applyDefaultMapping() {
-    if (!project) return;
-    setBusy(true);
-    try {
-      const profile = await fetch(`${API}/mapping-profiles/default`).then((r) => r.json());
-      const res = await fetch(`${API}/projects/${project.id}/mapping`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(profile),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Mapping failed");
-      setProject(data);
-      setMessage("Default LDIP mapping profile applied");
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function runBuild() {
     if (!project) return;
     setBusy(true);
@@ -144,8 +125,8 @@ export default function HomePage() {
 
       <ol className="steps">
         <li>Create project (CRS EPSG:32638 / UTM84-38N)</li>
-        <li>Upload DWG + roads_report.csv</li>
-        <li>Apply layer mapping → run build → download ZIP</li>
+        <li>Upload the team&apos;s DWG/DXF + its CSV/XLSX report</li>
+        <li>Map layers (or reuse the team&apos;s profile) → run build → download ZIP</li>
       </ol>
 
       <section className="panel">
@@ -192,14 +173,6 @@ export default function HomePage() {
           <button
             className="secondary"
             disabled={busy || !project}
-            onClick={applyDefaultMapping}
-            type="button"
-          >
-            Apply default mapping
-          </button>
-          <button
-            className="secondary"
-            disabled={busy || !project}
             onClick={loadPreview}
             type="button"
           >
@@ -209,8 +182,25 @@ export default function HomePage() {
         {preview != null && <pre>{JSON.stringify(preview, null, 2)}</pre>}
       </section>
 
+      {project && (
+        <section className="panel">
+          <h2>3 · Map layers for this team</h2>
+          <p className="hint">
+            DWG or DXF from any team: pick that team&apos;s saved profile (or start from the default), scan the drawing,
+            adjust, then save the profile so the team&apos;s next drawing maps itself.
+          </p>
+          <MappingEditor
+            key={project.id}
+            api={API}
+            projectId={project.id}
+            current={project.mappingProfile}
+            onApplied={setMessage}
+          />
+        </section>
+      )}
+
       <section className="panel">
-        <h2>3 · Build package</h2>
+        <h2>4 · Build package</h2>
         <div className="row">
           <button disabled={busy || !project} onClick={runBuild} type="button">
             Run build
