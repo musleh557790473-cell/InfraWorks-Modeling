@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, renameSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { nanoid } from "nanoid";
 import type {
@@ -77,6 +77,31 @@ function detectKind(filename: string): UploadedFile["kind"] {
   return "other";
 }
 
+/** Windows errors a rename gets while another program briefly holds the target open. */
+const TRANSIENT_LOCK = new Set(["EPERM", "EBUSY", "EACCES"]);
+
+/**
+ * renameSync that waits out a short lock. On Windows, replacing a file fails with EPERM while
+ * any other process has it open without delete sharing — antivirus scanning the file just
+ * written, OneDrive syncing the data folder, the search indexer, or the API/worker reading it.
+ * Such locks last milliseconds to a second, so retry with backoff (about 3 s in all) before failing.
+ */
+export function renameWithRetry(from: string, to: string, budgetMs = 3000): void {
+  const pause = new Int32Array(new SharedArrayBuffer(4));
+  let waited = 0;
+  for (let delay = 10; ; delay = Math.min(delay * 2, 250)) {
+    try {
+      renameSync(from, to);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code ?? "";
+      if (!TRANSIENT_LOCK.has(code) || waited >= budgetMs) throw err;
+      Atomics.wait(pause, 0, 0, delay); // synchronous sleep: the store API is synchronous
+      waited += delay;
+    }
+  }
+}
+
 export function createFileStore(dataDir: string): DomainStore {
   const uploadDir = join(dataDir, "uploads");
   const artifactDir = join(dataDir, "artifacts");
@@ -99,7 +124,12 @@ export function createFileStore(dataDir: string): DomainStore {
   const writeJson = (path: string, value: unknown) => {
     const tmp = `${path}.${process.pid}.tmp`;
     writeFileSync(tmp, JSON.stringify(value, null, 2));
-    renameSync(tmp, path);
+    try {
+      renameWithRetry(tmp, path);
+    } catch (err) {
+      rmSync(tmp, { force: true });
+      throw err;
+    }
   };
 
   let projects = readJson<ProjectRecord[]>(projectsPath, []);

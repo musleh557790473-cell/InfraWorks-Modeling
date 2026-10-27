@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync, readdirSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -466,3 +468,33 @@ test("\\U+XXXX escapes (DXF R2000–R2004) are decoded, so Arabic layer rules ma
   assert.ok(parsed.layers.some((l) => l.name === "\u0645\u062D\u0648\u0631 " + road), JSON.stringify(parsed.layers));
   assert.equal(parsed.features[0]?.infraFeatureClass, "road_centerline");
 });
+
+test(
+  "a store write waits out a short Windows file lock instead of failing with EPERM",
+  { skip: process.platform !== "win32" && "file locks that block a rename are Windows-only" },
+  async () => {
+    const dir = tmp();
+    const store = createFileStore(dir);
+    const project = store.createProject("lock", 32638);
+    const target = join(dir, "db", "projects.json");
+    // Another process opens projects.json without delete sharing, as antivirus or OneDrive does,
+    // and lets go 700 ms later. Replacing the file fails with EPERM until then.
+    const holder = spawn(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command",
+        "$f=[IO.File]::Open('" + target + "','Open','Read','Read'); 'locked'; Start-Sleep -Milliseconds 700; $f.Close()"],
+      { stdio: ["ignore", "pipe", "inherit"] },
+    );
+    const exited = once(holder, "exit");
+    await new Promise<void>((resolve, reject) => {
+      holder.stdout!.on("data", (d) => String(d).includes("locked") && resolve());
+      void exited.then(() => reject(new Error("lock holder exited before locking")));
+    });
+
+    store.updateProject(project.id, { name: "renamed while locked" });
+    await exited;
+
+    assert.equal(createFileStore(dir).getProject(project.id)?.name, "renamed while locked");
+    assert.deepEqual(readdirSync(join(dir, "db")).filter((f) => f.endsWith(".tmp")), [], "no temp file left behind");
+  },
+);
