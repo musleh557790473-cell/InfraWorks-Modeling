@@ -6,6 +6,7 @@ export * from "./convert.js";
 export * from "./dwg.js";
 export * from "./reports.js";
 export * from "./validate.js";
+export * from "./shapefile.js";
 export * from "./package.js";
 export * from "./pipeline.js";
 export * from "./scan.js";

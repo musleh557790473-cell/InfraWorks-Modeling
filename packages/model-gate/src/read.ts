@@ -62,11 +62,31 @@ export function readPackage(path: string): PackageInfo {
   const manifest = JSON.parse(read("manifest.json")) as {
     projectName: string;
     crs: { epsg: number };
-    layers: { name: string; infraFeatureClass: string; format: string; path: string }[];
+    layers: {
+      name: string;
+      infraFeatureClass: string;
+      format: string;
+      path: string;
+      featureCount: number;
+      extent?: [number, number, number, number];
+      length?: number;
+    }[];
   };
-  const layers = manifest.layers
-    .filter((l) => l.format === "geojson")
-    .map((l) => summarise(l.name, l.infraFeatureClass, l.path.split("/").pop()!, JSON.parse(read(l.path)) as GeoJson));
+  // Shapefiles are what InfraWorks imports, so compare against them when the package has them.
+  // Older packages (GeoJSON only) are summarised from the GeoJSON itself.
+  const shp = manifest.layers.filter((l) => l.format === "shp");
+  const layers: PackageLayer[] = shp.length
+    ? shp.map((l) => ({
+        name: l.name,
+        infraFeatureClass: l.infraFeatureClass,
+        file: l.path.split("/").pop()!,
+        featureCount: l.featureCount,
+        extent: l.extent ? { minX: l.extent[0], minY: l.extent[1], maxX: l.extent[2], maxY: l.extent[3] } : null,
+        length: l.length ?? 0,
+      }))
+    : manifest.layers
+        .filter((l) => l.format === "geojson")
+        .map((l) => summarise(l.name, l.infraFeatureClass, l.path.split("/").pop()!, JSON.parse(read(l.path)) as GeoJson));
   return { source: path, projectName: manifest.projectName, epsg: manifest.crs.epsg, layers };
 }
 

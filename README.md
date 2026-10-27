@@ -125,7 +125,17 @@ MCP tools: `create_project`, `upload_input`, `list_mapping_profiles`, `save_mapp
 
 ## Package contents
 
-- `manifest.json` / `crs.json` / `validation_report.json`
-- `layers/*.geojson` by InfraWorks feature class
-- `overlay/` 2D DWG/DXF when provided
-- `IMPORT_CHECKLIST.txt`
+- **`shp/*.shp`** — what InfraWorks imports (it has no GeoJSON reader). One Shapefile per
+  feature class and geometry kind (`road_centerline.shp`, or `water_line.shp` + `water_area.shp`),
+  each with `.shx`, `.dbf`, `.prj` (project CRS as ESRI WKT) and `.cpg` (UTF-8, so Arabic text
+  survives). Polygons follow the Shapefile winding rule.
+- `shp/field_names.csv` — dBASE limits field names to 10 ASCII characters; this maps each
+  `.dbf` field back to its original attribute name (Arabic column names become `FIELD_n`).
+- `layers/*.geojson` — the same features for GIS tools and checks; not for InfraWorks.
+- `manifest.json` — every layer with its feature count, extent, line length and the InfraWorks
+  data source type to choose; Gate G3 compares the model with these numbers.
+- `crs.json` / `validation_report.json` / `domain_features.json`
+- `overlay/` — the source drawing, for an optional 2D overlay
+- `IMPORT_CHECKLIST.txt` — step-by-step import written for this package's own files:
+  Add File Data Source → SHP, the Type for each file (Roads, Coverages, Land Parcels, Water Areas,
+  Rivers, Pipelines, Points of Interest), the coordinate system check, then Gate G3.
