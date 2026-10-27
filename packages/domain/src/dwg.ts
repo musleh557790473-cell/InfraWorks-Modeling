@@ -59,6 +59,14 @@ interface Block {
   entities: RawEntity[];
 }
 
+/**
+ * AutoCAD writes characters outside the drawing's code page as \U+XXXX in DXF R2000–R2004
+ * (Arabic layer names, labels, attributes). Decode them so layer rules and labels see real text.
+ */
+function decodeUnicodeEscapes(s: string): string {
+  return /\\U\+/i.test(s) ? s.replace(/\\U\+([0-9A-Fa-f]{4})/gi, (_, hex: string) => String.fromCharCode(parseInt(hex, 16))) : s;
+}
+
 function toPairs(text: string): Pair[] {
   const lines = text.split(/\r?\n/);
   if (lines.length % 2 === 1 && lines[lines.length - 1]!.trim() === "") lines.pop();
@@ -69,7 +77,7 @@ function toPairs(text: string): Pair[] {
     if (raw === "" || !Number.isInteger(code)) {
       throw new Error(`Malformed DXF: expected a group code at line ${i + 1}, found "${raw.slice(0, 40)}"`);
     }
-    out.push({ code, value: lines[i + 1]!.trim() });
+    out.push({ code, value: decodeUnicodeEscapes(lines[i + 1]!.trim()) });
   }
   return out;
 }
@@ -246,7 +254,7 @@ function readInfo(e: RawEntity): Info {
         info.str.set(2, p.value);
         break;
       default:
-        if ((p.code >= 11 && p.code <= 59) || p.code === 40 || p.code === 41) {
+        if ((p.code >= 11 && p.code <= 59) || p.code === 40 || p.code === 41 || p.code === 210 || p.code === 220 || p.code === 230) {
           const n = Number(p.value);
           if (Number.isFinite(n)) info.num.set(p.code, n);
         }
@@ -272,6 +280,41 @@ function plainText(s: string): string {
 type Pt = [number, number];
 type Xf = (p: Pt) => Pt;
 const identity: Xf = (p) => p;
+
+/** Entities whose points are stored in their Object Coordinate System (LINE, POINT, MTEXT and 3D polylines are WCS). */
+function usesOcs(type: string, flags: number): boolean {
+  return (
+    type === "ARC" || type === "CIRCLE" || type === "LWPOLYLINE" || type === "INSERT" || type === "TEXT" ||
+    (type === "POLYLINE" && (flags & 8) === 0)
+  );
+}
+
+/**
+ * OCS → WCS (plan) for an entity's extrusion direction (210/220/230), by the DXF arbitrary
+ * axis algorithm. MIRROR in AutoCAD writes extrusion (0,0,-1), which flips X; reading such
+ * points as WCS puts mirrored arcs, polylines and blocks on the wrong side of the origin.
+ * Identity for the usual (0,0,1). The elevation term is dropped: exact for extrusions along ±Z.
+ */
+function ocsOf(info: Info): Xf {
+  const nx = info.num.get(210) ?? 0;
+  const ny = info.num.get(220) ?? 0;
+  const nz = info.num.get(230) ?? 1;
+  const len = Math.hypot(nx, ny, nz);
+  if (!(len > 0) || (nx === 0 && ny === 0 && nz > 0)) return identity;
+  const n = [nx / len, ny / len, nz / len] as const;
+  const cross = (a: readonly number[], b: readonly number[]) => [
+    a[1]! * b[2]! - a[2]! * b[1]!,
+    a[2]! * b[0]! - a[0]! * b[2]!,
+    a[0]! * b[1]! - a[1]! * b[0]!,
+  ];
+  const unit = (v: number[]) => {
+    const l = Math.hypot(v[0]!, v[1]!, v[2]!);
+    return v.map((c) => c / l);
+  };
+  const ax = unit(cross(Math.abs(n[0]) < 1 / 64 && Math.abs(n[1]) < 1 / 64 ? [0, 1, 0] : [0, 0, 1], n));
+  const ay = unit(cross(n, ax));
+  return (p) => [p[0] * ax[0]! + p[1] * ay[0]!, p[0] * ax[1]! + p[1] * ay[1]!];
+}
 
 function insertTransform(parent: Xf, base: Pt, ins: Pt, sx: number, sy: number, rotDeg: number): Xf {
   const r = (rotDeg * Math.PI) / 180;
@@ -444,8 +487,11 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
         count(layer, e.type);
         candidates.push({ layer, geometry, handle: info.handle, xdata, attribs });
       };
+      // OCS points go to WCS first (mirrored objects), then through the enclosing blocks.
+      const ocs = usesOcs(e.type, info.flags) ? ocsOf(info) : identity;
+      const toWcs: Xf = ocs === identity ? ctx.xf : (p) => ctx.xf(ocs(p));
       const line = (pts: Pt[], closed: boolean) => {
-        const t = pts.map(ctx.xf);
+        const t = pts.map(toWcs);
         if (t.length < 2) return;
         if ((closed && t.length >= 3) || isClosedByVertices(t)) add({ type: "Polygon", coordinates: [closeRing(t)] });
         else add({ type: "LineString", coordinates: t });
@@ -504,7 +550,7 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
         case "TEXT":
         case "MTEXT": {
           const content = plainText(info.str.get(1) ?? "");
-          if (content && info.points[0]) labels.push({ layer, text: content, at: ctx.xf(info.points[0]) });
+          if (content && info.points[0]) labels.push({ layer, text: content, at: toWcs(info.points[0]) });
           count(layer, e.type);
           break;
         }
@@ -523,10 +569,10 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
             block && ctx.depth < MAX_BLOCK_DEPTH && (GEOMETRY_CLASSES.includes(cls) || blockHasGeometry(name, 0));
           if (!expand) {
             // A symbol (tree, pole, manhole, title block…): one point carrying its attributes.
-            add({ type: "Point", coordinates: ctx.xf(ins) }, attribs);
+            add({ type: "Point", coordinates: toWcs(ins) }, attribs);
             break;
           }
-          const xf = insertTransform(ctx.xf, block.base, ins, info.num.get(41) ?? 1, info.num.get(42) ?? 1, info.num.get(50) ?? 0);
+          const xf = insertTransform(toWcs, block.base, ins, info.num.get(41) ?? 1, info.num.get(42) ?? 1, info.num.get(50) ?? 0);
           walk(group(block.entities), { xf, byBlockLayer: layer, attribs, xdata, depth: ctx.depth + 1 });
           break;
         }

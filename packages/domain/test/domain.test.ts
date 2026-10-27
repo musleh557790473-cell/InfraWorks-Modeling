@@ -416,3 +416,53 @@ test("a second store on the same folder sees new jobs (API and worker are separa
   assert.equal(worker.getJob(job.id)?.status, "queued");
   assert.equal(worker.getProject(project.id)?.status, "building");
 });
+
+test("mirrored entities (extrusion 0,0,-1) land in WCS, not flipped across the origin", () => {
+  // AutoCAD MIRROR writes OCS points with X negated and extrusion (0,0,-1).
+  const text = dxf(
+    0, "SECTION", 2, "ENTITIES",
+    0, "ARC", 8, "WATER", 10, -658000, 20, 2748000, 40, 10, 210, 0, 220, 0, 230, -1, 50, 0, 51, 90,
+    0, "LWPOLYLINE", 8, "ROADS", 90, 2, 70, 0, 10, -658000, 20, 2748000, 10, -658100, 20, 2748000, 210, 0, 220, 0, 230, -1,
+    0, "ENDSEC", 0, "EOF",
+  );
+  const [arc, road] = parseDxf(text, "t.dxf", DEFAULT_MAPPING_PROFILE).features;
+  const a = arc!.geometry.coordinates as number[][];
+  assert.ok(a.every((p) => Math.abs(Math.hypot(p[0]! - 658000, p[1]! - 2748000) - 10) < 1e-6), "arc stays on its circle in WCS");
+  assert.deepEqual(a[0], [657990, 2748000], "OCS start angle 0° is WCS 180° once mirrored");
+  assert.ok(a.every((p) => p[1]! >= 2748000 - 1e-6), "mirrored 0–90° arc is the upper-left quarter");
+  assert.deepEqual(road!.geometry.coordinates, [[658000, 2748000], [658100, 2748000]]);
+});
+
+test("a mirrored block insert is placed in WCS with its contents mirrored", () => {
+  const text = dxf(
+    0, "SECTION", 2, "BLOCKS",
+    0, "BLOCK", 2, "PLOT", 10, 0, 20, 0,
+    0, "LWPOLYLINE", 8, "0", 90, 4, 70, 1, 10, 0, 20, 0, 10, 10, 20, 0, 10, 10, 20, 10, 10, 0, 20, 10,
+    0, "ENDBLK",
+    0, "ENDSEC",
+    0, "SECTION", 2, "ENTITIES",
+    0, "INSERT", 8, "PARCELS", 2, "PLOT", 10, -658000, 20, 2748000, 210, 0, 220, 0, 230, -1,
+    0, "ENDSEC", 0, "EOF",
+  );
+  const parsed = parseDxf(text, "t.dxf", DEFAULT_MAPPING_PROFILE);
+  assert.equal(parsed.features.length, 1);
+  const ring = parsed.features[0]!.geometry.coordinates[0] as number[][];
+  assert.ok(ring.every((p) => p[0]! >= 657990 - 1e-6 && p[0]! <= 658000 + 1e-6), JSON.stringify(ring));
+  assert.ok(ring.some((p) => Math.abs(p[0]! - 657990) < 1e-6 && Math.abs(p[1]! - 2748000) < 1e-6), "block (10,0) mirrors to x-10");
+});
+
+test("\\U+XXXX escapes (DXF R2000–R2004) are decoded, so Arabic layer rules match", () => {
+  const road = "\u0637\u0631\u064A\u0642"; // "road"
+  const profile = {
+    ...DEFAULT_MAPPING_PROFILE,
+    layers: [{ dwgLayer: "*" + road + "*", infraFeatureClass: "road_centerline" as const, joinKeyAttribute: "asset_id" }],
+  };
+  const text = dxf(
+    0, "SECTION", 2, "ENTITIES",
+    0, "LINE", 8, "\\U+0645\\U+062D\\U+0648\\U+0631 \\U+0637\\U+0631\\U+064A\\U+0642", 10, 658000, 20, 2748000, 11, 658100, 21, 2748000,
+    0, "ENDSEC", 0, "EOF",
+  );
+  const parsed = parseDxf(text, "t.dxf", profile);
+  assert.ok(parsed.layers.some((l) => l.name === "\u0645\u062D\u0648\u0631 " + road), JSON.stringify(parsed.layers));
+  assert.equal(parsed.features[0]?.infraFeatureClass, "road_centerline");
+});
