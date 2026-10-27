@@ -96,6 +96,39 @@ const tools = [
       required: ["jobId"],
     },
   },
+  {
+    name: "list_mapping_profiles",
+    description: "List saved team mapping profiles (layer rules + where each team keeps asset ids)",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "save_mapping_profile",
+    description: "Save a team mapping profile for reuse across projects",
+    inputSchema: {
+      type: "object",
+      properties: { profile: { type: "object" } },
+      required: ["profile"],
+    },
+  },
+  {
+    name: "scan_layers",
+    description:
+      "List the layers of the project's latest drawing (DWG is converted to DXF first) with the class each would get and where asset ids were found",
+    inputSchema: {
+      type: "object",
+      properties: { projectId: { type: "string" }, profileId: { type: "string" } },
+      required: ["projectId"],
+    },
+  },
+  {
+    name: "list_report_columns",
+    description: "Columns (and Excel sheets) of each uploaded report, for choosing the join column",
+    inputSchema: {
+      type: "object",
+      properties: { projectId: { type: "string" } },
+      required: ["projectId"],
+    },
+  },
 ] as const;
 
 const server = new Server(
@@ -161,6 +194,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case "get_package_url":
         result = await api(`/jobs/${args.jobId}/package-url`);
+        break;
+      case "list_mapping_profiles":
+        result = await api("/mapping-profiles");
+        break;
+      case "save_mapping_profile":
+        result = await api("/mapping-profiles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(args.profile),
+        });
+        break;
+      case "scan_layers":
+        result = await api(`/projects/${args.projectId}/scan-layers`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(args.profileId ? { profileId: args.profileId } : {}),
+        });
+        break;
+      case "list_report_columns":
+        result = await api(`/projects/${args.projectId}/reports`);
         break;
       default:
         throw new Error(`Unknown tool: ${name}`);

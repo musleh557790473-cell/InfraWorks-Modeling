@@ -18,7 +18,8 @@ cd InfraWorks-Modeling
 cp .env.example .env   # LOCAL_MODE=1
 pnpm install
 pnpm --filter @infraworks/domain build && pnpm --filter @infraworks/aps-client build
-pnpm fixture:pipeline  # sample DWG + CSV → ZIP under data/artifacts/
+pnpm fixture:pipeline  # sample DXF + CSV → ZIP under data/artifacts/
+# DWG input needs ODA File Converter (free) — see “CAD input” below
 pnpm dev               # web :3000 · API :8787 · worker · MCP (stdio)
 ```
 
@@ -35,8 +36,9 @@ pnpm dev               # web :3000 · API :8787 · worker · MCP (stdio)
 | `apps/mcp` | MCP tools mirroring the API |
 | `packages/domain` | Domain model, DWG/DXF + report ingest, validation, ZIP package |
 | `packages/imx-gate` | **Gate G2** — validate and repair a Civil 3D IMX export before import |
+| `packages/model-gate` | **Gate G3** — check the InfraWorks model after import against the package (and IMX) |
 | `packages/aps-client` | APS auth / Model Derivative (mocked without credentials) |
-| `fixtures/` | Sample DWG/DXF + `roads_report.csv` |
+| `fixtures/` | Sample DXF; real DWGs built by `make_fixtures.py` (`sample.dwg`, `team-b.dwg`); `roads_report.csv` |
 
 ## Conversion gates
 
@@ -48,20 +50,78 @@ import succeeds, and part of the model is simply absent.
 | --- | --- | --- |
 | G1 | DWG / LandXML, before export | planned |
 | **G2** | **`.imx`, after export and before import** | **`packages/imx-gate`** |
-| G3 | InfraWorks `.sqlite`, after import | planned |
+| **G3** | **InfraWorks `.sqlite`, after import** | **`packages/model-gate`** |
 
 ```bash
-pnpm --filter @infraworks/imx-gate gate export.imx --crs 32636 --repair
+pnpm gate:imx export.imx --crs 32636 --repair
+pnpm gate:model "model.sqlite" --package package.zip --imx export.imx
 ```
 
-See [`packages/imx-gate/README.md`](packages/imx-gate/README.md) for the rule list and
-what the auto-repair is allowed to touch.
+See [`packages/imx-gate/README.md`](packages/imx-gate/README.md) and
+[`packages/model-gate/README.md`](packages/model-gate/README.md) for the rule lists.
 
 ## Success check
 
-Upload fixture DWG + `roads_report.csv`, map layers, run build → download ZIP with `validation_report.json` and zero blocking issues.
+Upload `fixtures/sample.dxf` + `fixtures/roads_report.csv`, map layers, run build → download ZIP with `validation_report.json` and zero blocking issues.
 
-MCP tools: `create_project`, `upload_input`, `set_mapping_profile`, `run_build`, `get_job`, `get_validation`, `get_package_url`.
+## CAD input
+
+### DWG and DXF
+
+A DWG is converted to DXF first, with free tools tried in this order:
+
+| Engine | Licence | Notes |
+| --- | --- | --- |
+| **ODA File Converter** | Free download (registration) | Reads every DWG release; the most complete. Free for internal use — bundling it in a product you distribute needs an ODA licence. Found under `C:\Program Files\ODA\` or via `ODA_FILE_CONVERTER`. |
+| **ezdwg** (Python) | MIT | DWG R2000–R2018. Much less complete (block content often missing), so fallback only. `pip install ezdwg==0.16.0`; `EZDWG_PYTHON` / `EZDWG_PYTHONPATH` point at a specific install. |
+
+`CAD_CONVERTERS=oda,ezdwg` sets the order. The converted DXF is cached per upload, so scanning
+layers and building do not convert twice. A DWG that no engine can read blocks the build
+(`CAD_CONVERSION_FAILED`). Autodesk APS is not used.
+
+The reader takes **model space only** (layouts and title blocks are ignored) and handles
+`LINE`, `LWPOLYLINE` / `POLYLINE` (arcs kept as curves), `ARC`, `CIRCLE`, `POINT`, and
+**blocks** (expanded with their position, rotation and scale; a block drawn on layer `0` takes
+its insert's layer; symbol blocks — trees, poles, manholes — become one point carrying their
+attributes). Anything else is listed in a warning.
+
+**Civil 3D objects** (alignments, parcels, feature lines, corridors) cannot be read outside
+Civil 3D: they arrive as proxy entities and raise `CIVIL3D_OBJECTS_NOT_READ`. Ask the team to
+run `ExportToAutoCAD` before sending, or send LandXML.
+
+### Drawings from many teams
+
+Each team or consultant draws differently, so mapping is saved **per team** as a *mapping
+profile* and reused for that team's next drawing:
+
+- **Layer rules** are names or wildcards (`*ROAD*CNTR*`, `C-PROP-?`), case-insensitive, first
+  match wins. Unmapped layers get a suggestion from common names (US National CAD Standard,
+  Gulf practice, Arabic); a layer holding only text is treated as a label layer.
+- **Asset ids** are looked for in every usual place, in order:
+  1. XDATA (`xdataApps`, default `INFRAWORKS`; `*` = any application)
+  2. a block attribute (`attributeTags`, default `ASSET_ID, ROAD_ID, PARCEL_ID, PLOT_ID, PLOT_NO`)
+  3. the nearest TEXT/MTEXT label within `textMaxDistance` on `textLayers`
+
+  An id `pattern` (e.g. `^RD-\d{3}$`) filters all three and lets ids be found in any attribute
+  or label. Ids are compared ignoring case and spaces by default (`normalize`), and the
+  report's spelling becomes the feature's id.
+- **Reports**: CSV (UTF-8, UTF-16, or Arabic Windows-1256; `,` `;` or tab separated) and
+  **Excel** (`.xlsx`, any sheet; the header may sit below blank rows). Each report join names
+  its id column.
+
+In the web app: **Map layers for this team** → choose the team's profile → *Scan drawing
+layers* → adjust → *Save as team profile* → *Apply to project*. The same is available over
+REST (`/mapping-profiles`, `/projects/{id}/scan-layers`, `/projects/{id}/reports`) and MCP.
+
+### Checks on every build
+
+- Coordinates must fall inside the project CRS (`COORDS_OUTSIDE_CRS` blocks drawings left in local coordinates).
+- Drawing units other than metres on a UTM project → `DRAWING_UNITS_NOT_METRES`.
+- Features on id-carrying layers without an id → `ASSET_ID_MISSING`.
+- GeoJSON layers carry a `crs` member (`urn:ogc:def:crs:EPSG::<code>`) so InfraWorks/GDAL read
+  them in the project CRS, not as WGS 84 degrees.
+
+MCP tools: `create_project`, `upload_input`, `list_mapping_profiles`, `save_mapping_profile`, `scan_layers`, `list_report_columns`, `set_mapping_profile`, `run_build`, `get_job`, `get_validation`, `get_package_url`.
 
 ## Package contents
 

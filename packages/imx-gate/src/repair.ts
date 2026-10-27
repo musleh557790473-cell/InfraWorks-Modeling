@@ -1,5 +1,5 @@
-import { copyFileSync, existsSync } from "node:fs";
-import { dirname, basename, extname, join } from "node:path";
+import { copyFileSync, existsSync, realpathSync } from "node:fs";
+import { dirname, basename, extname, join, resolve } from "node:path";
 
 import Database from "better-sqlite3";
 
@@ -15,6 +15,18 @@ export interface RepairResult {
   integrityOk: boolean;
 }
 
+/**
+ * True when both paths name the same file, however they are written
+ * ("./a.imx" vs "a.imx", different case on Windows, symlinks).
+ */
+function samePath(a: string, b: string): boolean {
+  const norm = (p: string) => {
+    const abs = existsSync(p) ? realpathSync.native(p) : resolve(p);
+    return process.platform === "win32" ? abs.toLowerCase() : abs;
+  };
+  return norm(a) === norm(b);
+}
+
 export function defaultRepairPath(src: string): string {
   const ext = extname(src) || ".imx";
   return join(dirname(src), `${basename(src, ext)}_FIXED${ext}`);
@@ -28,7 +40,7 @@ export function defaultRepairPath(src: string): string {
  */
 export function repairImx(src: string, out?: string): RepairResult {
   const outPath = out ?? defaultRepairPath(src);
-  if (existsSync(outPath) && outPath === src) {
+  if (samePath(outPath, src)) {
     throw new Error("Refusing to repair in place — choose a different output path");
   }
   copyFileSync(src, outPath);

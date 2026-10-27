@@ -1,8 +1,8 @@
 /**
- * End-to-end fixture: sample DWG + roads_report.csv → InfraWorks package ZIP.
+ * End-to-end fixture: sample DXF + roads_report.csv → InfraWorks package ZIP.
  * Does not require the API server — uses domain pipeline directly.
  */
-import { copyFileSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -23,10 +23,10 @@ async function main() {
   const uploadDir = join(store.uploadDir, project.id);
   mkdirSync(uploadDir, { recursive: true });
 
-  const cadSrc = existsSync(join(fixtures, "sample.dwg"))
-    ? join(fixtures, "sample.dwg")
-    : join(fixtures, "sample.dxf");
-  const cadName = cadSrc.endsWith(".dxf") ? "sample.dxf" : "sample.dwg";
+  // Use the real vector DXF. sample.dwg is a text placeholder: binary DWG is not parsed,
+  // and validation blocks the synthetic geometry it would produce.
+  const cadSrc = join(fixtures, "sample.dxf");
+  const cadName = "sample.dxf";
   const cadDest = join(uploadDir, cadName);
   copyFileSync(cadSrc, cadDest);
   store.addUpload({

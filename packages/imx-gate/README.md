@@ -34,7 +34,7 @@ imx-gate export.imx --crs 32636 --repair --md gate.md --json gate.json
 | `--md` / `--json` | Also write a Markdown or raw JSON report |
 | `--quiet` | Suppress the console report |
 
-Exit code is `0` when no blocking finding remains, `1` otherwise — so it drops straight
+Exit code is `0` when no blocking finding remains, `1` otherwise, `2` for bad usage (unknown file, invalid `--crs` / `--max-gap`) — so it drops straight
 into CI or a pre-import hook.
 
 ```ts
@@ -56,8 +56,8 @@ if (!report.ok) throw new Error(`${report.blockingCount} blocking finding(s)`);
 | IMX-006 | Section spacing is within tolerance | warning | — |
 | IMX-007 | No runaway link slopes (the condition behind IMX-002) | warning | — |
 | IMX-008 | Geometry blobs decode, are non-empty and finite | blocking | — |
-| IMX-009 | Declared CRS matches `--crs`, coordinates sit inside the UTM envelope | blocking | — |
-| IMX-010 | The export actually carries roads and surfaces | warning | — |
+| IMX-009 | Declared CRS matches `--crs` (zone and hemisphere), coordinates sit inside the UTM envelope | blocking | — |
+| IMX-010 | The export actually carries roads (blocking) and surfaces (warning) | blocking / warning | — |
 | IMX-011 | No region is left with zero sections | warning | — |
 | IMX-012 | Sections cover the declared region span | warning | — |
 

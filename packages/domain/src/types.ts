@@ -61,8 +61,10 @@ export const DomainFeatureCollection = z.object({
 export type DomainFeatureCollection = z.infer<typeof DomainFeatureCollection>;
 
 export const LayerMapping = z.object({
-  dwgLayer: z.string(),
+  /** Layer name, or a wildcard rule ("*ROAD*CL*", "V-PROP-?"). Case-insensitive; first match wins. */
+  dwgLayer: z.string().min(1),
   infraFeatureClass: InfraFeatureClass,
+  /** Feature attribute that receives the asset id found for this layer's entities. */
   joinKeyAttribute: z.string().optional(),
 });
 export type LayerMapping = z.infer<typeof LayerMapping>;
@@ -71,16 +73,46 @@ export const ReportJoin = z.object({
   reportFile: z.string(),
   joinKeyColumn: z.string(),
   featureJoinAttribute: z.string().default("asset_id"),
+  /** Excel only: sheet name. Default: the first sheet. */
+  sheet: z.string().optional(),
 });
 export type ReportJoin = z.infer<typeof ReportJoin>;
+
+/**
+ * Where a team keeps asset ids in its drawings. Teams differ, so every source is tried
+ * in order: XDATA → block attribute → nearest text label.
+ */
+export const AssetKeyConfig = z.object({
+  /** Regex an id must match, e.g. "^RD-\\d+$". Also lets ids be found in any attribute or nearby text. */
+  pattern: z.string().optional(),
+  /** XDATA application names to read ids from; "*" accepts any application. */
+  xdataApps: z.array(z.string()).default(["INFRAWORKS"]),
+  /** Block attribute tags that hold the id (matched ignoring case, spaces, "-" and "_"). */
+  attributeTags: z.array(z.string()).default(["ASSET_ID", "ROAD_ID", "PARCEL_ID", "PLOT_ID", "PLOT_NO"]),
+  /** Layers whose TEXT/MTEXT may label a feature (wildcards allowed). Empty = any layer, only when `pattern` is set. */
+  textLayers: z.array(z.string()).default([]),
+  /** Maximum distance from a label to its feature, in drawing units. */
+  textMaxDistance: z.number().positive().default(10),
+  /** How ids are compared with the report: exact, trimmed upper-case, or letters/digits only. */
+  normalize: z.enum(["exact", "trim-upper", "alnum-upper"]).default("trim-upper"),
+});
+export type AssetKeyConfig = z.infer<typeof AssetKeyConfig>;
 
 export const MappingProfile = z.object({
   id: z.string(),
   name: z.string(),
+  /** Team or consultant this profile belongs to, e.g. "Parsons" or "Survey team B". */
+  team: z.string().optional(),
   layers: z.array(LayerMapping),
   reportJoins: z.array(ReportJoin).default([]),
+  assetKeys: AssetKeyConfig.default({}),
 });
 export type MappingProfile = z.infer<typeof MappingProfile>;
+
+/** Asset-key settings with defaults filled in (profiles stored before the field existed have none). */
+export function resolveAssetKeys(profile: { assetKeys?: Partial<AssetKeyConfig> }): AssetKeyConfig {
+  return AssetKeyConfig.parse(profile.assetKeys ?? {});
+}
 
 export const ProjectStatus = z.enum([
   "draft",
@@ -144,6 +176,8 @@ export type PackageManifest = z.infer<typeof PackageManifest>;
 export const CreateProjectInput = z.object({
   name: z.string().min(1),
   epsg: z.number().int().default(32638),
+  /** Start from a saved team profile instead of the built-in default. */
+  profileId: z.string().optional(),
 });
 export type CreateProjectInput = z.infer<typeof CreateProjectInput>;
 
@@ -168,4 +202,5 @@ export const DEFAULT_MAPPING_PROFILE: MappingProfile = {
       featureJoinAttribute: "asset_id",
     },
   ],
+  assetKeys: AssetKeyConfig.parse({}),
 };
