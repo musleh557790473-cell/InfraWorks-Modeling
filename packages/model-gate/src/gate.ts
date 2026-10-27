@@ -32,13 +32,24 @@ export function utmFromEpsg(epsg: number): { zone: number; south: boolean } | nu
 
 const isGeographic = (cs: string) => /^\s*GEOGCS/i.test(cs) || /^(EPSG:4326|LL84|WGS ?84)$/i.test(cs.trim());
 
-/** The data source that imported a package layer: matched by file name in its connection string. */
+/** File name without its extension: "road_centerline.geojson" -> "road_centerline". */
+const stem = (name: string) => name.replace(/\.[^./]+$/, "");
+
+/**
+ * The data source that imported a package layer: matched by file name in its connection string.
+ * The extension is ignored, so the same layer imported as .geojson, .shp, .sqlite… still matches;
+ * the name itself must match exactly ("road_centerline_old.shp" is not "road_centerline").
+ */
 function findSource(sources: DataSourceRow[], file: string): DataSourceRow | undefined {
-  const want = file.toLowerCase();
+  const want = stem(file.toLowerCase());
   return sources
     .filter((s) => {
       const conn = (s.CONNECTION_STRING ?? "").replace(/\\/g, "/").toLowerCase();
-      return conn.endsWith(`/${want}`) || conn === want || conn.includes(`/${want}`) || conn.includes(`=${want}`);
+      // Connection strings are a plain path, a ";"-separated list, or key="path"; pairs.
+      return conn
+        .split(/[;="]/)
+        .map((part) => part.trim().split("/").pop() ?? "")
+        .some((name) => name !== "" && stem(name) === want);
     })
     .at(-1); // the latest re-import wins
 }

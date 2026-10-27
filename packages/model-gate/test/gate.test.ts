@@ -75,6 +75,8 @@ interface Damage {
   sourceCs?: Record<string, string>;
   shift?: Record<string, [number, number]>;
   truncateRoads?: boolean;
+  /** Connection string per layer file, as InfraWorks wrote it (default C:/Imports/pkg/layers/<file>). */
+  conn?: (file: string) => string;
 }
 
 /** An InfraWorks-shaped model that imported the package — faithfully, unless told otherwise. */
@@ -105,7 +107,7 @@ function makeModel(name: string, d: Damage = {}): string {
     const guid = `ds-${++id}`;
     db.prepare(
       "insert into DATA_SOURCES (GUID, NAME, CONNECTION_STRING, TARGET_CLASS_NAME, SOURCE_CS) values (?,?,?,?,?)",
-    ).run(guid, file, `C:/Imports/pkg/layers/${file}`, TABLE[layer.infraFeatureClass], d.sourceCs?.[layer.infraFeatureClass] ?? UTM38N);
+    ).run(guid, file, d.conn?.(file) ?? `C:/Imports/pkg/layers/${file}`, TABLE[layer.infraFeatureClass], d.sourceCs?.[layer.infraFeatureClass] ?? UTM38N);
     const gj = JSON.parse(zip.getEntry(layer.path)!.getData().toString("utf8"));
     const [dx, dy] = d.shift?.[layer.infraFeatureClass] ?? [0, 0];
     const mv = (c: unknown): unknown => (typeof (c as number[])[0] === "number" ? [(c as number[])[0]! + dx, (c as number[])[1]! + dy] : (c as unknown[]).map(mv));
@@ -203,4 +205,18 @@ test("the real package ZIP and its unpacked folder give the same answer", () => 
   const b = runModelGate(model, { packagePath: dir });
   assert.deepEqual(a.layers, b.layers);
   assert.ok(readFileSync(join(dir, "manifest.json"), "utf8").includes("notForIssue"));
+});
+test("G3-003 a layer imported as SHP matches by name, whatever the extension", () => {
+  // InfraWorks writes SHP sources as DefaultFileLocation="C:\...\name.shp";
+  const shp = (file: string) => `DefaultFileLocation="C:\\Imports\\pkg\\layers_shp\\${file.replace(/\.geojson$/, ".shp")}";`;
+  const r = runModelGate(makeModel("shp.sqlite", { conn: shp }), { packagePath });
+  assert.equal(r.ok, true, JSON.stringify(r.findings, null, 2));
+  assert.ok(r.layers.every((l) => l.modelCount === l.packageCount));
+});
+
+test("G3-003 a different file with a similar name is not taken for the layer", () => {
+  const other = (file: string) => `C:/Imports/${file.replace(/\.geojson$/, "_old.shp")}`;
+  const r = runModelGate(makeModel("other.sqlite", { conn: other }), { packagePath });
+  assert.equal(r.ok, false);
+  assert.ok(r.findings.some((f) => f.ruleId === "G3-003" && /road_centerline/.test(f.message)));
 });
