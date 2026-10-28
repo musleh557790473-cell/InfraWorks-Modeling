@@ -165,6 +165,14 @@ export const PackageManifest = z.object({
       format: z.enum(["geojson", "shp", "dwg_overlay"]),
       path: z.string(),
       featureCount: z.number().int(),
+      /** Shapefile layers: the one geometry kind the file holds. */
+      geometryKind: z.enum(["point", "line", "area"]).optional(),
+      /** [minX, minY, maxX, maxY] in the package CRS. */
+      extent: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
+      /** Total plan length of line features, CRS units. */
+      length: z.number().optional(),
+      /** InfraWorks data source type to choose when importing this file. */
+      infraWorksType: z.string().optional(),
     }),
   ),
   files: z.array(z.string()),
