@@ -138,7 +138,7 @@ test("the package carries one Shapefile per class and geometry kind, and a check
   const shp = manifest.layers.filter((l: { format: string }) => l.format === "shp");
   assert.deepEqual(
     shp.map((l: { name: string; infraWorksType: string }) => `${l.name}:${l.infraWorksType}`).sort(),
-    ["road_centerline:Roads", "water_area:Water Areas", "water_line:Rivers"],
+    ["road_centerline:Roads", "water_area:Water Areas", "water_line:Streams"],
   );
   for (const ext of ["shp", "shx", "dbf", "prj", "cpg"]) assert.ok(existsSync(join(staging, "shp", `water_area.${ext}`)), ext);
   assert.equal(readShp(join(staging, "shp", "road_centerline")).records.length, 1);

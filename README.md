@@ -137,5 +137,5 @@ MCP tools: `create_project`, `upload_input`, `list_mapping_profiles`, `save_mapp
 - `crs.json` / `validation_report.json` / `domain_features.json`
 - `overlay/` — the source drawing, for an optional 2D overlay
 - `IMPORT_CHECKLIST.txt` — step-by-step import written for this package's own files:
-  Add File Data Source → SHP, the Type for each file (Roads, Coverages, Land Parcels, Water Areas,
-  Rivers, Pipelines, Points of Interest), the coordinate system check, then Gate G3.
+  Add File Data Source → SHP, the Type for each file (Roads, Coverage Areas, Parcels, Water Areas,
+  Streams, Pipelines, Points of Interest), the coordinate system check, then Gate G3.

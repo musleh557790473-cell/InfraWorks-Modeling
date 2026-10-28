@@ -158,15 +158,15 @@ export function infraWorksType(cls: InfraFeatureClass, kind: ShapeKind): string 
     case "road_centerline":
       return "Roads";
     case "coverage":
-      return "Coverages";
+      return "Coverage Areas";
     case "parcel":
-      return "Land Parcels";
+      return "Parcels";
     case "pipeline":
       return "Pipelines";
     case "water":
-      return kind === "area" ? "Water Areas" : "Rivers";
+      return kind === "area" ? "Water Areas" : "Streams";
     default:
-      return kind === "area" ? "Coverages" : "Points of Interest";
+      return kind === "area" ? "Coverage Areas" : "Points of Interest";
   }
 }
 
