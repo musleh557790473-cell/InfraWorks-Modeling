@@ -27,6 +27,10 @@ export interface ParsedDwg {
   keyStats: { xdata: number; attribute: number; text: number; missing: number };
   /** Set when the CAD file was a DWG converted to DXF first. */
   converter?: { engine: string; attempts: string[] };
+  /** The DXF ends before its EOF marker (cut off while saving or copying): the end of the drawing is missing. */
+  truncated?: boolean;
+  /** Bound xrefs read at their own coordinates because model space had nothing to convert (a plotted sheet). */
+  extractedXrefs?: string[];
 }
 
 /** Default XDATA application that carries asset ids (kept for existing drawings). */
@@ -91,6 +95,7 @@ function readSections(pairs: Pair[]) {
   let current = null as RawEntity | null;
   let block = null as Block | null;
   let blockHeader = null as RawEntity | null;
+  let sawEof = false;
 
   const flush = () => {
     if (!current) return;
@@ -127,6 +132,10 @@ function readSections(pairs: Pair[]) {
     // code 0 starts a new record
     closeBlockHeader();
     flush();
+    if (p.value === "EOF") {
+      sawEof = true;
+      break;
+    }
     if (p.value === "SECTION") {
       const name = pairs[i + 1];
       section = name && name.code === 2 ? name.value : null;
@@ -151,9 +160,25 @@ function readSections(pairs: Pair[]) {
     }
     if (section === "ENTITIES" || section === "BLOCKS") current = { type: p.value, pairs: [] };
   }
-  closeBlockHeader();
-  flush();
-  return { entities, blocks, insunits };
+  // A file cut short ends inside a section, so its last record is incomplete: drop it.
+  if (section === null) {
+    closeBlockHeader();
+    flush();
+  }
+  return { entities, blocks, insunits, truncated: !sawEof };
+}
+
+/**
+ * A bound xref: binding keeps the xref as a block of the same name and renames its layers to
+ * "<name>$0$<layer>". Nested pieces ("<name>$0$<block>") and anonymous blocks are not counted.
+ */
+function isBoundXref(b: Block): boolean {
+  if (b.name === "" || b.name.startsWith("*") || /\$\d+\$/.test(b.name)) return false;
+  const prefix = b.name.toUpperCase() + "$";
+  return b.entities.some((e) => {
+    const layer = readInfo(e).layer.toUpperCase();
+    return layer.startsWith(prefix) && /^\d+\$/.test(layer.slice(prefix.length));
+  });
 }
 
 /** POLYLINE + VERTEX… + SEQEND and INSERT + ATTRIB… + SEQEND become one item. */
@@ -437,7 +462,7 @@ interface Label {
 /* ---------------------------------------------------------------- main */
 
 export function parseDxf(text: string, filename: string, profile: MappingProfile): ParsedDwg {
-  const { entities, blocks, insunits } = readSections(toPairs(text));
+  const { entities, blocks, insunits, truncated } = readSections(toPairs(text));
   const keys = resolveAssetKeys(profile);
   const pattern = keys.pattern ? safeRegExp(keys.pattern) : null;
 
@@ -584,6 +609,24 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
 
   walk(group(entities), { xf: identity, attribs: {}, xdata: [], depth: 0 });
 
+  // A plotted sheet: nothing mapped in model space (or it was cut off), but the design drawing was
+  // bound into the file as an xref. Read each bound xref that has mapped layers, at its own
+  // coordinates: an xref's base point is the origin, so its coordinates are the designer's own.
+  // Title blocks and logos are bound xrefs too, but carry no mapped layers, so they are left out.
+  const extractedXrefs: string[] = [];
+  const unmappedXrefs: string[] = [];
+  const hasMappedGeometry = candidates.some((c) => c.geometry.type !== "Point" && GEOMETRY_CLASSES.includes(classOf(c.layer)));
+  if (!hasMappedGeometry) {
+    for (const b of [...blocks.values()].filter(isBoundXref)) {
+      if (!blockHasGeometry(b.name, 0)) {
+        unmappedXrefs.push(b.name);
+        continue;
+      }
+      extractedXrefs.push(b.name);
+      walk(group(b.entities), { xf: identity, attribs: {}, xdata: [], depth: 1 });
+    }
+  }
+
   /* -------- resolve asset keys and build features */
   const keyStats = { xdata: 0, attribute: 0, text: 0, missing: 0 };
   const okValue = (v: string) => v.trim() !== "" && (!pattern || pattern.test(v.trim()));
@@ -645,7 +688,18 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
     };
   });
 
-  const notes = [`Read ${features.length} feature(s) from model space (${blocks.size} block definition(s) available)`];
+  const notes = [
+    extractedXrefs.length
+      ? `Read ${features.length} feature(s); model space had nothing mapped, so bound xref(s) ${extractedXrefs.map((n) => `"${n}"`).join(", ")} were read at their own coordinates`
+      : `Read ${features.length} feature(s) from model space (${blocks.size} block definition(s) available)`,
+  ];
+  if (!hasMappedGeometry && !extractedXrefs.length && unmappedXrefs.length) {
+    notes.push(
+      `Bound xref(s) found but none has a mapped layer: ${unmappedXrefs.map((n) => `"${n}"`).join(", ")}. ` +
+        `Map their layers (by their own names, without the "<xref>$0$" prefix) to read them.`,
+    );
+  }
+  if (truncated) notes.push("The DXF ends before its EOF marker: the file was cut off and the end of the drawing is missing");
   if (keyStats.xdata + keyStats.attribute + keyStats.text) {
     notes.push(`Asset ids found: ${keyStats.xdata} from XDATA, ${keyStats.attribute} from block attributes, ${keyStats.text} from nearby text`);
   }
@@ -659,6 +713,8 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
     paperSpaceSkipped,
     insunits,
     keyStats,
+    ...(truncated ? { truncated } : {}),
+    ...(extractedXrefs.length ? { extractedXrefs } : {}),
   };
 }
 

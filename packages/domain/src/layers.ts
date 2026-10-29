@@ -20,9 +20,24 @@ export function matchesLayer(rule: string, layer: string): boolean {
   return re.test(layer.trim());
 }
 
-/** First rule in the profile that matches the layer (exact names and wildcards alike). */
+/**
+ * Binding an xref renames its layers to "<xref>$0$<layer>" ("$1$" and up on name clashes, repeated
+ * for nested xrefs). Returns the designer's own layer name, or the name unchanged.
+ */
+export function stripBoundXrefPrefix(layer: string): string {
+  return layer.replace(/^.*\$\d+\$/, "");
+}
+
+/**
+ * First rule in the profile that matches the layer (exact names and wildcards alike). A bound-xref
+ * layer is tried by its full name first, then by its own name, so "RD_CL" also maps "Xref Roads$0$RD_CL".
+ */
 export function findLayerMapping(profile: Pick<MappingProfile, "layers">, layer: string): LayerMapping | undefined {
-  return profile.layers.find((l) => matchesLayer(l.dwgLayer, layer));
+  const own = stripBoundXrefPrefix(layer);
+  return (
+    profile.layers.find((l) => matchesLayer(l.dwgLayer, layer)) ??
+    (own !== layer ? profile.layers.find((l) => matchesLayer(l.dwgLayer, own)) : undefined)
+  );
 }
 
 /**
@@ -44,7 +59,9 @@ const HINTS: { cls: InfraFeatureClass; words: RegExp }[] = [
 ];
 
 export function suggestFeatureClass(layer: string): InfraFeatureClass {
-  for (const h of HINTS) if (h.words.test(layer)) return h.cls;
+  // Judge a bound-xref layer by its own name: the "Xref ..." prefix would read as XREF (unmapped).
+  const own = stripBoundXrefPrefix(layer);
+  for (const h of HINTS) if (h.words.test(own)) return h.cls;
   return "unmapped";
 }
 

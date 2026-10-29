@@ -49,7 +49,9 @@ export function validateCollection(
     joinedCount: number;
     reportRowCount: number;
     hasCad: boolean;
-    cad?: Partial<Pick<ParsedDwg, "format" | "notes" | "skippedEntities" | "insunits" | "keyStats" | "paperSpaceSkipped">>;
+    cad?: Partial<
+      Pick<ParsedDwg, "format" | "notes" | "skippedEntities" | "insunits" | "keyStats" | "paperSpaceSkipped" | "truncated" | "extractedXrefs">
+    >;
     conversionError?: string;
   },
 ): ValidationReport {
@@ -78,6 +80,29 @@ export function validateCollection(
       message:
         `${opts.conversionError}. Install ODA File Converter (free) or ezdwg, or save the drawing as DXF ` +
         `from AutoCAD and upload that.`,
+    });
+  }
+
+  if (opts.cad?.truncated) {
+    issues.push({
+      code: "DXF_TRUNCATED",
+      severity: "warning",
+      message:
+        "The DXF ends before its end-of-file marker: it was cut off while being saved, exported or copied, so the " +
+        "end of the drawing (often the whole model space) is missing. Ask for the drawing to be saved again.",
+    });
+  }
+
+  const xrefs = opts.cad?.extractedXrefs ?? [];
+  if (xrefs.length) {
+    issues.push({
+      code: "SHEET_XREF_EXTRACTED",
+      severity: "warning",
+      message:
+        `Model space had nothing mapped, so the geometry was read from bound xref(s) ${xrefs.map((x) => `"${x}"`).join(", ")} ` +
+        `at their own coordinates. A plotted sheet often holds only the part of the design inside its viewport: ` +
+        `ask for the source drawing (${xrefs.map((x) => `${x}.dwg`).join(", ")}) for the full layout.`,
+      context: { xrefs: xrefs.join("; ") },
     });
   }
 

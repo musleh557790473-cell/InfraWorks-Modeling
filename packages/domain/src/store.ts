@@ -7,7 +7,7 @@ import type {
   ProjectStatus,
   ValidationReport,
 } from "./types.js";
-import { DEFAULT_MAPPING_PROFILE, DEFAULT_EPSG } from "./types.js";
+import { BUILTIN_PROFILES, DEFAULT_MAPPING_PROFILE, DEFAULT_EPSG } from "./types.js";
 import { resolveCrs } from "./crs.js";
 
 export interface UploadedFile {
@@ -249,14 +249,14 @@ export function createFileStore(dataDir: string): DomainStore {
     },
     listProfiles() {
       const saved = readJson<MappingProfile[]>(profilesPath, []);
-      return [DEFAULT_MAPPING_PROFILE, ...saved.filter((p) => p.id !== DEFAULT_MAPPING_PROFILE.id)];
+      return [...BUILTIN_PROFILES, ...saved.filter((p) => !BUILTIN_PROFILES.some((b) => b.id === p.id))];
     },
     getProfile(id) {
       return this.listProfiles().find((p) => p.id === id);
     },
     saveProfile(profile) {
-      if (profile.id === DEFAULT_MAPPING_PROFILE.id) {
-        throw new Error("The built-in default profile cannot be overwritten — save it under a new name");
+      if (BUILTIN_PROFILES.some((b) => b.id === profile.id)) {
+        throw new Error("A built-in profile cannot be overwritten — save it under a new name");
       }
       const saved = readJson<MappingProfile[]>(profilesPath, []).filter((p) => p.id !== profile.id);
       saved.push(profile);
