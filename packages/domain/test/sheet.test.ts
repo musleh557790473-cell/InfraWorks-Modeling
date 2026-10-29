@@ -134,5 +134,57 @@ test("the build report warns about a cut-off DXF and about roads taken from a sh
   assert.ok(codes.includes("SHEET_XREF_EXTRACTED"));
   const sheet = validation.issues.find((i) => i.code === "SHEET_XREF_EXTRACTED")!;
   assert.match(sheet.message, /Xref Road Layout Al Narjis\.dwg/);
+  assert.match(validation.issues.find((i) => i.code === "DXF_TRUNCATED")!.message, /EXPORTTOAUTOCAD/);
   assert.equal(validation.ok, true, "warnings, not blocking: the roads are still usable");
+});
+/** Build a project from DXF text and return its validation report, blocked or not. */
+async function report(text: string, profile = DEFAULT_MAPPING_PROFILE): Promise<ValidationReport> {
+  const dir = mkdtempSync(join(tmpdir(), "iw-sheet-"));
+  const path = join(dir, "t.dxf");
+  writeFileSync(path, text);
+  const store = createFileStore(dir);
+  const project = store.createProject("t", 32638);
+  store.setMappingProfile(project.id, profile);
+  store.addUpload({ projectId: project.id, filename: "t.dxf", kind: "dxf", path, size: 0 });
+  try {
+    return (await runBuildPipeline(store, project.id)).validation;
+  } catch (err) {
+    return (err as { validation: ValidationReport }).validation;
+  }
+}
+
+const ROAD_IN_UTM = [0, "LINE", 8, "ROADS", 10, 657100, 20, 2747200, 11, 657300, 21, 2747200];
+
+test("unmapped symbols at 0,0 (title block, legend) do not block a build: they are not exported", async () => {
+  // Al Qairawan after EXPORTTOAUTOCAD: three block inserts at 0,0 on layer 0 next to real roads.
+  const text = dxf(
+    0, "SECTION", 2, "BLOCKS", 0, "BLOCK", 2, "LEGEND", 10, 0, 20, 0, 0, "TEXT", 8, "0", 1, "Legend", 10, 0, 20, 0, 0, "ENDBLK", 0, "ENDSEC",
+    0, "SECTION", 2, "ENTITIES",
+    ...ROAD_IN_UTM,
+    0, "INSERT", 8, "0", 2, "LEGEND", 10, 0, 20, 0,
+    0, "INSERT", 8, "0", 2, "LEGEND", 10, 0, 20, 0,
+    0, "ENDSEC", 0, "EOF",
+  );
+  const v = await report(text);
+  assert.ok(!v.issues.some((i) => i.code === "COORDS_OUTSIDE_CRS"), JSON.stringify(v.issues));
+  assert.equal(v.ok, true);
+});
+
+test("a mapped feature in local coordinates still blocks the build", async () => {
+  const text = dxf(0, "SECTION", 2, "ENTITIES", 0, "LINE", 8, "ROADS", 10, 10, 20, 10, 11, 200, 21, 10, 0, "ENDSEC", 0, "EOF");
+  const v = await report(text);
+  const outside = v.issues.find((i) => i.code === "COORDS_OUTSIDE_CRS");
+  assert.equal(outside?.severity, "blocking");
+  assert.equal(v.ok, false);
+});
+
+test("units set to feet with coordinates already in UTM: the warning blames the units setting, not the geometry", async () => {
+  const header = [0, "SECTION", 2, "HEADER", 9, "$INSUNITS", 70, 2, 0, "ENDSEC"];
+  const right = await report(dxf(...header, 0, "SECTION", 2, "ENTITIES", ...ROAD_IN_UTM, 0, "ENDSEC", 0, "EOF"));
+  const units = right.issues.find((i) => i.code === "DRAWING_UNITS_NOT_METRES")!;
+  assert.equal(units.severity, "warning");
+  assert.match(units.message, /units setting is probably what is wrong/);
+
+  const local = await report(dxf(...header, 0, "SECTION", 2, "ENTITIES", 0, "LINE", 8, "ROADS", 10, 10, 20, 10, 11, 200, 21, 10, 0, "ENDSEC", 0, "EOF"));
+  assert.match(local.issues.find((i) => i.code === "DRAWING_UNITS_NOT_METRES")!.message, /not rescaled/);
 });

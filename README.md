@@ -94,8 +94,12 @@ folders): when model space has nothing mapped, each bound xref that has mapped l
 its own coordinates, and the title block and logos are left out. The report raises
 `SHEET_XREF_EXTRACTED`, since a sheet often holds only the part of the design inside its
 viewport: ask for the source drawing for the full layout. A DXF that ends before its `EOF` marker
-(cut off while being saved or copied) raises `DXF_TRUNCATED`, and its half-written last entity is
-dropped.
+raises `DXF_TRUNCATED`, and its half-written last entity is dropped. AutoCAD writes such files when
+its DXF export meets objects it cannot write, usually Civil 3D ones: in Civil 3D run `AUDIT`, then
+`EXPORTTOAUTOCAD`, and export the DXF from the drawing that creates. That drawing may report its
+units as feet; when the coordinates already fit the project CRS the warning says so, and they are
+used as they are. Unmapped symbols (title blocks and legends inserted at 0,0) are not exported, so
+they never block a build.
 
 ### Drawings from many teams
 
