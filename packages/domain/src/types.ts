@@ -214,9 +214,10 @@ export const DEFAULT_MAPPING_PROFILE: MappingProfile = {
 };
 
 /**
- * Parsons road layouts for LDIP (first seen on Al Narjis, sheet 10001): centrelines on RD_CL and
- * "RD_CL External Road", the site on "Project Boundary". Road edges, curb returns and the right of
- * way (RD_Edge, RD_CURB_RETURN, __ROW) are not centrelines and stay unmapped for a person to decide.
+ * Parsons road layouts for LDIP. Centrelines are RD_CL and "RD_CL External Road" on Al Narjis (sheet
+ * 10001) and RD_PR_CNRL (proposed centreline) on Al Qairawan (sheet 10100); the site is "Project
+ * Boundary". Road edges, curb returns, the right of way and chainage marks (RD_Edge, -RD_Edges,
+ * RD_CURB_RETURN, __ROW, RD_ROW, RD_C_CHAIN_*) are not centrelines and stay unmapped for a person to decide.
  * Rules use the layers' own names, so they also match the same layers inside a bound xref.
  */
 export const PARSONS_LDIP_ROADS_PROFILE: MappingProfile = {
@@ -225,6 +226,7 @@ export const PARSONS_LDIP_ROADS_PROFILE: MappingProfile = {
   team: "Parsons",
   layers: [
     { dwgLayer: "RD_CL*", infraFeatureClass: "road_centerline" },
+    { dwgLayer: "RD_PR_CNRL*", infraFeatureClass: "road_centerline" },
     { dwgLayer: "Project Boundary", infraFeatureClass: "coverage" },
   ],
   reportJoins: [],
