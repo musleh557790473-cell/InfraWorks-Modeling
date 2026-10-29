@@ -106,8 +106,8 @@ profile* and reused for that team's next drawing:
   match wins. Unmapped layers get a suggestion from common names (US National CAD Standard,
   Gulf practice, Arabic); a layer holding only text is treated as a label layer. Layers of a
   bound xref (`<xref>$0$RD_CL`) are matched and suggested by their own name (`RD_CL`).
-- **Built-in profiles**: the LDIP default, and *Parsons / LDIP road layout* (`RD_CL*` →
-  roads, `Project Boundary` → coverage). Start from one and save it as your team's profile.
+- **Built-in profiles**: the LDIP default, and *Parsons / LDIP road layout* (`RD_CL*` and
+  `RD_PR_CNRL*` → roads, `Project Boundary` → coverage). Start from one and save it as your team's profile.
 - **Asset ids** are looked for in every usual place, in order:
   1. XDATA (`xdataApps`, default `INFRAWORKS`; `*` = any application)
   2. a block attribute (`attributeTags`, default `ASSET_ID, ROAD_ID, PARCEL_ID, PLOT_ID, PLOT_NO`)
