@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 const CLASSES = ["road_centerline", "coverage", "water", "parcel", "pipeline", "annotation", "unmapped"] as const;
+/** Profiles shipped with the tool (BUILTIN_PROFILES in @infraworks/domain): read-only starting points. */
+const BUILTIN_IDS = new Set(["ldip-default", "parsons-ldip-roads"]);
 type FeatureClass = (typeof CLASSES)[number];
 
 type LayerMapping = { dwgLayer: string; infraFeatureClass: FeatureClass; joinKeyAttribute?: string };
@@ -71,7 +73,7 @@ export function MappingEditor({ api, projectId, current, onApplied }: {
   const [rows, setRows] = useState<EditRow[]>([]);
   const [keys, setKeys] = useState<AssetKeys>({ ...DEFAULT_KEYS, ...(current?.assetKeys ?? {}) });
   const [joins, setJoins] = useState<EditJoin[]>([]);
-  const [name, setName] = useState(current && current.id !== "ldip-default" ? current.name : "");
+  const [name, setName] = useState(current && !BUILTIN_IDS.has(current.id) ? current.name : "");
   const [team, setTeam] = useState(current?.team ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -101,7 +103,8 @@ export function MappingEditor({ api, projectId, current, onApplied }: {
       .map((j) => ({ reportFile: j.reportFile, joinKeyColumn: j.joinKeyColumn, featureJoinAttribute: j.featureJoinAttribute || "asset_id", ...(j.sheet ? { sheet: j.sheet } : {}) }));
     const assetKeys = { ...keys, pattern: keys.pattern?.trim() || undefined };
     return {
-      id: base && base.id !== "ldip-default" ? base.id : "",
+      // A built-in profile is a starting point: saving makes a new team profile.
+      id: base && !BUILTIN_IDS.has(base.id) ? base.id : "",
       name: name.trim() || "Unnamed profile",
       ...(team.trim() ? { team: team.trim() } : {}),
       layers,
@@ -114,7 +117,7 @@ export function MappingEditor({ api, projectId, current, onApplied }: {
     const p = profiles.find((x) => x.id === id);
     if (!p) return;
     setBase(p);
-    setName(p.id === "ldip-default" ? "" : p.name);
+    setName(BUILTIN_IDS.has(p.id) ? "" : p.name);
     setTeam(p.team ?? "");
     setKeys({ ...DEFAULT_KEYS, ...(p.assetKeys ?? {}) });
     setScan(null);

@@ -212,3 +212,24 @@ export const DEFAULT_MAPPING_PROFILE: MappingProfile = {
   ],
   assetKeys: AssetKeyConfig.parse({}),
 };
+
+/**
+ * Parsons road layouts for LDIP (first seen on Al Narjis, sheet 10001): centrelines on RD_CL and
+ * "RD_CL External Road", the site on "Project Boundary". Road edges, curb returns and the right of
+ * way (RD_Edge, RD_CURB_RETURN, __ROW) are not centrelines and stay unmapped for a person to decide.
+ * Rules use the layers' own names, so they also match the same layers inside a bound xref.
+ */
+export const PARSONS_LDIP_ROADS_PROFILE: MappingProfile = {
+  id: "parsons-ldip-roads",
+  name: "Parsons / LDIP road layout",
+  team: "Parsons",
+  layers: [
+    { dwgLayer: "RD_CL*", infraFeatureClass: "road_centerline" },
+    { dwgLayer: "Project Boundary", infraFeatureClass: "coverage" },
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
+/** Profiles shipped with the tool: listed first, and never overwritten or deleted by a save. */
+export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE];

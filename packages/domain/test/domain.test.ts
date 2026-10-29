@@ -344,13 +344,15 @@ test("a join column that does not exist fails with the real column names", async
 
 /* ------------------------------------------------------------------ team profiles */
 
-test("team profiles are saved, listed after the default, and the default cannot be overwritten", () => {
+test("team profiles are saved, listed after the built-in ones, and built-in profiles cannot be overwritten", () => {
   const store = createFileStore(tmp());
   store.saveProfile({ ...DEFAULT_MAPPING_PROFILE, id: "parsons", name: "Parsons", team: "Parsons" });
-  assert.deepEqual(store.listProfiles().map((p) => p.id), ["ldip-default", "parsons"]);
+  assert.deepEqual(store.listProfiles().map((p) => p.id), ["ldip-default", "parsons-ldip-roads", "parsons"]);
   assert.throws(() => store.saveProfile(DEFAULT_MAPPING_PROFILE), /cannot be overwritten/);
+  assert.throws(() => store.saveProfile(store.getProfile("parsons-ldip-roads")!), /cannot be overwritten/);
   assert.equal(store.deleteProfile("parsons"), true);
-  assert.deepEqual(store.listProfiles().map((p) => p.id), ["ldip-default"]);
+  assert.equal(store.deleteProfile("parsons-ldip-roads"), false, "built-in profiles are not stored, so not deleted");
+  assert.deepEqual(store.listProfiles().map((p) => p.id), ["ldip-default", "parsons-ldip-roads"]);
 });
 
 test("layer names are suggested in English NCS style and in Arabic", () => {

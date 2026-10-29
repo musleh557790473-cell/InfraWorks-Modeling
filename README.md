@@ -89,6 +89,14 @@ attributes). Anything else is listed in a warning.
 Civil 3D: they arrive as proxy entities and raise `CIVIL3D_OBJECTS_NOT_READ`. Ask the team to
 run `ExportToAutoCAD` before sending, or send LandXML.
 
+**Plotted sheets** (a layout sheet with the design bound in as an xref, as in Parsons' submission
+folders): when model space has nothing mapped, each bound xref that has mapped layers is read at
+its own coordinates, and the title block and logos are left out. The report raises
+`SHEET_XREF_EXTRACTED`, since a sheet often holds only the part of the design inside its
+viewport: ask for the source drawing for the full layout. A DXF that ends before its `EOF` marker
+(cut off while being saved or copied) raises `DXF_TRUNCATED`, and its half-written last entity is
+dropped.
+
 ### Drawings from many teams
 
 Each team or consultant draws differently, so mapping is saved **per team** as a *mapping
@@ -96,7 +104,10 @@ profile* and reused for that team's next drawing:
 
 - **Layer rules** are names or wildcards (`*ROAD*CNTR*`, `C-PROP-?`), case-insensitive, first
   match wins. Unmapped layers get a suggestion from common names (US National CAD Standard,
-  Gulf practice, Arabic); a layer holding only text is treated as a label layer.
+  Gulf practice, Arabic); a layer holding only text is treated as a label layer. Layers of a
+  bound xref (`<xref>$0$RD_CL`) are matched and suggested by their own name (`RD_CL`).
+- **Built-in profiles**: the LDIP default, and *Parsons / LDIP road layout* (`RD_CL*` →
+  roads, `Project Boundary` → coverage). Start from one and save it as your team's profile.
 - **Asset ids** are looked for in every usual place, in order:
   1. XDATA (`xdataApps`, default `INFRAWORKS`; `*` = any application)
   2. a block attribute (`attributeTags`, default `ASSET_ID, ROAD_ID, PARCEL_ID, PLOT_ID, PLOT_NO`)
