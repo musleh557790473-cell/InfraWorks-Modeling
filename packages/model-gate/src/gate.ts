@@ -262,30 +262,45 @@ function compareLayers(h: ModelHandle, pkg: PackageInfo, out: ModelFinding[], ro
   out.push(f("G3-000", "Summary", "info", `${imported} of ${pkg.layers.length} package layer(s) found in the model (${basename(pkg.source)}).`));
 }
 
-/* G3-008 — design roads: sections Civil 3D exported vs sections InfraWorks built */
+/* G3-008 — design roads: sections Civil 3D exported vs sections InfraWorks built
+   G3-009 — every road in the IMX arrived in the model */
 function compareRegions(h: ModelHandle, imxPath: string, out: ModelFinding[], rows: RegionComparison[]) {
   const imx = openImx(imxPath, true);
   let imxRegions;
+  let imxRoads: { name: string; design: boolean }[] = [];
   try {
     imxRegions = readRegions(imx, Number.POSITIVE_INFINITY);
+    if (imx.tables.has("ROADS")) {
+      imxRoads = (imx.db.prepare("select NAME, DEFINITION_ID from ROADS").all() as { NAME: string | null; DEFINITION_ID: string | null }[])
+        .filter((r) => r.NAME)
+        .map((r) => ({ name: r.NAME!, design: r.DEFINITION_ID !== null }));
+    }
   } finally {
     imx.db.close();
   }
   const model = modelRegions(h);
+  // InfraWorks gives each imported region a new GUID (seen on a real corridor import), so the
+  // region name is what pairs them in practice; the GUID is tried first in case a release keeps it.
   const byName = new Map([...model.values()].filter((r) => r.name).map((r) => [r.name!.toLowerCase(), r]));
   let unmatched = 0;
+  let byGuid = 0;
+  let short = 0;
 
   for (const r of imxRegions) {
     if (!r.sectionCount) continue;
-    const m = model.get(r.guid) ?? byName.get(r.name.toLowerCase());
+    const g = model.get(r.guid);
+    const m = g ?? byName.get(r.name.toLowerCase());
+    const matchedBy = g ? "guid" : m ? "name" : null;
+    if (g) byGuid += 1;
     const imxSpan = (r.lastSection ?? 0) - (r.firstSection ?? 0);
-    rows.push({ name: r.name, guid: r.guid, imxSections: r.sectionCount, imxSpan, modelSections: m?.sections ?? null, modelSpan: m?.span ?? null });
+    rows.push({ name: r.name, guid: r.guid, matchedBy, imxSections: r.sectionCount, imxSpan, modelSections: m?.sections ?? null, modelSpan: m?.span ?? null });
     if (!m) {
       unmatched += 1;
       continue;
     }
     const span = m.span ?? 0;
     if (m.sections === 0 || span < imxSpan - 1) {
+      short += 1;
       out.push(
         f(
           "G3-008",
@@ -308,5 +323,40 @@ function compareRegions(h: ModelHandle, imxPath: string, out: ModelFinding[], ro
         `${unmatched} IMX region(s) could not be matched to an InfraWorks region by GUID or name, so their length was not checked.`,
       ),
     );
+  }
+  const matched = rows.length - unmatched;
+  if (matched) {
+    const how = byGuid === matched ? "by GUID" : byGuid ? `${byGuid} by GUID, ${matched - byGuid} by name` : "by name";
+    out.push(
+      f(
+        "G3-008",
+        "Design roads are built over their full length",
+        "info",
+        `${matched} of ${rows.length} IMX region(s) matched ${how}; ${matched - short} built over their full length.`,
+      ),
+    );
+  }
+
+  if (imxRoads.length && h.tables.has("ROADS")) {
+    const cols = new Set((h.db.prepare("pragma table_info(ROADS)").all() as { name: string }[]).map((c) => c.name));
+    if (cols.has("NAME")) {
+      const names = new Set(
+        (h.db.prepare("select NAME from ROADS where NAME is not null").all() as { NAME: string }[]).map((r) => r.NAME.toLowerCase()),
+      );
+      const missing = imxRoads.filter((r) => !names.has(r.name.toLowerCase()));
+      if (missing.length) {
+        out.push(
+          f(
+            "G3-009",
+            "Every IMX road arrived in the model",
+            "warning",
+            `${missing.length} of ${imxRoads.length} road(s) in the IMX are not in the model: ` +
+              `${missing.map((r) => `${r.name} (${r.design ? "design road" : "plain road, no design definition"})`).join(", ")}. ` +
+              `Check the IMX data source's Configure filter, or whether the road is meant to come in.`,
+            { missing: missing.map((r) => r.name).join("; ") },
+          ),
+        );
+      }
+    }
   }
 }

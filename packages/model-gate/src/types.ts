@@ -48,6 +48,8 @@ export interface LayerComparison {
 export interface RegionComparison {
   name: string;
   guid: string;
+  /** How the IMX region was paired with the model's: InfraWorks re-issues GUIDs, so usually "name". */
+  matchedBy: "guid" | "name" | null;
   imxSections: number;
   imxSpan: number;
   modelSections: number | null;

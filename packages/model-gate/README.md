@@ -41,6 +41,7 @@ Exit code `0` = no blocking finding, `1` = blocking findings, `2` = bad usage.
 | G3-006 | The features sit where the package put them (extent centre offset) | blocking |
 | G3-007 | Linear layers arrived complete (plan length in the model vs the package) | warning; blocking over 10 % |
 | G3-008 | Design roads were built over their full length (sections per region vs the IMX) | blocking |
+| G3-009 | Every road in the IMX arrived in the model (matched by name) | warning |
 
 ## How it reads the model
 
@@ -61,5 +62,10 @@ An InfraWorks model is a SQLite database (`SCHEMA_VERSION` 17.x on InfraWorks 20
 - Table layout, data sources, CRS and FGF geometry were read from a real InfraWorks model
   (schema 17.18.0, 380 roads / 210 km, 0 unreadable geometries).
 - The rules are tested against a model database built to that layout and filled from a real package.
-- **G3-008 matches IMX regions to InfraWorks regions by GUID, then by name.** That pairing has not
-  yet been confirmed on a real corridor import; unmatched regions are reported, never passed silently.
+- **G3-008 on a real corridor** (NEOM PKG 4 C1-P3, IMX 2.1, UTM84-36N): all 6 regions and 2327
+  sections matched, built over their full length. InfraWorks gives each imported region a **new
+  GUID**, so regions pair **by name**; the GUID is still tried first. The report says how each
+  region was matched; unmatched regions are reported, never passed silently.
+- **G3-009** came from the same import: the IMX carried 3 roads, the model 2. The missing one,
+  `TRN_COR_C1P3_AAC`, is a plain road with no design definition (the corridor's outline); whether
+  InfraWorks skips such roads or the import filtered it out is not yet known, so it is a warning.
