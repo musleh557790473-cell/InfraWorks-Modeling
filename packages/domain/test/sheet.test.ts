@@ -54,6 +54,11 @@ test("bound-xref layer names are matched and suggested by their own name", () =>
   assert.equal(rule("RD_CL"), "road_centerline");
   assert.equal(rule("Xref Road Layout Al Narjis$0$Project Boundary"), "coverage");
   assert.equal(rule("Xref Road Layout Al Narjis$0$RD_CURB_RETURN"), undefined);
+  // Al Qairawan (sheet 10100): proposed centrelines on RD_PR_CNRL; edges, ROW and chainage stay out.
+  assert.equal(rule("Xref Road Layout Al Qairawan$0$RD_PR_CNRL"), "road_centerline");
+  for (const other of ["-RD_Edges", "RD_ROW", "RD_C_CHAIN_MARK", "G-ASPHALT ROAD"]) {
+    assert.equal(rule(`Xref Road Layout Al Qairawan$0$${other}`), undefined, other);
+  }
   // A rule written with the prefix still matches first.
   const prefixed = { layers: [{ dwgLayer: "Xref A$0$RD_CL", infraFeatureClass: "water" as const }, { dwgLayer: "RD_CL", infraFeatureClass: "road_centerline" as const }] };
   assert.equal(findLayerMapping(prefixed, "Xref A$0$RD_CL")?.infraFeatureClass, "water");
