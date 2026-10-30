@@ -89,7 +89,9 @@ export function validateCollection(
       severity: "warning",
       message:
         "The DXF ends before its end-of-file marker: it was cut off while being saved, exported or copied, so the " +
-        "end of the drawing (often the whole model space) is missing. Ask for the drawing to be saved again.",
+        "end of the drawing (often the whole model space) is missing. AutoCAD stops writing like this when it meets " +
+        "objects it cannot export, usually Civil 3D ones: in Civil 3D run AUDIT, then EXPORTTOAUTOCAD, and export the " +
+        "DXF from the drawing that creates.",
     });
   }
 
@@ -106,15 +108,25 @@ export function validateCollection(
     });
   }
 
+  // Only mapped features go into the package: title blocks, legends and other unmapped symbols
+  // (often inserted at 0,0) must not block a build or decide whether coordinates look right.
+  const env = collection.crs?.epsg ? crsEnvelope(collection.crs.epsg) : null;
+  const exported = collection.features.filter((f) => f.infraFeatureClass !== "unmapped");
+  const outside = env ? exported.filter((f) => outsideEnvelope(f, env)) : [];
+
   const units = opts.cad?.insunits;
   const metric = collection.crs?.epsg ? crsEnvelope(collection.crs.epsg) !== null && collection.crs.epsg !== 4326 : false;
+  const placedRight = metric && exported.length > 0 && outside.length === 0;
   if (metric && units !== undefined && units !== 0 && units !== 6) {
     issues.push({
       code: "DRAWING_UNITS_NOT_METRES",
       severity: "warning",
       message:
         `The drawing's units are ${UNIT_NAMES[units] ?? `code ${units}`}, but EPSG:${collection.crs.epsg} is in metres. ` +
-        `Coordinates are not rescaled — check the drawing is really in metres or scale it in CAD.`,
+        (placedRight
+          ? `The coordinates already fall in EPSG:${collection.crs.epsg}'s range, so the drawing's units setting is ` +
+            `probably what is wrong (Civil 3D's EXPORTTOAUTOCAD can change it); coordinates are used as they are.`
+          : `Coordinates are not rescaled — check the drawing is really in metres or scale it in CAD.`),
       context: { insunits: String(units) },
     });
   }
@@ -167,6 +179,24 @@ export function validateCollection(
     });
   }
 
+  // Features were read but none is on a mapped layer: the package would hold no layers at all.
+  if (collection.features.length > 0 && exported.length === 0) {
+    const byLayer = new Map<string, number>();
+    for (const f of collection.features) {
+      const layer = f.provenance.sourceLayer ?? "";
+      byLayer.set(layer, (byLayer.get(layer) ?? 0) + 1);
+    }
+    const top = [...byLayer].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([l]) => `"${l}"`);
+    issues.push({
+      code: "NOTHING_MAPPED",
+      severity: "blocking",
+      message:
+        `None of the ${collection.features.length} feature(s) read is on a mapped layer, so the package would be empty. ` +
+        `Choose the team's mapping profile or map its layers (most used: ${top.join(", ")}).`,
+      context: { count: String(collection.features.length), layers: top.join("; ") },
+    });
+  }
+
   const unmapped = collection.features.filter((f) => f.infraFeatureClass === "unmapped");
   if (unmapped.length > 0) {
     issues.push({
@@ -191,9 +221,7 @@ export function validateCollection(
     });
   }
 
-  const env = crsEnvelope(collection.crs.epsg);
   if (env) {
-    const outside = collection.features.filter((f) => outsideEnvelope(f, env));
     if (outside.length) {
       issues.push({
         code: "COORDS_OUTSIDE_CRS",
