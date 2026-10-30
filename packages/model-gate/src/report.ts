@@ -28,6 +28,18 @@ export function toConsole(r: ModelGateReport): string {
     }
     out.push("");
   }
+  if (r.regions.length) {
+    out.push(pad("region", 28) + pad("matched", 9) + pad("IMX sections/m", 18) + "model sections/m");
+    for (const g of r.regions) {
+      out.push(
+        pad(g.name, 28) +
+          pad(g.matchedBy ?? "no", 9) +
+          pad(`${g.imxSections} / ${g.imxSpan.toFixed(1)}`, 18) +
+          (g.modelSections === null ? "-" : `${g.modelSections} / ${g.modelSpan?.toFixed(1) ?? "-"}`),
+      );
+    }
+    out.push("");
+  }
   out.push("─".repeat(72));
   out.push(r.ok ? `PASS — ${r.warningCount} warning(s).` : `FAIL — ${r.blockingCount} blocking, ${r.warningCount} warning(s).`);
   out.push("");
@@ -50,9 +62,12 @@ export function toMarkdown(r: ModelGateReport): string {
     }
   }
   if (r.regions.length) {
-    out.push("", "| Region | IMX sections / span m | Model sections / span m |", "| --- | --- | --- |");
+    out.push("", "| Region | Matched by | IMX sections / span m | Model sections / span m |", "| --- | --- | --- | --- |");
     for (const g of r.regions) {
-      out.push(`| ${g.name} | ${g.imxSections} / ${g.imxSpan.toFixed(1)} | ${g.modelSections ?? "—"} / ${g.modelSpan?.toFixed(1) ?? "—"} |`);
+      out.push(
+        `| ${g.name} | ${g.matchedBy ?? "not matched"} | ${g.imxSections} / ${g.imxSpan.toFixed(1)} | ` +
+          `${g.modelSections ?? "—"} / ${g.modelSpan?.toFixed(1) ?? "—"} |`,
+      );
     }
   }
   return out.join("\n") + "\n";

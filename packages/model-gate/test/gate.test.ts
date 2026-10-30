@@ -220,3 +220,39 @@ test("G3-003 a different file with a similar name is not taken for the layer", (
   assert.equal(r.ok, false);
   assert.ok(r.findings.some((f) => f.ruleId === "G3-003" && /road_centerline/.test(f.message)));
 });
+
+test("G3-008/G3-009 a real corridor import: new GUIDs pair by name, and a road that did not arrive is named", () => {
+  // As NEOM PKG 4 C1-P3: InfraWorks re-issued the region GUID, and the IMX's plain corridor road
+  // (no DEFINITION_ID) is absent from the model while the design road arrived.
+  const model = makeModel("corridor.sqlite");
+  const db = new Database(model);
+  db.prepare("insert into ALIGNMENT_REGIONS (GUID, NAME) values ('a33470c2-5faf-4c48-b65b-1d9f3b1ec967', 'TRN_Road_A')").run();
+  for (let i = 0; i <= 10; i++) {
+    db.prepare("insert into ALIGNMENT_CROSS_SECTIONS (FK_REGION_GUID, REGION_DISTANCE_2D) values ('a33470c2-5faf-4c48-b65b-1d9f3b1ec967', ?)").run(i * 10);
+  }
+  db.prepare("insert into ROADS (NAME) values ('TRN_NB')").run();
+  db.close();
+
+  const imx = join(work, "corridor.imx");
+  const x = new Database(imx);
+  x.exec(`
+    create table IMX_VERSION (ID integer primary key, VERSION text);
+    create table ROADS (ID integer primary key, NAME text, DEFINITION_ID text);
+    create table CONSTRAINED_DEF_CORRIDOR_REGIONS (ID integer primary key, NAME text, GUID text, DEFINITION_ID text,
+      CORRIDOR_NAME text, BASELINE_NAME text, START_DISTANCE_2D real, END_DISTANCE_2D real, JSON_ASSEMBLY_DATA text);
+    create table CONSTRAINED_DEF_CORRIDOR_SECTIONS (ID integer primary key, REGION_ID text, DISTANCE_2D real, JSON_CROSS_SECTION text);
+  `);
+  x.prepare("insert into ROADS (NAME, DEFINITION_ID) values ('TRN_COR', null), ('TRN_NB', 'A1B8')").run();
+  x.prepare("insert into CONSTRAINED_DEF_CORRIDOR_REGIONS (NAME, GUID, START_DISTANCE_2D, END_DISTANCE_2D) values ('TRN_Road_A','5179d09d882a45e2523a35a0b658c8c0',0,100)").run();
+  for (let i = 0; i <= 10; i++) x.prepare("insert into CONSTRAINED_DEF_CORRIDOR_SECTIONS (REGION_ID, DISTANCE_2D) values ('5179d09d882a45e2523a35a0b658c8c0', ?)").run(i * 10);
+  x.close();
+
+  const r = runModelGate(model, { imxPath: imx });
+  assert.equal(r.ok, true, JSON.stringify(r.findings, null, 2));
+  assert.equal(r.regions[0]?.matchedBy, "name");
+  assert.match(r.findings.find((y) => y.ruleId === "G3-008" && y.severity === "info")!.message, /1 of 1 .* matched by name; 1 built/);
+  const missing = r.findings.find((y) => y.ruleId === "G3-009");
+  assert.equal(missing?.severity, "warning");
+  assert.equal(missing?.context?.missing, "TRN_COR");
+  assert.match(missing!.message, /plain road, no design definition/);
+});
