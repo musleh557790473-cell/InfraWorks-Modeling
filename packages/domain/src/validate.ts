@@ -179,6 +179,24 @@ export function validateCollection(
     });
   }
 
+  // Features were read but none is on a mapped layer: the package would hold no layers at all.
+  if (collection.features.length > 0 && exported.length === 0) {
+    const byLayer = new Map<string, number>();
+    for (const f of collection.features) {
+      const layer = f.provenance.sourceLayer ?? "";
+      byLayer.set(layer, (byLayer.get(layer) ?? 0) + 1);
+    }
+    const top = [...byLayer].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([l]) => `"${l}"`);
+    issues.push({
+      code: "NOTHING_MAPPED",
+      severity: "blocking",
+      message:
+        `None of the ${collection.features.length} feature(s) read is on a mapped layer, so the package would be empty. ` +
+        `Choose the team's mapping profile or map its layers (most used: ${top.join(", ")}).`,
+      context: { count: String(collection.features.length), layers: top.join("; ") },
+    });
+  }
+
   const unmapped = collection.features.filter((f) => f.infraFeatureClass === "unmapped");
   if (unmapped.length > 0) {
     issues.push({

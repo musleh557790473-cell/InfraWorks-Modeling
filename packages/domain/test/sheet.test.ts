@@ -142,6 +142,7 @@ test("the build report warns about a cut-off DXF and about roads taken from a sh
   assert.match(validation.issues.find((i) => i.code === "DXF_TRUNCATED")!.message, /EXPORTTOAUTOCAD/);
   assert.equal(validation.ok, true, "warnings, not blocking: the roads are still usable");
 });
+
 /** Build a project from DXF text and return its validation report, blocked or not. */
 async function report(text: string, profile = DEFAULT_MAPPING_PROFILE): Promise<ValidationReport> {
   const dir = mkdtempSync(join(tmpdir(), "iw-sheet-"));
@@ -192,4 +193,25 @@ test("units set to feet with coordinates already in UTM: the warning blames the 
 
   const local = await report(dxf(...header, 0, "SECTION", 2, "ENTITIES", 0, "LINE", 8, "ROADS", 10, 10, 20, 10, 11, 200, 21, 10, 0, "ENDSEC", 0, "EOF"));
   assert.match(local.issues.find((i) => i.code === "DRAWING_UNITS_NOT_METRES")!.message, /not rescaled/);
+});
+
+test("a drawing with nothing on a mapped layer blocks the build instead of shipping an empty package", async () => {
+  // As Al Qairawan 10100 read with a profile that has no rule for RD_PR_CNRL: only sheet furniture.
+  const text = dxf(
+    0, "SECTION", 2, "ENTITIES",
+    0, "LINE", 8, "C-ANNO-LGRD", 10, 657100, 20, 2747200, 11, 657300, 21, 2747200,
+    0, "LINE", 8, "C-ANNO-LGRD", 10, 657100, 20, 2747300, 11, 657300, 21, 2747300,
+    0, "LINE", 8, "RD_PR_CNRL", 10, 657100, 20, 2747400, 11, 657300, 21, 2747400,
+    0, "ENDSEC", 0, "EOF",
+  );
+  const v = await report(text);
+  const nothing = v.issues.find((i) => i.code === "NOTHING_MAPPED");
+  assert.equal(nothing?.severity, "blocking", JSON.stringify(v.issues));
+  assert.match(nothing!.message, /"C-ANNO-LGRD", "RD_PR_CNRL"/);
+  assert.equal(v.ok, false);
+
+  // The same drawing with the Parsons profile maps RD_PR_CNRL and builds.
+  const parsons = await report(text, PARSONS_LDIP_ROADS_PROFILE);
+  assert.ok(!parsons.issues.some((i) => i.code === "NOTHING_MAPPED"));
+  assert.equal(parsons.ok, true);
 });

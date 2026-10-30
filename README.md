@@ -133,6 +133,8 @@ REST (`/mapping-profiles`, `/projects/{id}/scan-layers`, `/projects/{id}/reports
 - Coordinates must fall inside the project CRS (`COORDS_OUTSIDE_CRS` blocks drawings left in local coordinates).
 - Drawing units other than metres on a UTM project → `DRAWING_UNITS_NOT_METRES`.
 - Features on id-carrying layers without an id → `ASSET_ID_MISSING`.
+- Features read but none on a mapped layer → `NOTHING_MAPPED` blocks the build (the package would
+  be empty); the message names the most used layers to map.
 - GeoJSON layers carry a `crs` member (`urn:ogc:def:crs:EPSG::<code>`) so InfraWorks/GDAL read
   them in the project CRS, not as WGS 84 degrees.
 
