@@ -18,6 +18,8 @@ export interface ShpFeature {
   /** Point: [x, y]. Line: one or more parts [[x, y]…]. Area: rings [[x, y]…] (first = outer). */
   kind: ShapeKind;
   parts: number[][][];
+  /** Area only: which rings are holes. Default: every ring after the first (one polygon). */
+  holes?: boolean[];
   attributes: Record<string, string | number | boolean | null>;
 }
 
@@ -52,11 +54,11 @@ function signedArea(ring: number[][]): number {
 }
 
 /** Shapefile rule: outer rings clockwise, holes counter-clockwise; rings closed. */
-function orientRings(rings: number[][][]): number[][][] {
+function orientRings(rings: number[][][], holes?: boolean[]): number[][][] {
   return rings.map((r, i) => {
     const ring = r.length && (r[0]![0] !== r[r.length - 1]![0] || r[0]![1] !== r[r.length - 1]![1]) ? [...r, r[0]!] : r;
     const ccw = signedArea(ring) > 0;
-    const wantCcw = i > 0;
+    const wantCcw = holes ? Boolean(holes[i]) : i > 0;
     return ccw === wantCcw ? ring : [...ring].reverse();
   });
 }
@@ -78,7 +80,7 @@ function shapeContent(f: ShpFeature): Buffer {
     b.writeDoubleLE(f.parts[0]![0]![1]!, 12);
     return b;
   }
-  const parts = f.kind === "area" ? orientRings(f.parts) : f.parts;
+  const parts = f.kind === "area" ? orientRings(f.parts, f.holes) : f.parts;
   const pts = parts.flat();
   const b = Buffer.alloc(44 + 4 * parts.length + 16 * pts.length);
   b.writeInt32LE(SHAPE_TYPE[f.kind], 0);

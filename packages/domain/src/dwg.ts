@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { nanoid } from "nanoid";
+import { subtractAreas } from "./areas.js";
 import { findLayerMapping, matchesLayer } from "./layers.js";
 import { resolveAssetKeys } from "./types.js";
 import type { AssetKeyConfig, DomainFeature, Geometry, InfraFeatureClass, MappingProfile } from "./types.js";
@@ -396,12 +397,21 @@ function closeRing(points: Pt[]): Pt[] {
   return f[0] === l[0] && f[1] === l[1] ? points : [...points, f];
 }
 
-function isClosedByVertices(points: Pt[]): boolean {
+/** First and last vertex meet, within `tol` drawing units. */
+function isClosedByVertices(points: Pt[], tol = 0): boolean {
   if (points.length < 4) return false;
   const f = points[0]!;
   const l = points[points.length - 1]!;
-  return f[0] === l[0] && f[1] === l[1];
+  return Math.hypot(f[0] - l[0], f[1] - l[1]) <= tol;
 }
+
+/**
+ * Area layers are often drawn as open polylines whose ends meet within a hair (Al Qairawan's
+ * right-of-way blocks: 42 of 105 "open" ones end under 1 cm from their start). On area classes
+ * those close; on lines (a loop road) only an exact match does.
+ */
+const CLOSE_TOLERANCE = 0.01;
+const AREA_LIKE: InfraFeatureClass[] = ["coverage", "parcel", "water"];
 
 function distToFeature(p: Pt, g: Geometry): number {
   const segDist = (a: number[], b: number[]) => {
@@ -518,7 +528,8 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
       const line = (pts: Pt[], closed: boolean) => {
         const t = pts.map(toWcs);
         if (t.length < 2) return;
-        if ((closed && t.length >= 3) || isClosedByVertices(t)) add({ type: "Polygon", coordinates: [closeRing(t)] });
+        const tol = AREA_LIKE.includes(classOf(layer)) ? CLOSE_TOLERANCE : 0;
+        if ((closed && t.length >= 3) || isClosedByVertices(t, tol)) add({ type: "Polygon", coordinates: [closeRing(t)] });
         else add({ type: "LineString", coordinates: t });
       };
 
@@ -685,8 +696,10 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
       geometry: c.geometry,
       attributes,
       provenance: { sourceFile: filename, sourceLayer: c.layer, sourceEntityId: c.handle },
+      ...(mapping?.outputLayer ? { outputLayer: mapping.outputLayer } : {}),
     };
   });
+  const cut = subtractAreas(features, profile);
 
   const notes = [
     extractedXrefs.length
@@ -699,6 +712,7 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
         `Map their layers (by their own names, without the "<xref>$0$" prefix) to read them.`,
     );
   }
+  notes.push(...cut.notes);
   if (truncated) notes.push("The DXF ends before its EOF marker: the file was cut off and the end of the drawing is missing");
   if (keyStats.xdata + keyStats.attribute + keyStats.text) {
     notes.push(`Asset ids found: ${keyStats.xdata} from XDATA, ${keyStats.attribute} from block attributes, ${keyStats.text} from nearby text`);
@@ -706,7 +720,7 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
 
   return {
     layers: [...layerStats.values()].sort((a, b) => b.entityCount - a.entityCount),
-    features,
+    features: cut.features,
     format: "dxf",
     notes,
     skippedEntities: skipped,
