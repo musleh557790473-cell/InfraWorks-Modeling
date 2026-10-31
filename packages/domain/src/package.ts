@@ -13,15 +13,21 @@ import type { ProjectRecord } from "./store.js";
 import { esriWkt, writeShapefile } from "./shapefile.js";
 import type { ShapeKind, ShpFeature } from "./shapefile.js";
 
-function featuresByClass(features: DomainFeature[]) {
-  const map = new Map<InfraFeatureClass, DomainFeature[]>();
+/** Package layers: one per mapping output layer, which defaults to the feature class. */
+function featuresByLayer(features: DomainFeature[]) {
+  const map = new Map<string, { cls: InfraFeatureClass; features: DomainFeature[] }>();
   for (const f of features) {
-    const list = map.get(f.infraFeatureClass) ?? [];
-    list.push(f);
-    map.set(f.infraFeatureClass, list);
+    if (f.infraFeatureClass === "unmapped") continue;
+    const key = f.outputLayer ?? f.infraFeatureClass;
+    const entry = map.get(key) ?? { cls: f.infraFeatureClass, features: [] };
+    entry.features.push(f);
+    map.set(key, entry);
   }
   return map;
 }
+
+/** Classes InfraWorks only builds from closed areas: open lines on them are not shipped. */
+const AREA_ONLY: InfraFeatureClass[] = ["coverage", "parcel"];
 
 /**
  * Coordinates stay in the project CRS (e.g. UTM metres), which RFC 7946 GeoJSON does not
@@ -58,17 +64,16 @@ export async function buildPackageZip(opts: {
   mkdirSync(stagingDir, { recursive: true });
   mkdirSync(join(stagingDir, "layers"), { recursive: true });
 
-  const byClass = featuresByClass(opts.collection.features);
+  const byLayer = featuresByLayer(opts.collection.features);
   const layerEntries: PackageManifest["layers"] = [];
   const files: string[] = [];
 
-  for (const [infraFeatureClass, feats] of byClass) {
-    if (infraFeatureClass === "unmapped") continue;
-    const rel = `layers/${infraFeatureClass}.geojson`;
+  for (const [name, { cls: infraFeatureClass, features: feats }] of byLayer) {
+    const rel = `layers/${name}.geojson`;
     writeFileSync(join(stagingDir, rel), JSON.stringify(toGeoJson(feats, opts.collection.crs.epsg), null, 2));
     files.push(rel);
     layerEntries.push({
-      name: infraFeatureClass,
+      name,
       infraFeatureClass,
       format: "geojson",
       path: rel,
@@ -77,7 +82,7 @@ export async function buildPackageZip(opts: {
   }
 
   // Shapefiles: what InfraWorks actually imports (it has no GeoJSON reader).
-  const shp = writeShapefileLayers(stagingDir, byClass, opts.collection.crs.epsg);
+  const shp = writeShapefileLayers(stagingDir, byLayer, opts.collection.crs.epsg);
   files.push(...shp.files);
   layerEntries.push(...shp.layers);
 
@@ -189,30 +194,35 @@ function toShp(f: DomainFeature): ShpFeature[] {
     case "Polygon":
       parts = c as number[][][];
       break;
-    case "MultiPolygon":
-      parts = (c as number[][][][]).flat();
-      break;
+    case "MultiPolygon": {
+      // Each polygon's first ring is an outer ring, the rest its holes.
+      const polys = c as number[][][][];
+      return [{ kind, parts: polys.flat(), holes: polys.flatMap((p) => p.map((_, i) => i > 0)), attributes }];
+    }
     default:
       return [];
   }
   return [{ kind, parts, attributes }];
 }
 
-function writeShapefileLayers(stagingDir: string, byClass: Map<InfraFeatureClass, DomainFeature[]>, epsg: number) {
+function writeShapefileLayers(stagingDir: string, byLayer: ReturnType<typeof featuresByLayer>, epsg: number) {
   mkdirSync(join(stagingDir, "shp"), { recursive: true });
   const layers: PackageManifest["layers"] = [];
   const files: string[] = [];
   const fieldRows: string[] = ["file,dbf_field,source_attribute,type"];
 
-  for (const [cls, feats] of byClass) {
-    if (cls === "unmapped") continue;
+  for (const [layer, { cls, features: feats }] of byLayer) {
     const byKind = new Map<ShapeKind, ShpFeature[]>();
     for (const f of feats) {
-      for (const s of toShp(f)) byKind.set(s.kind, [...(byKind.get(s.kind) ?? []), s]);
+      for (const s of toShp(f)) {
+        // An open line cannot become a coverage or parcel: AREA_NOT_CLOSED reports it instead.
+        if (AREA_ONLY.includes(cls) && s.kind !== "area") continue;
+        byKind.set(s.kind, [...(byKind.get(s.kind) ?? []), s]);
+      }
     }
     for (const [kind, list] of byKind) {
       // One kind → "road_centerline.shp"; several → "water_line.shp", "water_area.shp".
-      const name = byKind.size === 1 ? cls : `${cls}_${kind}`;
+      const name = byKind.size === 1 ? layer : `${layer}_${kind}`;
       const res = writeShapefile(join(stagingDir, "shp", name), kind, list, epsg);
       files.push(...res.files.map((p) => `shp/${basename(p)}`));
       for (const fl of res.fields) fieldRows.push(`${name}.shp,${fl.dbf},"${fl.source.replace(/"/g, '""')}",${fl.type}`);

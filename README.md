@@ -111,7 +111,19 @@ profile* and reused for that team's next drawing:
   Gulf practice, Arabic); a layer holding only text is treated as a label layer. Layers of a
   bound xref (`<xref>$0$RD_CL`) are matched and suggested by their own name (`RD_CL`).
 - **Built-in profiles**: the LDIP default, and *Parsons / LDIP road layout* (`RD_CL*` and
-  `RD_PR_CNRL*` → roads, `Project Boundary` → coverage). Start from one and save it as your team's profile.
+  `RD_PR_CNRL*` → roads, `Project Boundary` → coverage; on Al Qairawan also `road_reserve`,
+  `blocks` and `asphalt`, below). Start from one and save it as your team's profile.
+- **Areas around the roads**: a rule may name its own package layer (`outputLayer`), so rules of
+  one class ship as separate Shapefiles, and may cut other layers' closed areas out of its own
+  (`subtract`). Al Qairawan draws its right-of-way lines (`RD_ROW`) closed around the blocks
+  between the roads, so the Parsons profile ships:
+  - `blocks.shp` — the closed `RD_ROW` areas (171 blocks, 1.95 km² on sheet 10100);
+  - `road_reserve.shp` — the site `Boundary` minus those blocks (one area with 162 holes, 1.68 km²);
+  - `asphalt.shp` — the closed `G-ASPHALT ROAD` areas (most asphalt is drawn as open edges).
+
+  On coverage, parcel and water layers a polyline whose ends meet within 1 cm counts as closed
+  (42 of Al Qairawan's "open" blocks end under 1 cm from their start); open lines on coverage and
+  parcel layers cannot become areas, so they stay out of the Shapefiles and `AREA_NOT_CLOSED` counts them.
 - **Asset ids** are looked for in every usual place, in order:
   1. XDATA (`xdataApps`, default `INFRAWORKS`; `*` = any application)
   2. a block attribute (`attributeTags`, default `ASSET_ID, ROAD_ID, PARCEL_ID, PLOT_ID, PLOT_NO`)
@@ -143,7 +155,8 @@ MCP tools: `create_project`, `upload_input`, `list_mapping_profiles`, `save_mapp
 ## Package contents
 
 - **`shp/*.shp`** — what InfraWorks imports (it has no GeoJSON reader). One Shapefile per
-  feature class and geometry kind (`road_centerline.shp`, or `water_line.shp` + `water_area.shp`),
+  package layer (the feature class, or the rule's `outputLayer`) and geometry kind
+  (`road_centerline.shp`, `road_reserve.shp`, or `water_line.shp` + `water_area.shp`),
   each with `.shx`, `.dbf`, `.prj` (project CRS as ESRI WKT) and `.cpg` (UTF-8, so Arabic text
   survives). Polygons follow the Shapefile winding rule.
 - `shp/field_names.csv` — dBASE limits field names to 10 ASCII characters; this maps each

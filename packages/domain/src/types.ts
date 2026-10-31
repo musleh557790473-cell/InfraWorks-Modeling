@@ -45,6 +45,8 @@ export const DomainFeature = z.object({
   geometry: Geometry,
   attributes: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])),
   provenance: FeatureProvenance,
+  /** Package layer the feature goes into, when its mapping names one (default: its feature class). */
+  outputLayer: z.string().optional(),
 });
 export type DomainFeature = z.infer<typeof DomainFeature>;
 
@@ -66,6 +68,20 @@ export const LayerMapping = z.object({
   infraFeatureClass: InfraFeatureClass,
   /** Feature attribute that receives the asset id found for this layer's entities. */
   joinKeyAttribute: z.string().optional(),
+  /**
+   * Package layer (Shapefile name) for this rule, so two rules of one class ship as separate
+   * files, e.g. "road_reserve" and "blocks" both Coverage Areas. Default: the feature class.
+   */
+  outputLayer: z
+    .string()
+    .regex(/^[a-z][a-z0-9_]{0,30}$/, "lowercase letters, digits and _ only")
+    .optional(),
+  /**
+   * Layer rules whose closed areas are cut out of this rule's areas. The road reserve is the
+   * site boundary minus the blocks the right-of-way lines enclose: { dwgLayer: "Boundary",
+   * subtract: ["RD_ROW"] }.
+   */
+  subtract: z.array(z.string().min(1)).optional(),
 });
 export type LayerMapping = z.infer<typeof LayerMapping>;
 
@@ -216,8 +232,13 @@ export const DEFAULT_MAPPING_PROFILE: MappingProfile = {
 /**
  * Parsons road layouts for LDIP. Centrelines are RD_CL and "RD_CL External Road" on Al Narjis (sheet
  * 10001) and RD_PR_CNRL (proposed centreline) on Al Qairawan (sheet 10100); the site is "Project
- * Boundary". Road edges, curb returns, the right of way and chainage marks (RD_Edge, -RD_Edges,
- * RD_CURB_RETURN, __ROW, RD_ROW, RD_C_CHAIN_*) are not centrelines and stay unmapped for a person to decide.
+ * Boundary". Road edges, curb returns and chainage marks (RD_Edge, -RD_Edges, RD_CURB_RETURN, __ROW,
+ * RD_C_CHAIN_*) are not centrelines and stay unmapped for a person to decide.
+ *
+ * Al Qairawan also gives the areas around the roads. Its right-of-way lines (RD_ROW) close around
+ * the blocks between the roads, so the closed RD_ROW areas are the blocks, and the road reserve is
+ * the site boundary (Boundary, in the baseplan xref) minus those blocks. Closed asphalt areas
+ * (G-ASPHALT ROAD) ship on their own; the open asphalt edges cannot form areas.
  * Rules use the layers' own names, so they also match the same layers inside a bound xref.
  */
 export const PARSONS_LDIP_ROADS_PROFILE: MappingProfile = {
@@ -228,6 +249,9 @@ export const PARSONS_LDIP_ROADS_PROFILE: MappingProfile = {
     { dwgLayer: "RD_CL*", infraFeatureClass: "road_centerline" },
     { dwgLayer: "RD_PR_CNRL*", infraFeatureClass: "road_centerline" },
     { dwgLayer: "Project Boundary", infraFeatureClass: "coverage" },
+    { dwgLayer: "Boundary", infraFeatureClass: "coverage", outputLayer: "road_reserve", subtract: ["RD_ROW"] },
+    { dwgLayer: "RD_ROW", infraFeatureClass: "coverage", outputLayer: "blocks" },
+    { dwgLayer: "G-ASPHALT ROAD", infraFeatureClass: "coverage", outputLayer: "asphalt" },
   ],
   reportJoins: [],
   assetKeys: AssetKeyConfig.parse({}),

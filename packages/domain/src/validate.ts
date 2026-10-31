@@ -216,7 +216,7 @@ export function validateCollection(
       severity: "warning",
       message:
         `${openAreas.length} coverage/parcel feature(s) are open lines, not closed boundaries — ` +
-        `InfraWorks will not create an area from them. Close the polylines in CAD.`,
+        `InfraWorks will not create an area from them, so they are left out of the Shapefiles. Close the polylines in CAD.`,
       context: { count: String(openAreas.length) },
     });
   }
