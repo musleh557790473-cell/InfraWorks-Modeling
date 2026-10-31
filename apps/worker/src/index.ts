@@ -1,7 +1,6 @@
-import { join } from "node:path";
-import { createFileStore, runBuildPipeline } from "@infraworks/domain";
+import { createFileStore, resolveDataDir, runBuildPipeline } from "@infraworks/domain";
 
-const dataDir = process.env.DATA_DIR || join(process.cwd(), "../../data");
+const dataDir = resolveDataDir();
 const pollMs = Number(process.env.WORKER_POLL_MS || 2000);
 
 // In LOCAL_MODE the API runs each build inline. Polling the same files here as well

@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, renameSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 import { nanoid } from "nanoid";
 import type {
   JobStatus,
@@ -132,22 +132,44 @@ export function createFileStore(dataDir: string): DomainStore {
     }
   };
 
+  // Files inside the data folder are recorded relative to it, so the folder can move (or sit in
+  // OneDrive under a different user name on another machine) without breaking the records.
+  const toStored = (p: string | undefined) => {
+    if (!p || !isAbsolute(p)) return p;
+    const rel = relative(dataDir, p);
+    return rel && !rel.startsWith("..") && !isAbsolute(rel) ? rel.split(sep).join("/") : p;
+  };
+  const fromStored = (p: string | undefined) => {
+    if (!p) return p;
+    if (!isAbsolute(p)) return join(dataDir, p);
+    // A record written before paths were relative, by another machine or from another folder:
+    // rebase what follows its data folder's uploads/artifacts/converted onto this data folder,
+    // and prefer that copy, so a moved data folder stops pointing back at the old one.
+    const m = /[\\/](uploads|artifacts|converted)[\\/](.+)$/.exec(p);
+    const rebased = m ? join(dataDir, m[1]!, ...m[2]!.split(/[\\/]/)) : null;
+    if (rebased && existsSync(rebased)) return rebased;
+    return existsSync(p) ? p : (rebased ?? p);
+  };
+  const readUploads = () => readJson<UploadedFile[]>(uploadsPath, []).map((u) => ({ ...u, path: fromStored(u.path)! }));
+  const readJobs = () =>
+    readJson<JobRecord[]>(jobsPath, []).map((j) => (j.packagePath ? { ...j, packagePath: fromStored(j.packagePath) } : j));
+
   let projects = readJson<ProjectRecord[]>(projectsPath, []);
-  let uploads = readJson<UploadedFile[]>(uploadsPath, []);
-  let jobs = readJson<JobRecord[]>(jobsPath, []);
+  let uploads = readUploads();
+  let jobs = readJobs();
 
   // API and worker are separate processes sharing these files: re-read before every
   // operation so neither works from a stale copy or overwrites the other with one.
   const load = () => {
     projects = readJson<ProjectRecord[]>(projectsPath, []);
-    uploads = readJson<UploadedFile[]>(uploadsPath, []);
-    jobs = readJson<JobRecord[]>(jobsPath, []);
+    uploads = readUploads();
+    jobs = readJobs();
   };
 
   const persist = () => {
     writeJson(projectsPath, projects);
-    writeJson(uploadsPath, uploads);
-    writeJson(jobsPath, jobs);
+    writeJson(uploadsPath, uploads.map((u) => ({ ...u, path: toStored(u.path)! })));
+    writeJson(jobsPath, jobs.map((j) => (j.packagePath ? { ...j, packagePath: toStored(j.packagePath) } : j)));
   };
 
   return {

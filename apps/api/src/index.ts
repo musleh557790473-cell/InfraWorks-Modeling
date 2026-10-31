@@ -7,6 +7,7 @@ import {
   CreateProjectInput,
   MappingProfile,
   createFileStore,
+  resolveDataDir,
   detectKind,
   runBuildPipeline,
   scanProjectCad,
@@ -15,7 +16,7 @@ import {
 } from "@infraworks/domain";
 import { createApsClientFromEnv } from "@infraworks/aps-client";
 
-const dataDir = process.env.DATA_DIR || join(process.cwd(), "../../data");
+const dataDir = resolveDataDir();
 const store = createFileStore(dataDir);
 const aps = createApsClientFromEnv();
 const port = Number(process.env.API_PORT || 8787);
