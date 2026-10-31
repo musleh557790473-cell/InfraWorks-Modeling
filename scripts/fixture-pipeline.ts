@@ -7,12 +7,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createFileStore,
+  resolveDataDir,
   runBuildPipeline,
   DEFAULT_MAPPING_PROFILE,
 } from "@infraworks/domain";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const dataDir = join(root, "data");
+const dataDir = resolveDataDir(root);
 const fixtures = join(root, "fixtures");
 
 async function main() {

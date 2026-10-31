@@ -8,6 +8,7 @@
     "build": "pnpm -r --filter @infraworks/domain --filter @infraworks/aps-client build && pnpm -r --filter @infraworks/imx-gate build && pnpm -r --filter @infraworks/model-gate build && pnpm -r --filter @infraworks/api --filter @infraworks/worker --filter @infraworks/mcp --filter @infraworks/web build",
     "dev": "pnpm --filter @infraworks/domain build && pnpm --filter @infraworks/aps-client build && concurrently -k -n api,web,worker,mcp -c blue,green,yellow,magenta \"pnpm --filter @infraworks/api dev\" \"pnpm --filter @infraworks/web dev\" \"pnpm --filter @infraworks/worker dev\" \"pnpm --filter @infraworks/mcp dev\"",
     "fixture:pipeline": "tsx scripts/fixture-pipeline.ts",
+    "package:build": "tsx scripts/build-package.mts",
     "typecheck": "pnpm -r typecheck",
     "lint": "echo \"No lint configured yet\"",
     "test": "pnpm -r test",

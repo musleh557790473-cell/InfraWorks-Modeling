@@ -3,6 +3,7 @@ export * from "./crs.js";
 export * from "./store.js";
 export * from "./layers.js";
 export * from "./areas.js";
+export * from "./env.js";
 export * from "./convert.js";
 export * from "./dwg.js";
 export * from "./reports.js";

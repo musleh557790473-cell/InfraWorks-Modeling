@@ -26,6 +26,37 @@ pnpm dev               # web :3000 · API :8787 · worker · MCP (stdio)
 - Web: http://127.0.0.1:3000
 - OpenAPI: http://127.0.0.1:8787/openapi.json
 
+Build a package from one drawing without the web app:
+
+```bash
+pnpm package:build "C:\temp\drawing.dxf" --profile parsons-ldip-roads --name "Al Qairawan 10100"
+```
+
+## Working from two machines
+
+Code and data travel separately:
+
+| What | Where | Moves by |
+| --- | --- | --- |
+| The repo (code, `.git`) | a clone outside OneDrive on each machine, e.g. `C:\dev\InfraWorks-Modeling` | `git pull` / `git push` |
+| The data folder (uploads, packages, converted drawings, project database) | one OneDrive folder, e.g. `Documents\AI\InfraWorks-Modeling-Data` | OneDrive |
+| InfraWorks models, DWG / DXF / IMX inputs | OneDrive project folders | OneDrive |
+
+Each machine's own `.env` (not committed) points at the shared data folder, without quotes:
+
+```
+DATA_DIR=C:\Users\<you>\OneDrive - <org>\Documents\AI\InfraWorks-Modeling-Data
+```
+
+The API, worker, `pnpm package:build` and `pnpm fixture:pipeline` all read it. Paths inside the
+project database are stored relative to the data folder, so it opens on either machine even when
+the user name or OneDrive path differs.
+
+Keep the repo itself out of OneDrive: OneDrive does not understand git, and a machine that comes
+back online with old files writes them over newer ones as `name-<PC>` conflict copies (inside
+`.git` too), and locks files mid-checkout. Work on one machine at a time and let OneDrive show
+"Up to date" before starting on the other, since the project database is a set of JSON files.
+
 ## Monorepo layout
 
 | Path | Role |
