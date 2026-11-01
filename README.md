@@ -172,7 +172,8 @@ profile* and reused for that team's next drawing:
   - `sewer_manholes.shp` (Type: Pipeline Connectors): `label`, `kind` (Manhole / Outfall), `rim_m`,
     `invert_m`, `depth_m`, `size_m`. A rim of 0 or below the invert counts as no level.
   - Each layer records the InfraWorks columns its fields fill (`fields` in the manifest: `SIZE_X`,
-    `SIZE_Y`, `PIPE_MATERIAL`, `UTILITY_TYPE`, `NETWORKNAME`; `HEIGHT` = depth for manholes); the
+    `SIZE_Y`, `PIPE_MATERIAL`, `NETWORKNAME`; `HEIGHT` = depth for manholes). `UTILITY_TYPE` is a
+    read-only code InfraWorks sets itself, so the utility leads the network name (`Sewer - <model>`); the
     checklist lists them for the Table tab, `pnpm model:names` fills them on a copy, and Gate G3
     (`G3-012`) warns when they are empty. Invert levels stay in the attributes and are not yet put
     into InfraWorks' elevation columns, whose meaning (offset or level) is still to be checked.

@@ -26,25 +26,27 @@ export interface HydraulicNetwork {
 export interface HydraulicOptions {
   /** Package layers get this prefix: "sewer" → sewer_pipes, sewer_manholes. */
   prefix?: string;
-  /** UTILITY_TYPE in InfraWorks. */
+  /** The utility (Sewer, Water...): an attribute, and the start of the network name. */
   utility?: string;
-  /** NETWORKNAME in InfraWorks. Default: the model's file name. */
+  /** NETWORKNAME in InfraWorks. Default: "<utility> - <model file name>". */
   network?: string;
 }
 
-/** InfraWorks columns each package field fills (Configure → Common / Table). */
+/**
+ * InfraWorks columns each package field fills (Configure → Common / Table). UTILITY_TYPE is left
+ * out: InfraWorks keeps it as a read-only Int32 code it sets itself (CorePanelSchema.json), with
+ * no published list, so the utility goes into the network name instead ("Sewer - <model>").
+ */
 export const PIPE_FIELDS: Record<string, string> = {
   SIZE_X: "size_m",
   SIZE_Y: "size_m",
   PIPE_MATERIAL: "material",
-  UTILITY_TYPE: "utility",
   NETWORKNAME: "network",
 };
 export const CONNECTOR_FIELDS: Record<string, string> = {
   SIZE_X: "size_m",
   SIZE_Y: "size_m",
   HEIGHT: "depth_m",
-  UTILITY_TYPE: "utility",
   NETWORKNAME: "network",
 };
 
@@ -81,7 +83,7 @@ function readSewer(db: Db, filename: string, opts: HydraulicOptions): HydraulicN
   }
   const prefix = opts.prefix ?? "sewer";
   const utility = opts.utility ?? "Sewer";
-  const network = opts.network ?? basename(filename).replace(/\.(stsw|wtg)\.sqlite$/i, "");
+  const network = opts.network ?? `${utility} - ${basename(filename).replace(/\.(stsw|wtg)\.sqlite$/i, "")}`;
   const optional = (t: string, sql: string) => (tables.has(t) ? q(sql) : []);
 
   const elements = new Map(q("select ElementID id, Label label, IsDeleted del from HMIModelingElement").map((r) => [Number(r.id), r]));

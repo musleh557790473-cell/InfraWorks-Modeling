@@ -30,6 +30,7 @@ test("a SewerGEMS model: pipes and manholes in metres, deleted pipes left out, s
   assert.equal(co1.attributes.slope_pct, 0.5);
   assert.equal(co1.attributes.flow, "start-to-end");
   assert.equal(co1.attributes.node_start, "MH-1");
+  assert.equal(co1.attributes.network, "Sewer - Al Qairawan", "the utility leads the network name");
   assert.equal(pipes.find((f) => f.attributes.label === "CO-2")!.attributes.flow, "end-to-start", "drawn against the flow");
 
   const mh1 = nodes.find((f) => f.attributes.label === "MH-1")!;
@@ -60,7 +61,7 @@ test("a SewerGEMS model builds a package: Pipelines and Pipeline Connectors, wit
   assert.equal(pipes.infraWorksType, "Pipelines");
   assert.equal(mh.infraWorksType, "Pipeline Connectors");
   assert.equal(pipes.nameField, "NAME");
-  assert.deepEqual(pipes.fields, { SIZE_X: "SIZE_M", SIZE_Y: "SIZE_M", PIPE_MATERIAL: "MATERIAL", UTILITY_TYPE: "UTILITY", NETWORKNAME: "NETWORK" });
+  assert.deepEqual(pipes.fields, { SIZE_X: "SIZE_M", SIZE_Y: "SIZE_M", PIPE_MATERIAL: "MATERIAL", NETWORKNAME: "NETWORK" });
   assert.equal(mh.fields?.HEIGHT, "DEPTH_M");
   assert.ok(manifest.importChecklist.some((s) => /Table tab: SIZE_X = SIZE_M, SIZE_Y = SIZE_M, PIPE_MATERIAL = MATERIAL/.test(s)), manifest.importChecklist.join("\n"));
 });

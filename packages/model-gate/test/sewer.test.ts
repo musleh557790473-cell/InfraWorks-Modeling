@@ -51,9 +51,9 @@ function importedModel(name: string): string {
     create table ALIGNMENT_CROSS_SECTIONS (ID integer primary key, GUID text, FK_REGION_GUID text, REGION_DISTANCE_2D real, GEOMETRY blob);
     create table ROADS (ID integer primary key, GUID text, NAME text, GEOMETRY blob, DATA_SOURCE_ID text, EXTERNAL_ID text);
     create table PIPELINES (ID integer primary key, GUID text, NAME text, GEOMETRY blob, DATA_SOURCE_ID text, EXTERNAL_ID text,
-      SIZE_X real, SIZE_Y real, PIPE_MATERIAL text, UTILITY_TYPE text, NETWORKNAME text);
+      SIZE_X real, SIZE_Y real, PIPE_MATERIAL text, UTILITY_TYPE integer, NETWORKNAME text);
     create table PIPE_CONNECTORS (ID integer primary key, GUID text, NAME text, GEOMETRY blob, DATA_SOURCE_ID text, EXTERNAL_ID text,
-      SIZE_X real, SIZE_Y real, HEIGHT real, UTILITY_TYPE text, NETWORKNAME text);
+      SIZE_X real, SIZE_Y real, HEIGHT real, UTILITY_TYPE integer, NETWORKNAME text);
   `);
   db.prepare("insert into SCHEMA_VERSION values (1, '17.18.0')").run();
   db.prepare("insert into spatial_ref_sys values (1, 'UTM84-38N', null, null, ?, null, null)").run(UTM38N);
@@ -90,13 +90,13 @@ test("G3-012 names the empty columns of a sewer imported with Type only; model-n
   const r = fillNames(model, packagePath, out);
   const pipes = r.layers.find((l) => l.table === "PIPELINES")!;
   const byCol = Object.fromEntries(pipes.columns.map((c) => [c.column, c.filled]));
-  assert.deepEqual(byCol, { NAME: 2, SIZE_X: 2, SIZE_Y: 2, PIPE_MATERIAL: 2, UTILITY_TYPE: 2, NETWORKNAME: 2 });
+  assert.deepEqual(byCol, { NAME: 2, SIZE_X: 2, SIZE_Y: 2, PIPE_MATERIAL: 2, NETWORKNAME: 2 });
 
   const after = runModelGate(out, { packagePath });
   assert.ok(!after.findings.some((f) => f.ruleId === "G3-012" || f.ruleId === "G3-010"), JSON.stringify(after.findings));
   const db = new Database(out, { readonly: true });
-  const co1 = db.prepare("select NAME, SIZE_X, PIPE_MATERIAL, UTILITY_TYPE from PIPELINES where NAME = 'CO-1'").get() as Record<string, unknown>;
-  assert.deepEqual(co1, { NAME: "CO-1", SIZE_X: 0.2, PIPE_MATERIAL: "HDPE CORRUGATED", UTILITY_TYPE: "Sewer" });
+  const co1 = db.prepare("select NAME, SIZE_X, PIPE_MATERIAL, NETWORKNAME from PIPELINES where NAME = 'CO-1'").get() as Record<string, unknown>;
+  assert.deepEqual(co1, { NAME: "CO-1", SIZE_X: 0.2, PIPE_MATERIAL: "HDPE CORRUGATED", NETWORKNAME: "Sewer - Al Qairawan" });
   const mh = db.prepare("select HEIGHT, SIZE_X from PIPE_CONNECTORS where NAME = 'MH-1'").get() as Record<string, unknown>;
   assert.deepEqual(mh, { HEIGHT: 2, SIZE_X: 1.2 });
   const cfg = JSON.parse((db.prepare("select CONFIG from DATA_SOURCES where TARGET_CLASS_NAME = 'PIPELINES'").get() as { CONFIG: string }).CONFIG);
