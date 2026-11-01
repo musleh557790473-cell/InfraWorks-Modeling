@@ -1,7 +1,10 @@
 /**
  * Build an InfraWorks package from one drawing, from the command line:
  *   pnpm package:build <drawing.dxf|dwg | model.stsw.sqlite> [--profile <id>] [--name <project>] [--epsg <code>]
- * A SewerGEMS / WaterGEMS model database (<model>.stsw.sqlite) gives the network's pipes and manholes.
+ * A SewerGEMS / WaterGEMS model database (<model>.stsw.sqlite / <model>.wtg.sqlite) gives the network's
+ * pipes and structures. For a hydraulic model:
+ *   --utility <Water|Irrigation|Sewer>  layer prefix and network name (default: Sewer / Water)
+ *   --cover <m> --cover-source "<doc>"   WaterGEMS has no inverts: cover over the crown, and where it comes from
  * Uses the data folder from DATA_DIR (.env), so the package lands where both machines see it.
  */
 import { copyFileSync, mkdirSync } from "node:fs";
@@ -37,7 +40,19 @@ mkdirSync(dir, { recursive: true });
 const dest = join(dir, basename(src));
 copyFileSync(resolve(src), dest);
 const kind = /\.(stsw|wtg)\.sqlite$/i.test(src) ? "hydraulic" : extname(src).toLowerCase() === ".dwg" ? "dwg" : "dxf";
-store.addUpload({ projectId: project.id, filename: basename(src), kind, path: dest, size: 0 });
+const cover = flag("--cover");
+if (cover !== undefined && !(Number(cover) >= 0)) {
+  console.error(`--cover expects metres, got "${cover}"`);
+  process.exit(2);
+}
+const hydraulic =
+  kind === "hydraulic" && (flag("--utility") || cover !== undefined)
+    ? {
+        ...(flag("--utility") ? { utility: flag("--utility")! } : {}),
+        ...(cover !== undefined ? { coverM: Number(cover), coverSource: flag("--cover-source") ?? "given on the command line" } : {}),
+      }
+    : undefined;
+store.addUpload({ projectId: project.id, filename: basename(src), kind, path: dest, size: 0, ...(hydraulic ? { hydraulic } : {}) });
 
 try {
   const r = await runBuildPipeline(store, project.id);

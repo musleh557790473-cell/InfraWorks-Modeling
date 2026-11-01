@@ -84,7 +84,7 @@ export async function loadCad(
   const parsed: ParsedDwg = { ...base, features: [...base.features], notes: [...base.notes], layers: [...base.layers] };
   if (parsed.format === "none") parsed.format = "hydraulic";
   for (const m of models) {
-    const net = await readHydraulicModel(m.path, m.filename);
+    const net = await readHydraulicModel(m.path, m.filename, m.hydraulic ?? {});
     parsed.features.push(...net.features);
     parsed.notes.push(...net.notes);
     for (const [name, n] of countBy(net.features.map((f) => f.outputLayer ?? f.infraFeatureClass))) {
