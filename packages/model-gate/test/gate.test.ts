@@ -9,7 +9,7 @@ import Database from "better-sqlite3";
 import AdmZip from "adm-zip";
 import { createFileStore, runBuildPipeline } from "@infraworks/domain";
 
-import { runModelGate } from "../src/gate.js";
+import { nameMapping, runModelGate } from "../src/gate.js";
 
 const fixtures = resolve(dirname(fileURLToPath(import.meta.url)), "../../../fixtures");
 const UTM38N =
@@ -108,8 +108,16 @@ function makeModel(name: string, d: Damage = {}): string {
     const file = layer.path.split("/").pop();
     const guid = `ds-${++id}`;
     db.prepare(
-      "insert into DATA_SOURCES (GUID, NAME, CONNECTION_STRING, TARGET_CLASS_NAME, SOURCE_CS) values (?,?,?,?,?)",
-    ).run(guid, file, d.conn?.(file) ?? `C:/Imports/pkg/layers/${file}`, TABLE[layer.infraFeatureClass], d.sourceCs?.[layer.infraFeatureClass] ?? UTM38N);
+      "insert into DATA_SOURCES (GUID, NAME, CONNECTION_STRING, TARGET_CLASS_NAME, SOURCE_CS, CONFIG) values (?,?,?,?,?,?)",
+    ).run(
+      guid,
+      file,
+      d.conn?.(file) ?? `C:/Imports/pkg/layers/${file}`,
+      TABLE[layer.infraFeatureClass],
+      d.sourceCs?.[layer.infraFeatureClass] ?? UTM38N,
+      // As InfraWorks writes Configure: Name mapped to another field, or left out.
+      d.names === "other" ? JSON.stringify({ propertyMappings: { EXTERNAL_ID: { expression: "FeatId" }, NAME: { expression: "LAYER" } } }) : JSON.stringify({ propertyMappings: { EXTERNAL_ID: { expression: "FeatId" } } }),
+    );
     const gj = JSON.parse(zip.getEntry(layer.path)!.getData().toString("utf8"));
     const nameAttr = manifest.layers.find((l: { format: string; geojson?: string }) => l.format === "shp" && l.geojson === layer.path)?.nameAttribute;
     let n = 0;
@@ -157,12 +165,15 @@ test("G3-010 names left unmapped in Configure are a warning that names the field
   assert.equal(r.ok, true, "a warning: the geometry is fine");
   const w = r.findings.find((x) => x.ruleId === "G3-010" && /road_centerline/.test(x.message))!;
   assert.equal(w.severity, "warning");
-  assert.match(w.message, /no feature has a Name in the model.*Name = ASSET_ID/);
+  assert.match(w.message, /no feature has a Name in the model.*\(Name is not mapped\).*Name = ASSET_ID/);
 });
 
 test("G3-010 Name mapped to another field is caught", () => {
   const r = runModelGate(makeModel("misnamed.sqlite", { names: "other" }), { packagePath });
-  assert.ok(r.findings.some((x) => x.ruleId === "G3-010" && /mapped to another field/.test(x.message)));
+  assert.ok(r.findings.some((x) => x.ruleId === "G3-010" && /Name is mapped to LAYER\. Set Name = ASSET_ID/.test(x.message)), JSON.stringify(r.findings));
+  assert.equal(nameMapping('{"propertyMappings":{"NAME":{"expression":"ROAD_NAME"}}}'), "ROAD_NAME");
+  assert.equal(nameMapping('{"propertyMappings":{}}'), null);
+  assert.equal(nameMapping("not json"), null);
 });
 
 test("G3-003 a layer that was never imported is blocking", () => {

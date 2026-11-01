@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { AssetKeyConfig, createFileStore, parseDxf, runBuildPipeline } from "../src/index.js";
+import { AssetKeyConfig, createFileStore, dropDegenerateRings, isDegenerateRing, parseDxf, runBuildPipeline } from "../src/index.js";
 import type { MappingProfile } from "../src/index.js";
 
 const X = 657000;
@@ -102,4 +102,21 @@ test("an area drawn open with ends 5 mm apart closes; a road with the same gap s
   const kind = (layer: string) => parsed.features.find((f) => f.provenance.sourceLayer === layer)!.geometry.type;
   assert.equal(kind("RD_ROW"), "Polygon");
   assert.equal(kind("RD_CL"), "LineString");
+});
+
+test("rings without area are dropped: a millimetre hole would make InfraWorks drop the whole area", () => {
+  const outer = [[0, 0], [100, 0], [100, 100], [0, 100], [0, 0]];
+  const realHole = [[10, 10], [20, 10], [20, 20], [10, 20], [10, 10]];
+  // Al Qairawan's road reserve: a 4-point hole about 1 mm across, area 0.
+  const mmHole = [[50, 50], [50, 50.001], [50, 50.001], [50, 50]];
+  const sliver = [[30, 30], [130, 30], [130, 30.01], [30, 30.01], [30, 30]]; // 100 m x 1 cm: thin, but real
+  assert.equal(isDegenerateRing(mmHole), true);
+  assert.equal(isDegenerateRing(realHole), false);
+  assert.equal(isDegenerateRing(sliver), false);
+  assert.equal(isDegenerateRing([[0, 0], [1, 1], [0, 0]]), true, "fewer than 3 distinct points");
+
+  const out = dropDegenerateRings([[outer, realHole, mmHole] as [number, number][][]]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0]!.length, 2, "the real hole stays, the millimetre one goes");
+  assert.equal(dropDegenerateRings([[mmHole] as [number, number][][]]).length, 0, "a polygon with no area goes");
 });

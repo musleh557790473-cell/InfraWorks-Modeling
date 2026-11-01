@@ -11,6 +11,7 @@ import type {
 } from "./types.js";
 import type { ProjectRecord } from "./store.js";
 import { esriWkt, writeShapefile } from "./shapefile.js";
+import { dropDegenerateRings } from "./areas.js";
 import type { ShapeKind, ShpFeature } from "./shapefile.js";
 
 /** Package layers: one per mapping output layer, which defaults to the feature class. */
@@ -191,12 +192,19 @@ function toShp(f: DomainFeature): ShpFeature[] {
       parts = [c as number[][]];
       break;
     case "MultiLineString":
-    case "Polygon":
       parts = c as number[][][];
       break;
+    case "Polygon": {
+      // No ring without area reaches InfraWorks: one such hole makes it drop the whole area.
+      const [poly] = dropDegenerateRings([c as [number, number][][]]);
+      if (!poly) return [];
+      parts = poly;
+      break;
+    }
     case "MultiPolygon": {
       // Each polygon's first ring is an outer ring, the rest its holes.
-      const polys = c as number[][][][];
+      const polys = dropDegenerateRings(c as [number, number][][][]) as number[][][][];
+      if (!polys.length) return [];
       return [{ kind, parts: polys.flat(), holes: polys.flatMap((p) => p.map((_, i) => i > 0)), attributes }];
     }
     default:

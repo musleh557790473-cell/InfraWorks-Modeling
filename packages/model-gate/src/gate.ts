@@ -40,6 +40,21 @@ const stem = (name: string) => name.replace(/\.[^./]+$/, "");
  * The extension is ignored, so the same layer imported as .geojson, .shp, .sqlite… still matches;
  * the name itself must match exactly ("road_centerline_old.shp" is not "road_centerline").
  */
+/**
+ * What Name is mapped to in a data source's Configure settings (DATA_SOURCES.CONFIG, JSON:
+ * propertyMappings.NAME.expression), or null when it is not mapped.
+ */
+export function nameMapping(config: string | null | undefined): string | null {
+  if (!config) return null;
+  try {
+    const c = JSON.parse(config) as { propertyMappings?: Record<string, { expression?: string }> };
+    const e = c.propertyMappings?.NAME?.expression?.trim();
+    return e ? e : null;
+  } catch {
+    return null;
+  }
+}
+
 function findSource(sources: DataSourceRow[], file: string): DataSourceRow | undefined {
   const want = stem(file.toLowerCase());
   return sources
@@ -263,13 +278,15 @@ function compareLayers(h: ModelHandle, pkg: PackageInfo, out: ModelFinding[], ro
       const matched = got.filter((n) => layer.names!.has(n)).length;
       const sent = layer.namedCount ?? layer.names.size;
       row.names = { field: layer.nameField, package: sent, model: got.length, matched };
+      const mapped = nameMapping(src.CONFIG);
       if (!got.length) {
         out.push(
           f(
             "G3-010",
             "Names arrived",
             "warning",
-            `${layer.file}: no feature has a Name in the model, though ${sent} carry one in the package. ` +
+            `${layer.file}: no feature has a Name in the model, though ${sent} carry one in the package ` +
+              `(${mapped ? `Name is mapped to ${mapped}` : "Name is not mapped"}). ` +
               `In Configure → Common set Name = ${layer.nameField}, then Close & Refresh.`,
             { layer: layer.name, field: layer.nameField },
           ),
@@ -281,7 +298,7 @@ function compareLayers(h: ModelHandle, pkg: PackageInfo, out: ModelFinding[], ro
             "Names arrived",
             "warning",
             `${layer.file}: ${got.length} feature(s) have a Name, but only ${matched} match the package's ${layer.nameField} values — ` +
-              `Name is probably mapped to another field. Set Name = ${layer.nameField}.`,
+              `Name is ${mapped ? `mapped to ${mapped}` : "probably mapped to another field"}. Set Name = ${layer.nameField}.`,
             { layer: layer.name, field: layer.nameField, model: String(got.length), matched: String(matched) },
           ),
         );
