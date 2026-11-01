@@ -157,7 +157,7 @@ test("a faithful import passes", () => {
 test("G3-010 names left unmapped in Configure are a warning that names the field to map", () => {
   const good = runModelGate(makeModel("named.sqlite"), { packagePath });
   const roads = good.layers.find((l) => l.infraFeatureClass === "road_centerline")!;
-  assert.equal(roads.names?.field, "ASSET_ID");
+  assert.equal(roads.names?.field, "NAME");
   assert.equal(roads.names?.matched, roads.names?.package);
   assert.ok(!rules(good).includes("G3-010"));
 
@@ -165,12 +165,12 @@ test("G3-010 names left unmapped in Configure are a warning that names the field
   assert.equal(r.ok, true, "a warning: the geometry is fine");
   const w = r.findings.find((x) => x.ruleId === "G3-010" && /road_centerline/.test(x.message))!;
   assert.equal(w.severity, "warning");
-  assert.match(w.message, /no feature has a Name in the model.*\(Name is not mapped\).*Name = ASSET_ID/);
+  assert.match(w.message, /no feature has a Name in the model.*\(Name is not mapped\).*Name = NAME/);
 });
 
 test("G3-010 Name mapped to another field is caught", () => {
   const r = runModelGate(makeModel("misnamed.sqlite", { names: "other" }), { packagePath });
-  assert.ok(r.findings.some((x) => x.ruleId === "G3-010" && /Name is mapped to LAYER\. Set Name = ASSET_ID/.test(x.message)), JSON.stringify(r.findings));
+  assert.ok(r.findings.some((x) => x.ruleId === "G3-010" && /Name is mapped to LAYER\. Set Name = NAME/.test(x.message)), JSON.stringify(r.findings));
   assert.equal(nameMapping('{"propertyMappings":{"NAME":{"expression":"ROAD_NAME"}}}'), "ROAD_NAME");
   assert.equal(nameMapping('{"propertyMappings":{}}'), null);
   assert.equal(nameMapping("not json"), null);

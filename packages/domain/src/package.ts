@@ -180,7 +180,17 @@ export function infraWorksType(cls: InfraFeatureClass, kind: ShapeKind): string 
 function toShp(f: DomainFeature): ShpFeature[] {
   const kind = KIND_OF[f.geometry.type];
   if (!kind) return [];
-  const attributes = { ...f.attributes, src_file: f.provenance.sourceFile, src_layer: f.provenance.sourceLayer ?? null };
+  // A field called NAME first, holding the feature's name (road name, plot number): the field
+  // InfraWorks' Name should take. A CAD attribute already called "name" moves to name_cad.
+  const { name: cadName, ...rest } = f.attributes;
+  const named = f.nameAttribute ? f.attributes[f.nameAttribute] : undefined;
+  const attributes = {
+    ...(f.nameAttribute ? { name: named === undefined || named === null || String(named).trim() === "" ? null : String(named).trim() } : {}),
+    ...(f.nameAttribute ? rest : f.attributes),
+    ...(f.nameAttribute && cadName !== undefined && cadName !== null && cadName !== "" ? { name_cad: cadName } : {}),
+    src_file: f.provenance.sourceFile,
+    src_layer: f.provenance.sourceLayer ?? null,
+  };
   const c = f.geometry.coordinates;
   if (f.geometry.type === "MultiPoint") return (c as number[][]).map((p) => ({ kind, parts: [[p]], attributes }));
   let parts: number[][][];
@@ -236,7 +246,7 @@ function writeShapefileLayers(stagingDir: string, byLayer: ReturnType<typeof fea
       for (const fl of res.fields) fieldRows.push(`${name}.shp,${fl.dbf},"${fl.source.replace(/"/g, '""')}",${fl.type}`);
       // The field InfraWorks' Name should take: the attribute the mapping names features by.
       const nameAttribute = mostCommonValue(feats.map((f) => f.nameAttribute).filter((a): a is string => Boolean(a)));
-      const nameField = nameAttribute ? res.fields.find((fl) => fl.source === nameAttribute)?.dbf : undefined;
+      const nameField = nameAttribute ? res.fields.find((fl) => fl.source === "name")?.dbf : undefined;
       const namedCount = nameAttribute
         ? list.filter((s) => s.attributes[nameAttribute] !== undefined && s.attributes[nameAttribute] !== null && String(s.attributes[nameAttribute]).trim() !== "").length
         : 0;
@@ -274,7 +284,7 @@ export function importChecklist(
     ...shpLayers.flatMap((l) => [
       `   - ${basename(l.path)} → Type: ${l.infraWorksType} (${l.featureCount} feature(s))`,
       ...(l.nameField
-        ? [`       and on the Common tab: Name = ${l.nameField} (${l.namedCount} of ${l.featureCount} have one). InfraWorks keeps only the fields you map.`]
+        ? [`       and on the Common tab: Name = ${l.nameField} (${l.namedCount} of ${l.featureCount} have one; it holds ${l.nameAttribute}). InfraWorks keeps only the fields you map.`]
         : []),
     ]),
     prj

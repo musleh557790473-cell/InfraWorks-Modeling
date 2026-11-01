@@ -168,9 +168,10 @@ profile* and reused for that team's next drawing:
   name. The Parsons profile names Al Qairawan's centrelines from `0-Alignment Name` (`road_name`,
   e.g. `R.6.G.12`): 280 of 332 named.
 - **Names in InfraWorks**: InfraWorks keeps a `.dbf` field only when it is mapped in *Configure*.
-  Each package layer records the field that names its features (`nameField` in the manifest:
-  `ROAD_NAME`, `PARCEL_ID`, `ASSET_ID`), the checklist says *Common tab: Name = <field>*, and
-  Gate G3 (`G3-010`) warns when the names did not arrive or Name was mapped to another field.
+  Every Shapefile whose features have a name carries it first, in a text field called `NAME`
+  (the road name, the plot number; `nameField` / `nameAttribute` in the manifest), the checklist
+  says *Common tab: Name = NAME*, and Gate G3 (`G3-010`) reads the model's Configure settings and
+  warns when the names did not arrive, saying whether Name was left unmapped or mapped elsewhere.
 - **Asset ids** are looked for in every usual place, in order:
   1. XDATA (`xdataApps`, default `INFRAWORKS`; `*` = any application)
   2. a block attribute (`attributeTags`, default `ASSET_ID, ROAD_ID, PARCEL_ID, PLOT_ID, PLOT_NO`)

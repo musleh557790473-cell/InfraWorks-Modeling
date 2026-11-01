@@ -169,8 +169,13 @@ test("the checklist names the field to map to Name, since InfraWorks keeps only 
   const staging = readdirSync(out).find((d) => d.startsWith(`pkg-${project.id}-`))!;
   const manifest = JSON.parse(readFileSync(join(out, staging, "manifest.json"), "utf8")) as PackageManifest;
   const plots = manifest.layers.find((l) => l.format === "shp" && l.name === "plots")!;
-  assert.equal(plots.nameField, "PARCEL_ID");
+  assert.equal(plots.nameField, "NAME");
+  assert.equal(plots.nameAttribute, "parcel_id");
+  // NAME is the first .dbf field, and text even though every plot number is digits.
+  const dbf = readFileSync(join(out, staging, "shp", "plots.dbf"));
+  assert.equal(dbf.subarray(32, 43).toString("latin1").replace(/\0+$/, ""), "NAME");
+  assert.equal(String.fromCharCode(dbf[32 + 11]!), "C");
   assert.equal(plots.namedCount, 2);
   assert.equal(plots.geojson, "layers/plots.geojson");
-  assert.ok(manifest.importChecklist.some((s) => /Common tab: Name = PARCEL_ID \(2 of 3 have one\)/.test(s)), manifest.importChecklist.join("\n"));
+  assert.ok(manifest.importChecklist.some((s) => /Common tab: Name = NAME \(2 of 3 have one; it holds parcel_id\)/.test(s)), manifest.importChecklist.join("\n"));
 });
