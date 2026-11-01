@@ -221,6 +221,59 @@ profile* and reused for that team's next drawing:
       - Left out: 3,482 deleted pipes, 1 switched off and 4 of zero length.
       - Node Elevation matches the sewer rims (median +0.03 m).
       - Cover 0.80 m, **assumed by AICC pending confirmation**: no model, drawing or note gives one.
+- **Networks from drawings** (what no hydraulic model carries). Several sheets combine into one
+  package, which sets the project's `cadMode: "all"`; otherwise the newest drawing replaces earlier
+  ones:
+
+  ```bash
+  pnpm package:build PWT.dwg STO.dwg IRR.dwg --profile parsons-ldip-wet-utilities
+  pnpm package:build ELV.dwg EMV.dwg SLT.dwg TEL.dwg SEC.dwg --profile parsons-ldip-dry-utilities
+  ```
+
+  - **Wet** (*Parsons / LDIP wet utilities (drawings)*), for Al Qairawan:
+    - storm drainage: 648 pipes, sizes from the layer names (`…SW_Pipe Dia 400`), and 663 manholes
+      and outfalls. No storm model was issued.
+    - potable water: 818 valves and 351 fire hydrants. The WaterGEMS model has neither.
+    - irrigation: 199 gate and washout valves.
+
+    Water, sewer and irrigation pipes come from their hydraulic models.
+  - **Dry** (*Parsons / LDIP dry utilities (drawings)*), for Al Qairawan:
+
+    | Network | Lines | Points |
+    | --- | --- | --- |
+    | Low voltage | 2,317 cables | 1,354 pillars |
+    | Medium voltage | 149 cables | 102 substations |
+    | Street lighting | 203 cables | 1,882 street lights, 2 panels |
+    | Telecom | 510 ducts | 455 handholes |
+    | Security | 352 ducts | 269 handholes, 685 CCTV cameras |
+
+  - **What ships as what:** pipes and cables ship as Pipelines and nodes as Pipeline Connectors,
+    each layer listing the InfraWorks columns its fields fill (`fields`, e.g. `SIZE_X` ← `size_m`,
+    `NETWORKNAME` ← `network`). Street lights and cameras ship as Points of Interest.
+  - **Rule options:**
+    - `attributes`: constant fields, such as `utility` and `network` ("Storm - Al Qairawan").
+    - `fields`: InfraWorks columns.
+    - `size`: from the layer name or the nearest label, then carried along a run.
+    - `symbols`: lines and symbols on one layer go to different package layers (`AAMSLCrdr` is the
+      lighting cable and, as symbols, the poles).
+    - `asPoint`: a shape ships as its centre (cameras drawn as circles).
+    - `explode: false`: a layer's symbols stay one point each.
+  - **The reader also learned** from these sheets:
+    - A sheet that rotates its xrefs off the CRS (the storm sheet, 295° about a point off site) is
+      read at the xrefs' own coordinates (`XREF_READ_AT_OWN_COORDINATES`).
+    - A block of only inserts, or of geometry pasted in world coordinates at 0,0, is a group and is
+      opened.
+    - An xref holding only mapped symbols is opened, once.
+    - A connector or point layer keeps each symbol as one point. A line layer ships no stray
+      points, and its closed rings ship as lines.
+    - A few stray features off the CRS among many placed right are left out, not blocking
+      (`COORDS_OUTSIDE_CRS_LEFT_OUT`). There may be at most 5 (or 0.5 %), with 20 times as many
+      inside.
+    - A justified TEXT label is placed at its alignment point.
+  - **Worth raising with Parsons:**
+    - the sewer xref's "QIC Storm" pipes lie about 160 km away (another site);
+    - one closed outline on `AAMSLCrdr` (46.7 km round) ships with the lighting cables;
+    - the security handholes sit in an xref named "Narjes Overall Primary Security Network".
 - **Names beside the features** (`labels`): a rule may take a name from text written next to its
   features — each label goes to the nearest feature within `maxDistance`, and a feature named by
   several labels takes the name most of them give, so a link road never borrows a neighbour's
