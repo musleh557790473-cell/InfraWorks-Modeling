@@ -15,9 +15,11 @@ const flag = (n: string) => {
   const i = args.indexOf(n);
   return i >= 0 ? args[i + 1] : undefined;
 };
-const src = args.find((a, i) => !a.startsWith("--") && !args[i - 1]?.startsWith("--"));
+// Several drawings combine into one package (one sheet per utility network: cadMode "all").
+const sources = args.filter((a, i) => !a.startsWith("--") && !args[i - 1]?.startsWith("--"));
+const src = sources[0];
 if (!src) {
-  console.error("usage: pnpm package:build <drawing.dxf|dwg> [--profile <id>] [--name <project>] [--epsg <code>]");
+  console.error("usage: pnpm package:build <drawing.dxf|dwg | model.stsw.sqlite> [more drawings…] [--profile <id>] [--name <project>] [--epsg <code>]");
   console.error(`profiles: ${BUILTIN_PROFILES.map((p) => p.id).join(", ")}`);
   process.exit(2);
 }
@@ -32,12 +34,16 @@ const dataDir = resolveDataDir(root);
 const store = createFileStore(dataDir);
 const project = store.createProject(flag("--name") ?? basename(src, extname(src)), Number(flag("--epsg") ?? 32638));
 store.setMappingProfile(project.id, profile);
+const drawings = sources.filter((x) => !/\.(stsw|wtg)\.sqlite$/i.test(x));
+if (drawings.length > 1) store.updateProject(project.id, { cadMode: "all" });
 const dir = join(store.uploadDir, project.id);
 mkdirSync(dir, { recursive: true });
-const dest = join(dir, basename(src));
-copyFileSync(resolve(src), dest);
-const kind = /\.(stsw|wtg)\.sqlite$/i.test(src) ? "hydraulic" : extname(src).toLowerCase() === ".dwg" ? "dwg" : "dxf";
-store.addUpload({ projectId: project.id, filename: basename(src), kind, path: dest, size: 0 });
+for (const one of sources) {
+  const dest = join(dir, basename(one));
+  copyFileSync(resolve(one), dest);
+  const kind = /\.(stsw|wtg)\.sqlite$/i.test(one) ? "hydraulic" : extname(one).toLowerCase() === ".dwg" ? "dwg" : "dxf";
+  store.addUpload({ projectId: project.id, filename: basename(one), kind, path: dest, size: 0 });
+}
 
 try {
   const r = await runBuildPipeline(store, project.id);

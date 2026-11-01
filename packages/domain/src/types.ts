@@ -106,6 +106,56 @@ export const LayerMapping = z.object({
       maxDistance: z.number().positive().default(10),
     })
     .optional(),
+  /**
+   * Attributes every feature of this rule carries, e.g. { utility: "Storm", network: "Storm - Al
+   * Qairawan" }, as the hydraulic readers give their pipes.
+   */
+  attributes: z.record(z.string()).optional(),
+  /**
+   * InfraWorks columns this rule's attributes fill (column → attribute), as the hydraulic readers
+   * set them: { SIZE_X: "size_m", SIZE_Y: "size_y_m", NETWORKNAME: "network" }. The manifest lists
+   * them, the checklist names them for the Table tab, model:names fills them and G3-012 checks them.
+   */
+  fields: z.record(z.string()).optional(),
+  /**
+   * Pipe size, in mm in the drawing: diameter_mm and size_m (metres, for SIZE_X), size_y_m (a box's
+   * rise, for SIZE_Y) and size_mm as written. From the layer name ("PIPE-SEWER-200mm", "Pipe Dia
+   * 400", "Box 2000x1500": one or two numbers captured by `fromLayer`), or from the nearest text
+   * label ("Ø160 mm") on `fromLabel.labels` within `maxDistance`, then carried along a run.
+   */
+  size: z
+    .object({
+      fromLayer: z.string().optional(),
+      fromLabel: z
+        .object({
+          labels: z.array(z.string().min(1)).min(1),
+          pattern: z.string().default(String.raw`(\d+(?:\.\d+)?)\s*mm`),
+          maxDistance: z.number().positive().default(5),
+        })
+        .optional(),
+    })
+    .optional(),
+  /**
+   * true: expand blocks inserted on this layer even when the rule's class is "unmapped", so the
+   * layers inside them can be used. false: never expand them; each insert stays one point (a cable
+   * layer that also carries joint symbols, whose pieces would otherwise become bits of cable).
+   */
+  explode: z.boolean().optional(),
+  /** Ship each feature as one point at the centre of its shape (CCTV cameras drawn as circles). */
+  asPoint: z.boolean().optional(),
+  /**
+   * Where symbol inserts on this layer go when the rule itself is for lines: Al Qairawan draws the
+   * street-light cable and the light poles on one layer (AAMSLCrdr), so the poles become points of
+   * their own class and package layer.
+   */
+  symbols: z
+    .object({
+      infraFeatureClass: InfraFeatureClass,
+      outputLayer: z.string().regex(/^[a-z][a-z0-9_]{0,30}$/).optional(),
+      attributes: z.record(z.string()).optional(),
+      fields: z.record(z.string()).optional(),
+    })
+    .optional(),
 });
 export type LayerMapping = z.infer<typeof LayerMapping>;
 
@@ -306,5 +356,100 @@ export const PARSONS_LDIP_ROADS_PROFILE: MappingProfile = {
   assetKeys: AssetKeyConfig.parse({ textLayers: ["MP-PLT-TXT"], pattern: "^([A-Z]{1,2}-)?[0-9]{1,4}$" }),
 };
 
+/** The InfraWorks columns a drawing's pipes and connectors fill, as the hydraulic readers set them. */
+const PIPE_COLUMNS = { SIZE_X: "size_m", SIZE_Y: "size_y_m", NETWORKNAME: "network" };
+const CONNECTOR_COLUMNS = { NETWORKNAME: "network" };
+/** Constant attributes: the utility, and the network name it leads ("Storm - Al Qairawan"). */
+const net = (utility: string, conn_type?: string) => ({ utility, network: `${utility} - Al Qairawan`, ...(conn_type ? { conn_type } : {}) });
+
+/**
+ * Parsons wet utilities that only the drawings carry, from the Al Qairawan network sheets (each
+ * network in its own xref). The pipes of potable water, sewer and irrigation come from their
+ * hydraulic models (SewerGEMS / WaterGEMS), which are the designer's own data; the drawings add:
+ * - storm drainage (STO): no hydraulic model was issued. Pipe sizes from the layer names
+ *   ("…SW_Pipe Dia 400"), manholes and outfalls. The sheet rotates its xrefs 295° about a point off
+ *   site; they are read at their own coordinates (XREF_READ_AT_OWN_COORDINATES).
+ * - potable water valves and fire hydrants (PWT): the WaterGEMS model has none.
+ * - irrigation gate and washout valves (IRR): the WaterGEMS model has its air and isolation valves only.
+ * Layers with generic names (RD2) are matched with their xref prefix: RD2 is a road edge elsewhere.
+ * Not read: the "QIC Storm" pipes in the sewer xref (about 160 km away, another site).
+ */
+export const PARSONS_LDIP_WET_PROFILE: MappingProfile = {
+  id: "parsons-ldip-wet-utilities",
+  name: "Parsons / LDIP wet utilities (drawings)",
+  team: "Parsons",
+  layers: [
+    { dwgLayer: "*SW_Pipe Dia *", infraFeatureClass: "pipeline", outputLayer: "storm_pipes", attributes: net("Storm"), fields: PIPE_COLUMNS, size: { fromLayer: String.raw`Dia\s*(\d+)` } },
+    { dwgLayer: "C-SSWR-MNHL-P", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: net("Storm", "Manhole"), fields: CONNECTOR_COLUMNS },
+    { dwgLayer: "Xref Storm Network$0$C-STRM-STRC", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: net("Storm", "Outfall"), fields: CONNECTOR_COLUMNS },
+    { dwgLayer: "Xref Potable Water$0$RD2", infraFeatureClass: "pipe_connector", outputLayer: "water_hydrants", attributes: net("Water", "Fire Hydrant"), fields: CONNECTOR_COLUMNS },
+    { dwgLayer: "C-WATR-APPT", infraFeatureClass: "pipe_connector", outputLayer: "water_valves", attributes: net("Water", "Valve"), fields: CONNECTOR_COLUMNS },
+    { dwgLayer: "Motorized Gate Valve", infraFeatureClass: "pipe_connector", outputLayer: "water_valves", attributes: net("Water", "Motorized Gate Valve"), fields: CONNECTOR_COLUMNS },
+    { dwgLayer: "C-PW-AIR VALVE", infraFeatureClass: "pipe_connector", outputLayer: "water_valves", attributes: net("Water", "Air Valve"), fields: CONNECTOR_COLUMNS },
+    { dwgLayer: "C-PW-WASHOUT VALVE", infraFeatureClass: "pipe_connector", outputLayer: "water_valves", attributes: net("Water", "Washout Valve"), fields: CONNECTOR_COLUMNS },
+    { dwgLayer: "BGV 110mm", infraFeatureClass: "pipe_connector", outputLayer: "irrigation_valves", attributes: net("Irrigation", "Gate Valve"), fields: CONNECTOR_COLUMNS },
+    { dwgLayer: "IR-WASHOUT VALVE", infraFeatureClass: "pipe_connector", outputLayer: "irrigation_valves", attributes: net("Irrigation", "Washout Valve"), fields: CONNECTOR_COLUMNS },
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
+/**
+ * Parsons dry utilities for LDIP, from the Al Qairawan network sheets, one per network, each with
+ * its network in an xref: low voltage (ELV), medium voltage (EMV), street lighting (SLT), telecom
+ * (TEL) and security (SEC). Cables and ducts ship as Pipelines; pillars, substations, panels,
+ * handholes and manholes as Pipeline Connectors; street lights and CCTV cameras (drawn as circles)
+ * as Points of Interest. Each xref repeats some shared layers (the street-light corridor AAMSLCrdr
+ * in the LV, MV and SL xrefs; DSS substations in LV and MV; TEL_HH handholes in telecom and
+ * security), so those are matched with the one xref prefix that owns them.
+ * Not read: tree and corridor guides (-00-Tree_*, -06- Street Lighting), annotation and labels.
+ */
+const LV = "Xref_Qairawan_LV Network-final$0$";
+const MV = "Xref_Qairawan_MV Network$0$";
+const SL = "Xref_Qairawan_SL Network$0$";
+const TEL = "Xref Primary Telecom Network$0$";
+const SEC = "Xref Primary Security Network$0$";
+const cable = { infraFeatureClass: "pipeline" as const, explode: false, fields: { NETWORKNAME: "network" } };
+const node = { infraFeatureClass: "pipe_connector" as const, fields: CONNECTOR_COLUMNS };
+export const PARSONS_LDIP_DRY_PROFILE: MappingProfile = {
+  id: "parsons-ldip-dry-utilities",
+  name: "Parsons / LDIP dry utilities (drawings)",
+  team: "Parsons",
+  layers: [
+    // Low voltage: cables (cross-section in the layer name, kept in src_layer), house connections, pillars.
+    { dwgLayer: `${LV}E-POWER-CABL*`, ...cable, outputLayer: "lv_cables", attributes: net("Electrical LV") },
+    { dwgLayer: `${LV}Electrical LV -HC`, ...cable, outputLayer: "lv_cables", attributes: net("Electrical LV", "House Connection") },
+    { dwgLayer: `${LV}E-POWR-MINI-PILLAR-*`, ...node, outputLayer: "lv_pillars", attributes: net("Electrical LV", "Mini Pillar") },
+    // Medium voltage: cables, distribution and primary substations.
+    { dwgLayer: `${MV}MV Cables*`, ...cable, outputLayer: "mv_cables", attributes: net("Electrical MV") },
+    { dwgLayer: `${MV}HV Cables`, ...cable, outputLayer: "mv_cables", attributes: net("Electrical HV") },
+    { dwgLayer: `${MV}DSS`, ...node, outputLayer: "substations", attributes: net("Electrical MV", "Distribution Substation") },
+    { dwgLayer: `${MV}PSS`, ...node, outputLayer: "substations", asPoint: true, attributes: net("Electrical MV", "Primary Substation") },
+    // Street lighting: one layer for both, its lines are the cable, its symbols the light poles.
+    {
+      dwgLayer: `${SL}AAMSLCrdr`,
+      ...cable,
+      outputLayer: "streetlight_cables",
+      attributes: net("Street Lighting"),
+      symbols: { infraFeatureClass: "annotation", outputLayer: "street_lights", attributes: { conn_type: "Street Light" } },
+    },
+    { dwgLayer: `${SL}AAM`, infraFeatureClass: "annotation", outputLayer: "street_lights", attributes: net("Street Lighting", "Street Light") },
+    { dwgLayer: `${SL}SSLPC`, ...node, outputLayer: "streetlight_panels", attributes: net("Street Lighting", "Lighting Panel") },
+    // Telecom: primary ducts and feeders, handholes, manholes, towers.
+    { dwgLayer: `${TEL}Primary`, ...cable, outputLayer: "telecom_ducts", attributes: net("Telecom") },
+    { dwgLayer: `${TEL}Main Feeder Primary`, ...cable, outputLayer: "telecom_ducts", attributes: net("Telecom", "Main Feeder") },
+    { dwgLayer: `${TEL}TEL_HH`, ...node, outputLayer: "telecom_handholes", attributes: net("Telecom", "Handhole") },
+    { dwgLayer: `${TEL}Telecom MH`, ...node, outputLayer: "telecom_handholes", attributes: net("Telecom", "Manhole") },
+    { dwgLayer: `${TEL}SEC_TELECOM`, ...node, outputLayer: "telecom_handholes", attributes: net("Telecom", "Telecom Tower") },
+    // Security: ducts, handholes (in a nested xref), CCTV cameras (circles: their centre).
+    { dwgLayer: `${SEC}Primary Security_OM`, ...cable, outputLayer: "security_ducts", attributes: net("Security") },
+    { dwgLayer: `${SEC}Security_*`, ...cable, outputLayer: "security_ducts", attributes: net("Security") },
+    { dwgLayer: `${SEC}*TEL_HH`, ...node, outputLayer: "security_handholes", attributes: net("Security", "Handhole") },
+    { dwgLayer: `${SEC}cctv camera`, infraFeatureClass: "annotation", outputLayer: "cctv_cameras", asPoint: true, attributes: net("Security", "CCTV Camera") },
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
 /** Profiles shipped with the tool: listed first, and never overwritten or deleted by a save. */
-export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE];
+export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE];

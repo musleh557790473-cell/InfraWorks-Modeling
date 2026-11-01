@@ -23,7 +23,7 @@ function bboxOf(polys: ClipPolygon[]): Bbox {
 
 const overlaps = (a: Bbox, b: Bbox) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
 
-function matchesAny(rules: string[], layer: string): boolean {
+export function matchesAny(rules: string[], layer: string): boolean {
   const own = stripBoundXrefPrefix(layer);
   return rules.some((r) => matchesLayer(r, layer) || matchesLayer(r, own));
 }
