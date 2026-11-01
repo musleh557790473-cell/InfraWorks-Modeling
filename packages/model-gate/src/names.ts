@@ -183,12 +183,16 @@ export function fillNames(modelPath: string, packagePath: string, outPath: strin
           }
           const numeric = /REAL|INT|NUM|DOUBLE|FLOAT/.test(columns.get(column)!);
           const set = db.prepare(`update "${table}" set "${column}" = ? where ID = ?`);
+          let textInNumber: string | undefined;
           for (const r of rows) {
             const i = Number(r.EXTERNAL_ID) - 1;
             const raw = Number.isInteger(i) && i >= 0 ? values[i] : undefined;
             if (raw === undefined || raw === null) continue;
             const value = numeric ? Number(raw) : raw;
-            if (numeric && !Number.isFinite(value as number)) continue;
+            if (numeric && !Number.isFinite(value as number)) {
+              textInNumber ??= raw;
+              continue;
+            }
             const now = r[column];
             const empty = now === null || now === undefined || String(now).trim() === "";
             if (!empty && String(now) !== String(value)) {
@@ -198,6 +202,12 @@ export function fillNames(modelPath: string, packagePath: string, outPath: strin
             if (!empty) continue;
             set.run(value as string | number, r.ID as number);
             fill.filled++;
+          }
+          // InfraWorks keeps some columns as number codes (UTILITY_TYPE, PIPE_TYPE): text cannot go
+          // in, and a mapping to a text field would put it there on the next Refresh. Leave both out.
+          if (!fill.filled && !fill.kept && textInNumber !== undefined) {
+            fill.skipped = `${table}.${column} holds a number code, and ${field} is text ("${textInNumber}"): not filled, not mapped`;
+            continue;
           }
           config.propertyMappings = { ...(config.propertyMappings ?? {}), [column]: { expression: field } };
         }
