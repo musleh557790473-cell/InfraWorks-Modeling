@@ -221,6 +221,17 @@ profile* and reused for that team's next drawing:
       - Left out: 3,482 deleted pipes, 1 switched off and 4 of zero length.
       - Node Elevation matches the sewer rims (median +0.03 m).
       - Cover 0.80 m, **assumed by AICC pending confirmation**: no model, drawing or note gives one.
+    - **Confirmed in InfraWorks** on "qairawan test (names)", after importing with Type only and
+      running `model:names` once per package:
+      - PW (Polyline)-242 shows Ø0.63 m HDPE, network "Water - Qirawn Hyrdulic Model", Elevation
+        Offset From / To -1.315 m (1.0 m cover + half of 0.63 m).
+      - P-615 shows Ø0.45 m HDPE, "Irrigation - AlQairwan", -1.025 m (0.80 m + 0.225 m).
+      - The pipes lie below the ground at their size.
+      - Gate G3 passes with 0 warnings for both packages: 895 / 1,074 pipes, lengths equal, offset
+        0.00 m, all names in.
+      - The network names follow the model file names as issued, typos included.
+      - Where a water and an irrigation pipe cross at close depths, check the irrigation depth
+        once its cover is confirmed.
 - **Networks from drawings** (what no hydraulic model carries). Several sheets combine into one
   package, which sets the project's `cadMode: "all"`; otherwise the newest drawing replaces earlier
   ones:
