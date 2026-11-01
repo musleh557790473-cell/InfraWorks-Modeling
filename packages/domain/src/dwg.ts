@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { nanoid } from "nanoid";
 import { subtractAreas } from "./areas.js";
-import { findLayerMapping, matchesLayer } from "./layers.js";
+import { findLayerMapping, matchesLayer, stripBoundXrefPrefix } from "./layers.js";
+import { polygonize } from "./polygonize.js";
 import { resolveAssetKeys } from "./types.js";
 import type { AssetKeyConfig, DomainFeature, Geometry, InfraFeatureClass, MappingProfile } from "./types.js";
 
@@ -461,6 +462,8 @@ interface Candidate {
   handle?: string;
   xdata: { app: string; value: string }[];
   attribs: Record<string, string>;
+  /** An area built from separate lines: only a label inside it names it, never a neighbour's. */
+  labelInside?: boolean;
 }
 
 interface Label {
@@ -638,14 +641,39 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
     }
   }
 
+  /* -------- areas from separate lines: plots drawn as single LINE segments (rules with `polygonize`) */
+  const polygonNotes: string[] = [];
+  for (const rule of profile.layers.filter((l) => l.polygonize)) {
+    const mine = new Set(candidates.filter((c) => c.geometry.type !== "Point" && findLayerMapping(profile, c.layer) === rule));
+    if (!mine.size) continue;
+    const lines = [...mine].flatMap((c) =>
+      c.geometry.type === "LineString" ? [c.geometry.coordinates as number[][]] : c.geometry.type === "Polygon" ? (c.geometry.coordinates as number[][][]) : [],
+    );
+    const closeGaps = rule.polygonize!.closeGaps ?? 0;
+    const r = polygonize(lines, { closeGaps });
+    const layer = mostCommon([...mine].map((c) => c.layer));
+    const kept = candidates.filter((c) => !mine.has(c));
+    candidates.length = 0;
+    candidates.push(...kept);
+    for (const coordinates of r.polygons) candidates.push({ layer, geometry: { type: "Polygon", coordinates }, xdata: [], attribs: {}, labelInside: true });
+    polygonNotes.push(
+      `${rule.outputLayer ?? rule.dwgLayer}: ${r.polygons.length} area(s) built from ${lines.length} line(s) on "${rule.dwgLayer}"` +
+        (closeGaps ? `; ${r.gapsClosed} drafting gap(s) up to ${closeGaps} m closed` : "") +
+        `; ${r.dangles} loose line piece(s) and ${r.slivers} sliver(s) left out`,
+    );
+  }
+
   /* -------- resolve asset keys and build features */
   const keyStats = { xdata: 0, attribute: 0, text: 0, missing: 0 };
+  let multiLabelled = 0;
   const okValue = (v: string) => v.trim() !== "" && (!pattern || pattern.test(v.trim()));
   const apps = keys.xdataApps.map((a) => a.toUpperCase());
   const tags = new Set(keys.attributeTags.map(normTag));
   const usableLabels = labels.filter(
     (l) =>
-      (keys.textLayers.length ? keys.textLayers.some((r) => matchesLayer(r, l.layer)) : Boolean(pattern)) &&
+      (keys.textLayers.length
+        ? keys.textLayers.some((r) => matchesLayer(r, l.layer) || matchesLayer(r, stripBoundXrefPrefix(l.layer)))
+        : Boolean(pattern)) &&
       okValue(l.text),
   );
 
@@ -673,14 +701,20 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
       }
       if (key === undefined && usableLabels.length) {
         let best: Label | undefined;
-        let bestD = keys.textMaxDistance;
+        let bestD = c.labelInside ? 0 : keys.textMaxDistance;
+        const box = boxOfGeometry(c.geometry);
+        let inside = 0;
         for (const l of usableLabels) {
+          const [x, y] = l.at;
+          if (x < box[0] - bestD || x > box[2] + bestD || y < box[1] - bestD || y > box[3] + bestD) continue;
           const d = distToFeature(l.at, c.geometry);
+          if (c.labelInside && d === 0) inside++;
           if (d <= bestD) {
             bestD = d;
             best = l;
           }
         }
+        if (inside > 1) multiLabelled += 1;
         if (best) {
           key = best.text.trim();
           keyStats.text += 1;
@@ -713,6 +747,10 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
     );
   }
   notes.push(...cut.notes);
+  notes.push(...polygonNotes);
+  if (multiLabelled) {
+    notes.push(`${multiLabelled} area(s) hold more than one label: a dividing line is probably missing there (the last label was used)`);
+  }
   if (truncated) notes.push("The DXF ends before its EOF marker: the file was cut off and the end of the drawing is missing");
   if (keyStats.xdata + keyStats.attribute + keyStats.text) {
     notes.push(`Asset ids found: ${keyStats.xdata} from XDATA, ${keyStats.attribute} from block attributes, ${keyStats.text} from nearby text`);
@@ -747,4 +785,27 @@ function memo<A extends unknown[], R>(fn: (...a: A) => R): (...a: A) => R {
     if (!m.has(k)) m.set(k, fn(...a));
     return m.get(k)!;
   };
+}
+
+function mostCommon(values: string[]): string {
+  const n = new Map<string, number>();
+  for (const v of values) n.set(v, (n.get(v) ?? 0) + 1);
+  return [...n.entries()].sort((a, b) => b[1] - a[1])[0]![0];
+}
+
+function boxOfGeometry(g: Geometry): [number, number, number, number] {
+  const b: [number, number, number, number] = [Infinity, Infinity, -Infinity, -Infinity];
+  const walk = (c: unknown): void => {
+    if (!Array.isArray(c)) return;
+    if (typeof c[0] === "number") {
+      b[0] = Math.min(b[0], c[0] as number);
+      b[1] = Math.min(b[1], c[1] as number);
+      b[2] = Math.max(b[2], c[0] as number);
+      b[3] = Math.max(b[3], c[1] as number);
+      return;
+    }
+    for (const x of c) walk(x);
+  };
+  walk(g.coordinates);
+  return b;
 }

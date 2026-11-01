@@ -7,6 +7,7 @@ import type {
   ValidationReport,
 } from "./types.js";
 import type { ParsedDwg } from "./dwg.js";
+import { findLayerMapping } from "./layers.js";
 
 const UNIT_NAMES: Record<number, string> = { 1: "inches", 2: "feet", 3: "miles", 4: "millimetres", 5: "centimetres", 6: "metres", 7: "kilometres" };
 
@@ -155,6 +156,30 @@ export function validateCollection(
         `${ks.attribute} from block attributes, ${ks.text} from nearby text. Set the team's id pattern, attribute tags ` +
         `or label layer in the mapping profile.`,
       context: { missing: String(ks.missing), xdata: String(ks.xdata), attribute: String(ks.attribute), text: String(ks.text) },
+    });
+  }
+
+  // One id on two features of a layer: the drawing numbers two plots (or roads) alike, so a
+  // report join or a reviewer could pick the wrong one.
+  const seenIds = new Map<string, number>();
+  for (const f of collection.features) {
+    if (f.infraFeatureClass === "unmapped") continue;
+    const attr = findLayerMapping(profile, f.provenance.sourceLayer ?? "")?.joinKeyAttribute;
+    const v = attr ? f.attributes[attr] : undefined;
+    if (v === undefined || v === null || String(v).trim() === "") continue;
+    const k = `${f.outputLayer ?? f.infraFeatureClass}\u0000${String(v).trim()}`;
+    seenIds.set(k, (seenIds.get(k) ?? 0) + 1);
+  }
+  const dupes = [...seenIds.entries()].filter(([, n]) => n > 1).map(([k, n]) => ({ layer: k.split("\u0000")[0]!, id: k.split("\u0000")[1]!, n }));
+  if (dupes.length) {
+    const shown = dupes.slice(0, 15).map((d) => `${d.id} (${d.layer}, ${d.n}×)`).join(", ");
+    issues.push({
+      code: "ASSET_ID_DUPLICATE",
+      severity: "warning",
+      message:
+        `${dupes.length} id(s) are used by more than one feature: ${shown}${dupes.length > 15 ? ", …" : ""}. ` +
+        `The drawing gives two features the same number; ask the designer which is right.`,
+      context: { count: String(dupes.length), ids: dupes.map((d) => d.id).join("; ") },
     });
   }
 

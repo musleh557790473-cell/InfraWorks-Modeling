@@ -143,7 +143,7 @@ profile* and reused for that team's next drawing:
   bound xref (`<xref>$0$RD_CL`) are matched and suggested by their own name (`RD_CL`).
 - **Built-in profiles**: the LDIP default, and *Parsons / LDIP road layout* (`RD_CL*` and
   `RD_PR_CNRL*` → roads, `Project Boundary` → coverage; on Al Qairawan also `road_reserve`,
-  `blocks` and `asphalt`, below). Start from one and save it as your team's profile.
+  `blocks`, `asphalt` and `plots`, below). Start from one and save it as your team's profile.
 - **Areas around the roads**: a rule may name its own package layer (`outputLayer`), so rules of
   one class ship as separate Shapefiles, and may cut other layers' closed areas out of its own
   (`subtract`). Al Qairawan draws its right-of-way lines (`RD_ROW`) closed around the blocks
@@ -155,6 +155,13 @@ profile* and reused for that team's next drawing:
   On coverage, parcel and water layers a polyline whose ends meet within 1 cm counts as closed
   (42 of Al Qairawan's "open" blocks end under 1 cm from their start); open lines on coverage and
   parcel layers cannot become areas, so they stay out of the Shapefiles and `AREA_NOT_CLOSED` counts them.
+- **Plots drawn as separate lines** (`polygonize`): a rule may build its areas from the faces its
+  lines enclose. The lines are split where they cross or end on one another, loose ends are dropped,
+  and `closeGaps` joins line ends that stop short of another line (drafting gaps) up to the given
+  distance. Only a label *inside* an area names it, never a neighbour's. The Parsons profile builds
+  `plots.shp` (Type: Parcels) from the baseplan's `MP-PLT-LIN` lines, numbered by the `MP-PLT-TXT`
+  text inside each plot (`parcel_id`), with `closeGaps: 0.5`: on Al Qairawan 10100, 6,555 plots,
+  5,944 numbered (5,938 of the 5,952 numbers alone in their plot); 442 gaps of up to 0.5 m closed.
 - **Asset ids** are looked for in every usual place, in order:
   1. XDATA (`xdataApps`, default `INFRAWORKS`; `*` = any application)
   2. a block attribute (`attributeTags`, default `ASSET_ID, ROAD_ID, PARCEL_ID, PLOT_ID, PLOT_NO`)
@@ -176,6 +183,7 @@ REST (`/mapping-profiles`, `/projects/{id}/scan-layers`, `/projects/{id}/reports
 - Coordinates must fall inside the project CRS (`COORDS_OUTSIDE_CRS` blocks drawings left in local coordinates).
 - Drawing units other than metres on a UTM project → `DRAWING_UNITS_NOT_METRES`.
 - Features on id-carrying layers without an id → `ASSET_ID_MISSING`.
+- One id on two features of a layer (two plots numbered alike in the drawing) → `ASSET_ID_DUPLICATE`.
 - Features read but none on a mapped layer → `NOTHING_MAPPED` blocks the build (the package would
   be empty); the message names the most used layers to map.
 - GeoJSON layers carry a `crs` member (`urn:ogc:def:crs:EPSG::<code>`) so InfraWorks/GDAL read

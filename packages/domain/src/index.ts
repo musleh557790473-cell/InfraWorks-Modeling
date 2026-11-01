@@ -12,3 +12,4 @@ export * from "./shapefile.js";
 export * from "./package.js";
 export * from "./pipeline.js";
 export * from "./scan.js";
+export * from "./polygonize.js";
