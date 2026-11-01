@@ -16,14 +16,15 @@ export function toConsole(r: ModelGateReport): string {
     out.push("");
   }
   if (r.layers.length) {
-    out.push(pad("layer", 20) + pad("model table", 14) + pad("features", 14) + pad("length (m)", 22) + "offset");
+    out.push(pad("layer", 20) + pad("model table", 14) + pad("features", 14) + pad("length (m)", 22) + pad("offset", 14) + "names");
     for (const l of r.layers) {
       out.push(
         pad(l.layer, 20) +
           pad(l.dataSource?.targetTable ?? "not imported", 14) +
           pad(`${l.modelCount}/${l.packageCount}`, 14) +
           pad(l.packageLength ? `${l.modelLength.toFixed(0)}/${l.packageLength.toFixed(0)}` : "-", 22) +
-          (l.centreOffset === null ? "-" : `${l.centreOffset.toFixed(2)} m`),
+          pad(l.centreOffset === null ? "-" : `${l.centreOffset.toFixed(2)} m`, 14) +
+          (l.names ? `${l.names.matched}/${l.names.package} (${l.names.field})` : "-"),
       );
     }
     out.push("");
@@ -53,11 +54,16 @@ export function toMarkdown(r: ModelGateReport): string {
   out.push("| Rule | Severity | Finding |", "| --- | --- | --- |");
   for (const f of r.findings) out.push(`| ${f.ruleId} | ${f.severity} | ${f.message.replace(/\|/g, "\\|")} |`);
   if (r.layers.length) {
-    out.push("", "| Layer | Model table | Features (model/package) | Length m (model/package) | Offset m |", "| --- | --- | --- | --- | --- |");
+    out.push(
+      "",
+      "| Layer | Model table | Features (model/package) | Length m (model/package) | Offset m | Names (model/package) |",
+      "| --- | --- | --- | --- | --- | --- |",
+    );
     for (const l of r.layers) {
       out.push(
         `| ${l.layer} | ${l.dataSource?.targetTable ?? "not imported"} | ${l.modelCount}/${l.packageCount} | ` +
-          `${l.packageLength ? `${l.modelLength.toFixed(1)}/${l.packageLength.toFixed(1)}` : "-"} | ${l.centreOffset?.toFixed(3) ?? "-"} |`,
+          `${l.packageLength ? `${l.modelLength.toFixed(1)}/${l.packageLength.toFixed(1)}` : "-"} | ${l.centreOffset?.toFixed(3) ?? "-"} | ` +
+          `${l.names ? `${l.names.matched}/${l.names.package} (${l.names.field})` : "-"} |`,
       );
     }
   }

@@ -2,7 +2,7 @@ import { basename } from "node:path";
 
 import { openImx, readRegions } from "@infraworks/imx-gate";
 
-import { dataSources, importedStats, modelRegions, modelWkt, openModel, readPackage, schemaVersion } from "./read.js";
+import { dataSources, importedNames, importedStats, modelRegions, modelWkt, openModel, readPackage, schemaVersion } from "./read.js";
 import type { DataSourceRow, ModelHandle } from "./read.js";
 import { EXPECTED_TABLE } from "./types.js";
 import type { LayerComparison, ModelFinding, ModelGateOptions, ModelGateReport, PackageInfo, RegionComparison } from "./types.js";
@@ -253,6 +253,44 @@ function compareLayers(h: ModelHandle, pkg: PackageInfo, out: ModelFinding[], ro
               `${(loss * 100).toFixed(1)} % (${(layer.length - stats.length).toFixed(1)} m) missing.`,
             { layer: layer.name, loss: loss.toFixed(4) },
           ),
+        );
+      }
+    }
+
+    /* G3-010 names arrived: InfraWorks keeps a .dbf field only when it is mapped in Configure */
+    if (layer.nameField && layer.names?.size) {
+      const got = importedNames(h, target, src.GUID);
+      const matched = got.filter((n) => layer.names!.has(n)).length;
+      const sent = layer.namedCount ?? layer.names.size;
+      row.names = { field: layer.nameField, package: sent, model: got.length, matched };
+      if (!got.length) {
+        out.push(
+          f(
+            "G3-010",
+            "Names arrived",
+            "warning",
+            `${layer.file}: no feature has a Name in the model, though ${sent} carry one in the package. ` +
+              `In Configure → Common set Name = ${layer.nameField}, then Close & Refresh.`,
+            { layer: layer.name, field: layer.nameField },
+          ),
+        );
+      } else if (matched < got.length * 0.9) {
+        out.push(
+          f(
+            "G3-010",
+            "Names arrived",
+            "warning",
+            `${layer.file}: ${got.length} feature(s) have a Name, but only ${matched} match the package's ${layer.nameField} values — ` +
+              `Name is probably mapped to another field. Set Name = ${layer.nameField}.`,
+            { layer: layer.name, field: layer.nameField, model: String(got.length), matched: String(matched) },
+          ),
+        );
+      } else if (matched < sent) {
+        out.push(
+          f("G3-010", "Names arrived", "warning", `${layer.file}: ${matched} of ${sent} named feature(s) arrived with their Name.`, {
+            layer: layer.name,
+            field: layer.nameField,
+          }),
         );
       }
     }

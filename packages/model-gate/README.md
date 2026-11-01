@@ -42,6 +42,7 @@ Exit code `0` = no blocking finding, `1` = blocking findings, `2` = bad usage.
 | G3-007 | Linear layers arrived complete (plan length in the model vs the package) | warning; blocking over 10 % |
 | G3-008 | Design roads were built over their full length (sections per region vs the IMX) | blocking |
 | G3-009 | Every road in the IMX arrived in the model (matched by name) | warning |
+| G3-010 | Names arrived: the layer's name field (checklist: *Common → Name*) is in the model's `NAME` and matches the package | warning |
 
 ## How it reads the model
 

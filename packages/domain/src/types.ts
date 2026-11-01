@@ -47,6 +47,8 @@ export const DomainFeature = z.object({
   provenance: FeatureProvenance,
   /** Package layer the feature goes into, when its mapping names one (default: its feature class). */
   outputLayer: z.string().optional(),
+  /** The attribute that names the feature (road name, plot number): what InfraWorks' Name should show. */
+  nameAttribute: z.string().optional(),
 });
 export type DomainFeature = z.infer<typeof DomainFeature>;
 
@@ -88,6 +90,18 @@ export const LayerMapping = z.object({
    * that distance (drafting gaps). Only a label inside an area names it.
    */
   polygonize: z.object({ closeGaps: z.number().nonnegative().max(5).optional() }).optional(),
+  /**
+   * Names written as text next to the features (road names along their centreline): each label on
+   * these layers names the nearest feature of this rule within maxDistance, and a feature named by
+   * several labels takes the one most of them give. The text goes into `attribute`.
+   */
+  labels: z
+    .object({
+      layers: z.array(z.string().min(1)).min(1),
+      attribute: z.string().regex(/^[a-z][a-z0-9_]{0,30}$/, "lowercase letters, digits and _ only"),
+      maxDistance: z.number().positive().default(10),
+    })
+    .optional(),
 });
 export type LayerMapping = z.infer<typeof LayerMapping>;
 
@@ -195,6 +209,14 @@ export const PackageManifest = z.object({
       length: z.number().optional(),
       /** InfraWorks data source type to choose when importing this file. */
       infraWorksType: z.string().optional(),
+      /** Shapefile layers: the .dbf field to map to Name in InfraWorks (Configure → Common). */
+      nameField: z.string().optional(),
+      /** The feature attribute behind nameField, as in the GeoJSON layer. */
+      nameAttribute: z.string().optional(),
+      /** Features in this file that carry a name. */
+      namedCount: z.number().int().optional(),
+      /** The GeoJSON layer holding the same features (with their names), for checks. */
+      geojson: z.string().optional(),
     }),
   ),
   files: z.array(z.string()),
@@ -257,7 +279,8 @@ export const PARSONS_LDIP_ROADS_PROFILE: MappingProfile = {
   team: "Parsons",
   layers: [
     { dwgLayer: "RD_CL*", infraFeatureClass: "road_centerline" },
-    { dwgLayer: "RD_PR_CNRL*", infraFeatureClass: "road_centerline" },
+    // Road names (R.6.G.12) are MTEXT 2-10 m beside each centreline, usually twice per road.
+    { dwgLayer: "RD_PR_CNRL*", infraFeatureClass: "road_centerline", labels: { layers: ["0-Alignment Name"], attribute: "road_name", maxDistance: 10 } },
     { dwgLayer: "Project Boundary", infraFeatureClass: "coverage" },
     { dwgLayer: "Boundary", infraFeatureClass: "coverage", outputLayer: "road_reserve", subtract: ["RD_ROW"] },
     { dwgLayer: "RD_ROW", infraFeatureClass: "coverage", outputLayer: "blocks" },

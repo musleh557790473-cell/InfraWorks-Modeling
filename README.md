@@ -162,6 +162,15 @@ profile* and reused for that team's next drawing:
   `plots.shp` (Type: Parcels) from the baseplan's `MP-PLT-LIN` lines, numbered by the `MP-PLT-TXT`
   text inside each plot (`parcel_id`), with `closeGaps: 0.5`: on Al Qairawan 10100, 6,555 plots,
   5,944 numbered (5,938 of the 5,952 numbers alone in their plot); 442 gaps of up to 0.5 m closed.
+- **Names beside the features** (`labels`): a rule may take a name from text written next to its
+  features — each label goes to the nearest feature within `maxDistance`, and a feature named by
+  several labels takes the name most of them give, so a link road never borrows a neighbour's
+  name. The Parsons profile names Al Qairawan's centrelines from `0-Alignment Name` (`road_name`,
+  e.g. `R.6.G.12`): 280 of 332 named.
+- **Names in InfraWorks**: InfraWorks keeps a `.dbf` field only when it is mapped in *Configure*.
+  Each package layer records the field that names its features (`nameField` in the manifest:
+  `ROAD_NAME`, `PARCEL_ID`, `ASSET_ID`), the checklist says *Common tab: Name = <field>*, and
+  Gate G3 (`G3-010`) warns when the names did not arrive or Name was mapped to another field.
 - **Asset ids** are looked for in every usual place, in order:
   1. XDATA (`xdataApps`, default `INFRAWORKS`; `*` = any application)
   2. a block attribute (`attributeTags`, default `ASSET_ID, ROAD_ID, PARCEL_ID, PLOT_ID, PLOT_NO`)
@@ -207,4 +216,5 @@ MCP tools: `create_project`, `upload_input`, `list_mapping_profiles`, `save_mapp
 - `overlay/` — the source drawing, for an optional 2D overlay
 - `IMPORT_CHECKLIST.txt` — step-by-step import written for this package's own files:
   Add File Data Source → SHP, the Type for each file (Roads, Coverage Areas, Parcels, Water Areas,
-  Streams, Pipelines, Points of Interest), the coordinate system check, then Gate G3.
+  Streams, Pipelines, Points of Interest), the field to map to Name on the Common tab, the
+  coordinate system check, then Gate G3.

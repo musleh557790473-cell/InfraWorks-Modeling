@@ -77,6 +77,8 @@ interface Damage {
   truncateRoads?: boolean;
   /** Connection string per layer file, as InfraWorks wrote it (default C:/Imports/pkg/layers/<file>). */
   conn?: (file: string) => string;
+  /** Name left unmapped in Configure, or mapped to another field. Default: Name = the checklist's field. */
+  names?: "unmapped" | "other";
 }
 
 /** An InfraWorks-shaped model that imported the package — faithfully, unless told otherwise. */
@@ -109,6 +111,8 @@ function makeModel(name: string, d: Damage = {}): string {
       "insert into DATA_SOURCES (GUID, NAME, CONNECTION_STRING, TARGET_CLASS_NAME, SOURCE_CS) values (?,?,?,?,?)",
     ).run(guid, file, d.conn?.(file) ?? `C:/Imports/pkg/layers/${file}`, TABLE[layer.infraFeatureClass], d.sourceCs?.[layer.infraFeatureClass] ?? UTM38N);
     const gj = JSON.parse(zip.getEntry(layer.path)!.getData().toString("utf8"));
+    const nameAttr = manifest.layers.find((l: { format: string; geojson?: string }) => l.format === "shp" && l.geojson === layer.path)?.nameAttribute;
+    let n = 0;
     const [dx, dy] = d.shift?.[layer.infraFeatureClass] ?? [0, 0];
     const mv = (c: unknown): unknown => (typeof (c as number[])[0] === "number" ? [(c as number[])[0]! + dx, (c as number[])[1]! + dy] : (c as unknown[]).map(mv));
     for (const feat of gj.features) {
@@ -117,8 +121,10 @@ function makeModel(name: string, d: Damage = {}): string {
         const c = coords as number[][];
         coords = [c[0], [(c[0]![0]! + c[1]![0]!) / 2, (c[0]![1]! + c[1]![1]!) / 2]]; // half the road
       }
-      db.prepare(`insert into ${TABLE[layer.infraFeatureClass]} (GUID, GEOMETRY, DATA_SOURCE_ID) values (?,?,?)`).run(
+      const name = d.names === "unmapped" ? null : d.names === "other" ? `F-${++n}` : nameAttr ? (feat.properties?.[nameAttr] ?? null) : null;
+      db.prepare(`insert into ${TABLE[layer.infraFeatureClass]} (GUID, NAME, GEOMETRY, DATA_SOURCE_ID) values (?,?,?,?)`).run(
         feat.id,
+        name,
         fgf(feat.geometry.type, coords),
         guid,
       );
@@ -138,6 +144,25 @@ test("a faithful import passes", () => {
   assert.equal(r.schemaVersion, "17.18.0");
   assert.ok(r.layers.every((l) => l.modelCount === l.packageCount));
   assert.ok(r.layers.every((l) => (l.centreOffset ?? 0) < 1e-6));
+});
+
+test("G3-010 names left unmapped in Configure are a warning that names the field to map", () => {
+  const good = runModelGate(makeModel("named.sqlite"), { packagePath });
+  const roads = good.layers.find((l) => l.infraFeatureClass === "road_centerline")!;
+  assert.equal(roads.names?.field, "ASSET_ID");
+  assert.equal(roads.names?.matched, roads.names?.package);
+  assert.ok(!rules(good).includes("G3-010"));
+
+  const r = runModelGate(makeModel("unnamed.sqlite", { names: "unmapped" }), { packagePath });
+  assert.equal(r.ok, true, "a warning: the geometry is fine");
+  const w = r.findings.find((x) => x.ruleId === "G3-010" && /road_centerline/.test(x.message))!;
+  assert.equal(w.severity, "warning");
+  assert.match(w.message, /no feature has a Name in the model.*Name = ASSET_ID/);
+});
+
+test("G3-010 Name mapped to another field is caught", () => {
+  const r = runModelGate(makeModel("misnamed.sqlite", { names: "other" }), { packagePath });
+  assert.ok(r.findings.some((x) => x.ruleId === "G3-010" && /mapped to another field/.test(x.message)));
 });
 
 test("G3-003 a layer that was never imported is blocking", () => {

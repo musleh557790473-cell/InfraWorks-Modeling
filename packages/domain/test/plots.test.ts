@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { PARSONS_LDIP_ROADS_PROFILE, createFileStore, parseDxf, polygonize, runBuildPipeline } from "../src/index.js";
-import type { ValidationReport } from "../src/index.js";
+import type { PackageManifest, ValidationReport } from "../src/index.js";
 
 const dxf = (...pairs: (string | number)[]) => pairs.map(String).join("\n") + "\n";
 const ring = (x0: number, y0: number, x1: number, y1: number) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]];
@@ -110,4 +110,67 @@ test("the same plot number on two plots raises ASSET_ID_DUPLICATE", async () => 
   assert.ok(dup, JSON.stringify(v.issues));
   assert.match(dup.message, /1001 \(plots, 2×\)/);
   assert.equal(dup.severity, "warning");
+});
+/* ------------------------------------------------------------------ road names, and what to map in InfraWorks */
+
+/** A road layout bound into the sheet: three centrelines and their names as MTEXT beside them. */
+function roadLayout(names: [string, number, number][]) {
+  const X = "Xref Road Layout Al Qairawan";
+  const road = (x0: number, y0: number, x1: number, y1: number) => [0, "LINE", 8, `${X}$0$RD_PR_CNRL`, 10, E + x0, 20, N + y0, 11, E + x1, 21, N + y1];
+  return dxf(
+    0, "SECTION", 2, "BLOCKS",
+    0, "BLOCK", 2, X, 10, 0, 20, 0,
+    ...road(0, 0, 200, 0), // A
+    ...road(0, 40, 200, 40), // B, 40 m north of A
+    ...road(100, 0, 100, 40), // C, joins A and B, has no label of its own
+    ...names.flatMap(([t, x, y]) => [0, "MTEXT", 8, `${X}$0$0-Alignment Name`, 1, `{\\Fisocp.shx|c0;\\C256;${t}}`, 10, E + x, 20, N + y]),
+    0, "ENDBLK", 0, "ENDSEC",
+    0, "SECTION", 2, "ENTITIES", 0, "INSERT", 8, "0", 2, X, 10, 0, 20, 0, 0, "ENDSEC", 0, "EOF",
+  );
+}
+
+test("road names: each label names its nearest road within 10 m; a road with no label of its own stays unnamed", () => {
+  const parsed = parseDxf(
+    roadLayout([["R.6.G.1", 30, 3], ["R.6.G.1", 170, -3], ["R.6.G.2", 50, 37], ["R.6.G.9", 300, 0]]),
+    "10100.dxf",
+    PARSONS_LDIP_ROADS_PROFILE,
+  );
+  const roads = parsed.features.filter((f) => f.infraFeatureClass === "road_centerline");
+  const nameOf = (x0: number, y0: number, x1: number) =>
+    roads.find((f) => {
+      const c = f.geometry.coordinates as number[][];
+      return c[0]![0] === E + x0 && c[0]![1] === N + y0 && c[1]![0] === E + x1;
+    })!.attributes.road_name;
+  assert.equal(nameOf(0, 0, 200), "R.6.G.1", "MTEXT formatting stripped");
+  assert.equal(nameOf(0, 40, 200), "R.6.G.2");
+  assert.equal(nameOf(100, 0, 100), undefined, "the link road does not borrow a neighbour's name");
+  assert.ok(roads.every((f) => f.nameAttribute === "road_name"));
+  assert.ok(parsed.notes.some((n) => /2 of 3 feature\(s\) named from 3 of 4 label\(s\)/.test(n)), parsed.notes.join(" | "));
+});
+
+test("road names: a road labelled differently takes the name most of its labels give, and the note says so", () => {
+  const parsed = parseDxf(roadLayout([["R.1", 20, 3], ["R.1", 150, 3], ["R.7", 80, 3]]), "10100.dxf", PARSONS_LDIP_ROADS_PROFILE);
+  const a = parsed.features.find((f) => f.attributes.road_name !== undefined)!;
+  assert.equal(a.attributes.road_name, "R.1");
+  assert.ok(parsed.notes.some((n) => /1 got different names from different labels/.test(n)));
+});
+
+test("the checklist names the field to map to Name, since InfraWorks keeps only mapped fields", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "iw-plots-"));
+  const path = join(dir, "10100.dxf");
+  writeFileSync(path, baseplan([["1001", 10, 10], ["1002", 25, 10]]));
+  const store = createFileStore(dir);
+  const project = store.createProject("plots", 32638);
+  store.setMappingProfile(project.id, PARSONS_LDIP_ROADS_PROFILE);
+  store.addUpload({ projectId: project.id, filename: "10100.dxf", kind: "dxf", path, size: 0 });
+  const r = await runBuildPipeline(store, project.id);
+  // The package folder sits next to the ZIP: pkg-<project id>-<timestamp>/manifest.json.
+  const out = dirname(r.packagePath);
+  const staging = readdirSync(out).find((d) => d.startsWith(`pkg-${project.id}-`))!;
+  const manifest = JSON.parse(readFileSync(join(out, staging, "manifest.json"), "utf8")) as PackageManifest;
+  const plots = manifest.layers.find((l) => l.format === "shp" && l.name === "plots")!;
+  assert.equal(plots.nameField, "PARCEL_ID");
+  assert.equal(plots.namedCount, 2);
+  assert.equal(plots.geojson, "layers/plots.geojson");
+  assert.ok(manifest.importChecklist.some((s) => /Common tab: Name = PARCEL_ID \(2 of 3 have one\)/.test(s)), manifest.importChecklist.join("\n"));
 });

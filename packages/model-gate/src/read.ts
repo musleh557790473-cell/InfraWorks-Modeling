@@ -70,7 +70,21 @@ export function readPackage(path: string): PackageInfo {
       featureCount: number;
       extent?: [number, number, number, number];
       length?: number;
+      nameField?: string;
+      nameAttribute?: string;
+      namedCount?: number;
+      geojson?: string;
     }[];
+  };
+  const namesOf = (l: { nameAttribute?: string; geojson?: string }): Set<string> | undefined => {
+    if (!l.nameAttribute || !l.geojson) return undefined;
+    const gj = JSON.parse(read(l.geojson)) as { features: { properties?: Record<string, unknown> | null }[] };
+    const out = new Set<string>();
+    for (const f of gj.features) {
+      const v = f.properties?.[l.nameAttribute];
+      if (v !== undefined && v !== null && String(v).trim() !== "") out.add(String(v).trim());
+    }
+    return out;
   };
   // Shapefiles are what InfraWorks imports, so compare against them when the package has them.
   // Older packages (GeoJSON only) are summarised from the GeoJSON itself.
@@ -83,6 +97,7 @@ export function readPackage(path: string): PackageInfo {
         featureCount: l.featureCount,
         extent: l.extent ? { minX: l.extent[0], minY: l.extent[1], maxX: l.extent[2], maxY: l.extent[3] } : null,
         length: l.length ?? 0,
+        ...(l.nameField ? { nameField: l.nameField, names: namesOf(l), namedCount: l.namedCount } : {}),
       }))
     : manifest.layers
         .filter((l) => l.format === "geojson")
@@ -162,6 +177,15 @@ export function importedStats(h: ModelHandle, table: string, dataSourceGuid: str
     }
   }
   return out;
+}
+
+/** The Name values a data source's rows got in the model (non-empty only). */
+export function importedNames(h: ModelHandle, table: string, dataSourceGuid: string): string[] {
+  if (!h.tables.has(table)) return [];
+  const cols = (h.db.prepare(`pragma table_info("${table}")`).all() as { name: string }[]).map((c) => c.name);
+  if (!cols.includes("DATA_SOURCE_ID") || !cols.includes("NAME")) return [];
+  const rows = h.db.prepare(`select NAME from "${table}" where DATA_SOURCE_ID = ?`).all(dataSourceGuid) as { NAME: unknown }[];
+  return rows.map((r) => (r.NAME === null || r.NAME === undefined ? "" : String(r.NAME).trim())).filter((s) => s !== "");
 }
 
 /** Design-road regions and the cross-sections InfraWorks actually built for each. */

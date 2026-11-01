@@ -731,8 +731,54 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
       attributes,
       provenance: { sourceFile: filename, sourceLayer: c.layer, sourceEntityId: c.handle },
       ...(mapping?.outputLayer ? { outputLayer: mapping.outputLayer } : {}),
+      ...(mapping?.labels || mapping?.joinKeyAttribute ? { nameAttribute: mapping.labels?.attribute ?? mapping.joinKeyAttribute } : {}),
     };
   });
+
+  /* -------- names from labels beside the features (rules with `labels`): label → nearest feature */
+  for (const rule of profile.layers.filter((l) => l.labels)) {
+    const cfg = rule.labels!;
+    const targets = features.filter((f) => findLayerMapping(profile, f.provenance.sourceLayer ?? "") === rule);
+    if (!targets.length) continue;
+    const boxes = targets.map((f) => boxOfGeometry(f.geometry));
+    const votes = new Map<number, Map<string, { n: number; d: number }>>();
+    let read = 0;
+    let placed = 0;
+    for (const l of labels) {
+      if (!cfg.layers.some((r) => matchesLayer(r, l.layer) || matchesLayer(r, stripBoundXrefPrefix(l.layer)))) continue;
+      const text = l.text.trim();
+      if (!text) continue;
+      read++;
+      let best = -1;
+      let bestD = cfg.maxDistance;
+      for (let i = 0; i < targets.length; i++) {
+        const b = boxes[i]!;
+        if (l.at[0] < b[0] - bestD || l.at[0] > b[2] + bestD || l.at[1] < b[1] - bestD || l.at[1] > b[3] + bestD) continue;
+        const d = distToFeature(l.at, targets[i]!.geometry);
+        if (d < bestD || (best < 0 && d <= bestD)) {
+          bestD = d;
+          best = i;
+        }
+      }
+      if (best < 0) continue;
+      placed++;
+      const v = votes.get(best) ?? votes.set(best, new Map()).get(best)!;
+      const cur = v.get(text) ?? { n: 0, d: Infinity };
+      v.set(text, { n: cur.n + 1, d: Math.min(cur.d, bestD) });
+    }
+    let disputed = 0;
+    for (const [i, v] of votes) {
+      const ranked = [...v.entries()].sort((a, b) => b[1].n - a[1].n || a[1].d - b[1].d);
+      if (ranked.length > 1) disputed++;
+      targets[i]!.attributes[cfg.attribute] = ranked[0]![0];
+    }
+    polygonNotes.push(
+      `${rule.outputLayer ?? rule.dwgLayer}: ${votes.size} of ${targets.length} feature(s) named from ${placed} of ${read} label(s) on ` +
+        `${cfg.layers.map((x) => `"${x}"`).join(", ")} (within ${cfg.maxDistance} m)` +
+        (disputed ? `; ${disputed} got different names from different labels (the most common was used)` : ""),
+    );
+  }
+
   const cut = subtractAreas(features, profile);
 
   const notes = [

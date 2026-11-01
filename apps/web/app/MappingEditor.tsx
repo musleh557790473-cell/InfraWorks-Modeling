@@ -15,6 +15,7 @@ type LayerMapping = {
   outputLayer?: string;
   subtract?: string[];
   polygonize?: { closeGaps?: number };
+  labels?: { layers: string[]; attribute: string; maxDistance?: number };
 };
 type ReportJoin = { reportFile: string; joinKeyColumn: string; featureJoinAttribute: string; sheet?: string };
 type AssetKeys = {
@@ -106,6 +107,7 @@ export function MappingEditor({ api, projectId, current, onApplied }: {
             ...(from.outputLayer ? { outputLayer: from.outputLayer } : {}),
             ...(from.subtract ? { subtract: from.subtract } : {}),
             ...(from.polygonize ? { polygonize: from.polygonize } : {}),
+            ...(from.labels ? { labels: from.labels } : {}),
           }
         : {};
       layers.push({ dwgLayer: r.rule.trim(), infraFeatureClass: r.cls, ...(r.joinAttr.trim() ? { joinKeyAttribute: r.joinAttr.trim() } : {}), ...extras });
