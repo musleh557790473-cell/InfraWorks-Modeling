@@ -184,6 +184,43 @@ profile* and reused for that team's next drawing:
   - Duplicate element labels in the model raise `ASSET_ID_DUPLICATE`.
   - Al Qairawan (Rev.03): 902 pipes (63.16 km, 200-800 mm, HDPE corrugated / ductile iron), 900
     manholes and 1 outfall; 258 deleted pipes left out; 15 labels used twice.
+  - **WaterGEMS** (`<model>.wtg.sqlite`): a pressure model, with no inverts.
+
+    ```bash
+    pnpm package:build "<model>.wtg.sqlite" --utility Water --cover 1.0 --cover-source "<document>"
+    ```
+
+    The layers are `water_` or `irrigation_` (from `--utility`), with `NETWORKNAME` set to
+    `<utility> - <model>`.
+    - **Which elements:** only real, live elements, active in the model's active scenario.
+      `ElementType = 3`, since 9 is a prototype (a template). Child alternatives override their
+      parent: irrigation's *Peak-Distribution* switches its transmission pipe off.
+    - **`<prefix>_pipes`** (Pipelines):
+      - `diameter_mm` is the nominal size. WaterGEMS keeps the bore (`inside_mm`); a PE bore within
+        1.5 mm of a standard size × 9/11 is that SDR 11 size, so 130.8 mm is Ø160. The PWT notes
+        say "ALL PIPE DIAMETER ARE NOMINAL" and "HDPE PE100-SDR11". Other materials keep the bore.
+      - Also `material`, `node_start` / `node_end`, and `elev_start_m` / `elev_end_m`, the nodes'
+        Elevation.
+      - **Depth only from a given `--cover`:** the pipe centre is cover + half the outside diameter
+        below the terrain (`off_start_m` / `off_end_m` → `ELEV_FROM` / `ELEV_TO`), with the source
+        kept in `cover_src`. Without `--cover` no depth is shipped, and `ELEV_FROM` / `ELEV_TO` are
+        not listed.
+    - **`<prefix>_structures`** (Pipeline Connectors): reservoirs, tanks, valves, pumps, hydrants
+      (`kind`, `elev_m`). Junctions are only network points at bends and branches, so they do not
+      ship.
+    - **Al Qairawan potable water:**
+      - 895 pipes (74.07 km): HDPE Ø160-630 (778 of them Ø160) and 5 ductile iron, plus reservoir
+        R-2.
+      - Left out: 6 deleted pipes and 1 prototype.
+      - Cover 1.0 m: PWT-DWG-10000-001 note 5, "minimum cover above the crown".
+      - Node Elevation lies about 0.5 m (0.3-0.9 m) below the sewer rims nearby, so it is probably
+        another ground surface; it is kept as an attribute only.
+    - **Al Qairawan irrigation:**
+      - 1,074 pipes (51.75 km): HDPE Ø90-450, of which 736 are Ø90.
+      - 14 structures: 8 air valves, 4 isolation valves, 1 pump and 1 reservoir.
+      - Left out: 3,482 deleted pipes, 1 switched off and 4 of zero length.
+      - Node Elevation matches the sewer rims (median +0.03 m).
+      - Cover 0.80 m, **assumed by AICC pending confirmation**: no model, drawing or note gives one.
 - **Networks from drawings** (what no hydraulic model carries). Several sheets combine into one
   package, which sets the project's `cadMode: "all"`; otherwise the newest drawing replaces earlier
   ones:
