@@ -175,7 +175,9 @@ profile* and reused for that team's next drawing:
     `SIZE_Y`, `PIPE_MATERIAL`, `NETWORKNAME`, and depth: `ELEV_FROM` / `ELEV_TO` = the pipe centre's
     offset below ground at each end, `off_start_m` / `off_end_m`, from the rim of the node there,
     which SewerGEMS sets to the ground; for manholes `HEIGHT` = depth and `ELEVATION_OFFSET` = minus
-    the depth, so the connector spans invert to rim; both to be confirmed in InfraWorks). `UTILITY_TYPE` is a
+    the depth, so the connector spans invert to rim; seen in InfraWorks on Al Qairawan: pipe CO-445 at
+    -3.514 / -2.873 m enters the base of its manhole, MH-34 (depth 3.073 m) runs from the pipe up to
+    the ground). `UTILITY_TYPE` is a
     read-only code InfraWorks sets itself, so the utility leads the network name (`Sewer - <model>`); the
     checklist lists them for the Table tab, `pnpm model:names` fills them on a copy, and Gate G3
     (`G3-012`) warns when they are empty. On Al Qairawan the pipe centres sit 1.4-5.2 m below ground.
