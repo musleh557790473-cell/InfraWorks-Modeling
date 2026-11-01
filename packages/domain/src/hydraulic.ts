@@ -42,12 +42,17 @@ export const PIPE_FIELDS: Record<string, string> = {
   SIZE_Y: "size_m",
   PIPE_MATERIAL: "material",
   NETWORKNAME: "network",
+  // InfraWorks places a pipe on the terrain plus "Elevation Offset From / To" at its two ends.
+  ELEV_FROM: "off_start_m",
+  ELEV_TO: "off_end_m",
 };
 export const CONNECTOR_FIELDS: Record<string, string> = {
   SIZE_X: "size_m",
   SIZE_Y: "size_m",
   HEIGHT: "depth_m",
   NETWORKNAME: "network",
+  // A connector stands on the terrain and rises by HEIGHT: lowered by its depth, it spans invert to rim.
+  ELEVATION_OFFSET: "off_base_m",
 };
 
 type Row = Record<string, unknown>;
@@ -106,6 +111,13 @@ function readSewer(db: Db, filename: string, opts: HydraulicOptions): HydraulicN
   const manholes = new Set(optional("Manhole", "select DomainElementID id from Manhole").map((r) => Number(r.id)));
   const outfalls = new Set(optional("Outfall", "select DomainElementID id from Outfall").map((r) => Number(r.id)));
 
+  /** A node's rim, when it is a level at all: an outfall's rim is often left at 0. */
+  const rimOf = (id: number): number | undefined => {
+    const raw = rim.get(id)?.rim ?? outfallRim.get(id);
+    const bottom = invert.get(id);
+    return raw !== undefined && raw > 0 && (bottom === undefined || raw >= bottom) ? raw : undefined;
+  };
+
   const features: DomainFeature[] = [];
   const src = (id: number, layer: string) => ({ sourceFile: filename, sourceLayer: layer, sourceEntityId: String(id) });
   let nodes = 0;
@@ -118,7 +130,7 @@ function readSewer(db: Db, filename: string, opts: HydraulicOptions): HydraulicN
     const bottom = invert.get(id);
     // An outfall's rim is often left at 0: a rim below the invert is no level at all.
     const rawTop = s?.rim ?? outfallRim.get(id);
-    const top = rawTop !== undefined && rawTop > 0 && (bottom === undefined || rawTop >= bottom) ? rawTop : undefined;
+    const top = rimOf(id);
     if (rawTop !== undefined && top === undefined) noRim++;
     const kind = outfalls.has(id) ? "Outfall" : "Manhole";
     features.push({
@@ -134,6 +146,8 @@ function readSewer(db: Db, filename: string, opts: HydraulicOptions): HydraulicN
         rim_m: round(top),
         invert_m: round(bottom),
         depth_m: top !== undefined && bottom !== undefined ? round(top - bottom) : null,
+        // Below the rim, which SewerGEMS sets to the ground: the connector's base offset from the terrain.
+        off_base_m: top !== undefined && bottom !== undefined ? round(bottom - top) : null,
         size_m: s && s.diameter > 0 ? round(s.diameter) : null,
         utility,
         network,
@@ -200,6 +214,9 @@ function readSewer(db: Db, filename: string, opts: HydraulicOptions): HydraulicN
         length_m: Math.round(len * 1000) / 1000,
         node_start: label(from) || null,
         node_end: label(to) || null,
+        // The pipe's centre below the ground at each end (rim of the node there, the model's ground).
+        off_start_m: offsetBelow(usInv, diameter, rimOf(from)),
+        off_end_m: offsetBelow(dsInv, diameter, rimOf(to)),
         utility,
         network,
       },
@@ -229,6 +246,12 @@ export function wkbPoints(b: Uint8Array | null | undefined): [number, number][] 
   const out: [number, number][] = [];
   for (let i = 0; i < n && 9 + i * 16 + 16 <= b.length; i++) out.push([v.getFloat64(9 + i * 16, le), v.getFloat64(17 + i * 16, le)]);
   return out;
+}
+
+/** Centre of a pipe of this diameter on this invert, relative to the ground level given. */
+function offsetBelow(invert: number | undefined, diameter: number, ground: number | undefined): number | null {
+  if (invert === undefined || ground === undefined || !Number.isFinite(invert) || !Number.isFinite(diameter)) return null;
+  return round(invert + diameter / 2 - ground);
 }
 
 const dist = (a: [number, number], b: [number, number]) => Math.hypot(a[0] - b[0], a[1] - b[1]);
