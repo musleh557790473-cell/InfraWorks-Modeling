@@ -14,6 +14,7 @@
     "test": "pnpm -r test",
     "gate:imx": "pnpm --filter @infraworks/imx-gate gate",
     "gate:model": "pnpm --filter @infraworks/model-gate gate",
+    "model:names": "pnpm --filter @infraworks/model-gate names",
     "fixtures:dwg": "python fixtures/make_fixtures.py"
   },
   "devDependencies": {

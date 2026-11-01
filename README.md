@@ -172,6 +172,13 @@ profile* and reused for that team's next drawing:
   (the road name, the plot number; `nameField` / `nameAttribute` in the manifest), the checklist
   says *Common tab: Name = NAME*, and Gate G3 (`G3-010`) reads the model's Configure settings and
   warns when the names did not arrive, saying whether Name was left unmapped or mapped elsewhere.
+  InfraWorks does not map a field called `NAME` by itself (tried on Al Qairawan), so
+  `pnpm model:names "<model>.sqlite" --package <package>.zip` does it on a **copy**: it copies the
+  model and its `<model>.files` folder to `<model> (names)`, fills `NAME` row by row (InfraWorks
+  keeps each row's Shapefile record number in `EXTERNAL_ID`), and records *Name = NAME* in each
+  data source's Configure settings, so a Refresh keeps them. It refuses while the model is open
+  (`<model>.lock`) and never changes the model itself. On Al Qairawan: 280/280 road names and
+  5,944/5,944 plot numbers, G3 PASS with no warning.
 - **Asset ids** are looked for in every usual place, in order:
   1. XDATA (`xdataApps`, default `INFRAWORKS`; `*` = any application)
   2. a block attribute (`attributeTags`, default `ASSET_ID, ROAD_ID, PARCEL_ID, PLOT_ID, PLOT_NO`)

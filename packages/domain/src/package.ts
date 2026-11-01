@@ -294,6 +294,12 @@ export function importChecklist(
     "4. Attribute names are shortened to 10 characters in the .dbf; shp/field_names.csv maps each to its original name. Any field you do not map in Configure is not kept by InfraWorks.",
     ...(hasOverlay ? ["5. Optional: add the drawing in overlay/ as a 2D overlay for reference."] : []),
     `${hasOverlay ? 6 : 5}. Close the model, then check the import: pnpm gate:model "<model>.sqlite" --package <this package>.zip`,
+    ...(shpLayers.some((l) => l.nameField)
+      ? [
+          "   InfraWorks does not map NAME by itself. Instead of mapping it by hand, after closing the model run",
+          "   pnpm model:names \"<model>.sqlite\" --package <this package>.zip and open the \"<model> (names)\" copy it writes.",
+        ]
+      : []),
     "Review validation_report.json. Outputs are NOT FOR ISSUE until Human Review Gate approval.",
   ];
   return steps;

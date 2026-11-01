@@ -60,7 +60,7 @@ function findSource(sources: DataSourceRow[], file: string): DataSourceRow | und
 }
 
 /** Every data source that reads this file, oldest first. */
-function findSources(sources: DataSourceRow[], file: string): DataSourceRow[] {
+export function findSources(sources: DataSourceRow[], file: string): DataSourceRow[] {
   const want = stem(file.toLowerCase());
   return sources.filter((s) => {
       const conn = (s.CONNECTION_STRING ?? "").replace(/\\/g, "/").toLowerCase();
