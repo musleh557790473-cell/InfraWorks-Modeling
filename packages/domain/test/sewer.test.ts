@@ -31,16 +31,21 @@ test("a SewerGEMS model: pipes and manholes in metres, deleted pipes left out, s
   assert.equal(co1.attributes.flow, "start-to-end");
   assert.equal(co1.attributes.node_start, "MH-1");
   assert.equal(co1.attributes.network, "Sewer - Al Qairawan", "the utility leads the network name");
+  // Centre below the rim at each end: 683.0 + 0.1 - 685.0 and 682.5 + 0.1 - 684.5.
+  assert.equal(co1.attributes.off_start_m, -1.9);
+  assert.equal(co1.attributes.off_end_m, -1.9);
   assert.equal(pipes.find((f) => f.attributes.label === "CO-2")!.attributes.flow, "end-to-start", "drawn against the flow");
 
   const mh1 = nodes.find((f) => f.attributes.label === "MH-1")!;
   assert.equal(mh1.attributes.rim_m, 685);
   assert.equal(mh1.attributes.depth_m, 2);
   assert.equal(mh1.attributes.size_m, 1.2);
+  assert.equal(mh1.attributes.off_base_m, -2, "lowered by its depth, it spans invert to rim");
   const out = nodes.find((f) => f.attributes.label === "OUT-1")!;
   assert.equal(out.attributes.kind, "Outfall");
   assert.equal(out.attributes.rim_m, null, "a rim of 0 is no level");
   assert.equal(out.attributes.depth_m, null);
+  assert.equal(out.attributes.off_base_m, null);
   assert.ok(net.notes.some((n) => /1 node\(s\) have no usable rim level/.test(n)));
 });
 
@@ -61,7 +66,8 @@ test("a SewerGEMS model builds a package: Pipelines and Pipeline Connectors, wit
   assert.equal(pipes.infraWorksType, "Pipelines");
   assert.equal(mh.infraWorksType, "Pipeline Connectors");
   assert.equal(pipes.nameField, "NAME");
-  assert.deepEqual(pipes.fields, { SIZE_X: "SIZE_M", SIZE_Y: "SIZE_M", PIPE_MATERIAL: "MATERIAL", NETWORKNAME: "NETWORK" });
+  assert.deepEqual(pipes.fields, { SIZE_X: "SIZE_M", SIZE_Y: "SIZE_M", PIPE_MATERIAL: "MATERIAL", NETWORKNAME: "NETWORK", ELEV_FROM: "OFF_START_", ELEV_TO: "OFF_END_M" });
+  assert.equal(mh.fields?.ELEVATION_OFFSET, "OFF_BASE_M");
   assert.equal(mh.fields?.HEIGHT, "DEPTH_M");
   assert.ok(manifest.importChecklist.some((s) => /Table tab: SIZE_X = SIZE_M, SIZE_Y = SIZE_M, PIPE_MATERIAL = MATERIAL/.test(s)), manifest.importChecklist.join("\n"));
 });
