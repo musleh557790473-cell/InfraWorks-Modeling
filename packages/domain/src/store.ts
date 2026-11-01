@@ -14,7 +14,8 @@ export interface UploadedFile {
   id: string;
   projectId: string;
   filename: string;
-  kind: "dwg" | "dxf" | "csv" | "xlsx" | "pdf" | "shp" | "tif" | "other";
+  /** "hydraulic": a SewerGEMS / WaterGEMS model database (<model>.stsw.sqlite, <model>.wtg.sqlite). */
+  kind: "dwg" | "dxf" | "csv" | "xlsx" | "pdf" | "shp" | "tif" | "hydraulic" | "other";
   path: string;
   size: number;
   uploadedAt: string;

@@ -2,7 +2,7 @@ import { basename } from "node:path";
 
 import { openImx, readRegions } from "@infraworks/imx-gate";
 
-import { dataSources, importedNames, importedStats, modelRegions, modelWkt, openModel, readPackage, schemaVersion } from "./read.js";
+import { dataSources, importedFilled, importedNames, importedStats, modelRegions, modelWkt, openModel, readPackage, schemaVersion } from "./read.js";
 import type { DataSourceRow, ModelHandle } from "./read.js";
 import { EXPECTED_TABLE } from "./types.js";
 import type { LayerComparison, ModelFinding, ModelGateOptions, ModelGateReport, PackageInfo, RegionComparison } from "./types.js";
@@ -327,6 +327,45 @@ function compareLayers(h: ModelHandle, pkg: PackageInfo, out: ModelFinding[], ro
             field: layer.nameField,
           }),
         );
+      }
+    }
+
+    /* G3-012 the layer's other columns arrived (SIZE_X, PIPE_MATERIAL, HEIGHT...): kept only when mapped */
+    if (layer.fields && layer.fieldCounts) {
+      const missing: string[] = [];
+      const partial: string[] = [];
+      let mappings: Record<string, { expression?: string }> = {};
+      try {
+        mappings = (JSON.parse(src.CONFIG ?? "{}") as { propertyMappings?: typeof mappings }).propertyMappings ?? {};
+      } catch {
+        /* unreadable settings: report as not mapped */
+      }
+      row.fields = {};
+      for (const [col, field] of Object.entries(layer.fields)) {
+        if (col === "NAME") continue;
+        const sent = layer.fieldCounts[col] ?? 0;
+        if (!sent) continue;
+        const got = importedFilled(h, target, src.GUID, col);
+        if (got < 0) continue; // this InfraWorks table has no such column
+        row.fields[col] = { field, package: sent, model: got };
+        const how = mappings[col]?.expression ? `mapped to ${mappings[col]!.expression}` : "not mapped";
+        if (got === 0) missing.push(`${col} (${how}; ${field} has ${sent})`);
+        else if (got < sent) partial.push(`${col} ${got}/${sent}`);
+      }
+      if (missing.length) {
+        out.push(
+          f(
+            "G3-012",
+            "Attributes arrived",
+            "warning",
+            `${layer.file}: empty in the model: ${missing.join(", ")}. Map them on the Table tab ` +
+              `(${Object.entries(layer.fields).filter(([c]) => c !== "NAME").map(([c, d]) => `${c} = ${d}`).join(", ")}), or run pnpm model:names on the closed model.`,
+            { layer: layer.name },
+          ),
+        );
+      }
+      if (partial.length) {
+        out.push(f("G3-012", "Attributes arrived", "warning", `${layer.file}: only part arrived: ${partial.join(", ")}.`, { layer: layer.name }));
       }
     }
   }

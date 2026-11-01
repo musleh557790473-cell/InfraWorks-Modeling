@@ -40,15 +40,22 @@ function main(argv: string[]): number {
     const r = fillNames(model, pkg, out);
     process.stdout.write(`\nCopy written: ${r.output}${r.filesFolder ? `\n         and: ${r.filesFolder}` : ""}\n\n`);
     for (const l of r.layers) {
-      process.stdout.write(
-        l.skipped
-          ? `  ${l.file} ("${l.dataSource}"): left alone, ${l.skipped}\n`
-          : `  ${l.file} ("${l.dataSource}", ${l.table}): ${l.filled} of ${l.rows} row(s) named from ${l.field}` +
-              `${l.kept ? `, ${l.kept} kept their own name` : ""}; Name = ${l.field} recorded in Configure\n`,
-      );
+      if (l.skipped) {
+        process.stdout.write(`  ${l.file} ("${l.dataSource}"): left alone, ${l.skipped}\n`);
+        continue;
+      }
+      process.stdout.write(`  ${l.file} ("${l.dataSource}", ${l.table}, ${l.rows} rows)\n`);
+      for (const c of l.columns) {
+        process.stdout.write(
+          c.skipped
+            ? `      ${c.column}: not filled, ${c.skipped}\n`
+            : `      ${c.column} = ${c.field}: ${c.filled} filled${c.kept ? `, ${c.kept} kept their own value` : ""}\n`,
+        );
+      }
     }
+    process.stdout.write("\nEach filled column is recorded as a mapping in Configure.\n");
     process.stdout.write("\nOpen the copy in InfraWorks. A Refresh of these data sources keeps the names.\n");
-    return r.layers.some((l) => l.skipped) ? 1 : 0;
+    return r.layers.some((l) => l.skipped || l.columns.some((c) => c.skipped)) ? 1 : 0;
   } catch (err) {
     process.stderr.write(`model-names: ${err instanceof Error ? err.message : String(err)}\n`);
     return 2;

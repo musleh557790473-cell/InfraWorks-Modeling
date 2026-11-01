@@ -7,6 +7,8 @@ export const InfraFeatureClass = z.enum([
   "water",
   "parcel",
   "pipeline",
+  /** Manholes, chambers, valves: InfraWorks Pipeline Connectors (PIPE_CONNECTORS). */
+  "pipe_connector",
   "annotation",
   "unmapped",
 ]);
@@ -49,6 +51,8 @@ export const DomainFeature = z.object({
   outputLayer: z.string().optional(),
   /** The attribute that names the feature (road name, plot number): what InfraWorks' Name should show. */
   nameAttribute: z.string().optional(),
+  /** InfraWorks column → the attribute that fills it (SIZE_X → size_m, PIPE_MATERIAL → material). */
+  infraWorksFields: z.record(z.string()).optional(),
 });
 export type DomainFeature = z.infer<typeof DomainFeature>;
 
@@ -217,6 +221,10 @@ export const PackageManifest = z.object({
       namedCount: z.number().int().optional(),
       /** The GeoJSON layer holding the same features (with their names), for checks. */
       geojson: z.string().optional(),
+      /** InfraWorks column → .dbf field that fills it (beyond Name), for model:names and Gate G3. */
+      fields: z.record(z.string()).optional(),
+      /** InfraWorks column → the feature attribute behind it, as in the GeoJSON layer. */
+      fieldAttributes: z.record(z.string()).optional(),
     }),
   ),
   files: z.array(z.string()),

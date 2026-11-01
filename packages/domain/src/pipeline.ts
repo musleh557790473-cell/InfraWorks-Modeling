@@ -9,6 +9,7 @@ import type { ConvertOptions } from "./convert.js";
 import { indexRowsByKey, readReport } from "./reports.js";
 import { validateCollection } from "./validate.js";
 import { buildPackageZip } from "./package.js";
+import { readHydraulicModel } from "./hydraulic.js";
 import { resolveAssetKeys } from "./types.js";
 import type { DomainFeatureCollection, MappingProfile, ValidationReport } from "./types.js";
 
@@ -65,8 +66,41 @@ export async function dxfFor(
   return { path: out, converter };
 }
 
-/** Read the project's CAD with a given profile (used by the build and by the layer scan). */
+/**
+ * Read the project's CAD with a given profile (used by the build and by the layer scan), plus
+ * every hydraulic model uploaded with it (SewerGEMS / WaterGEMS database): its pipes and
+ * manholes carry their own class and package layer, whatever the profile says.
+ */
 export async function loadCad(
+  store: DomainStore,
+  projectId: string,
+  profile: MappingProfile,
+  opts?: ConvertOptions,
+): Promise<CadLoad> {
+  const drawing = await loadDrawing(store, projectId, profile, opts);
+  const models = store.listUploads(projectId).filter((u) => u.kind === "hydraulic");
+  if (!models.length) return drawing;
+  const base = drawing.upload ? drawing.parsed : { ...EMPTY, notes: [], features: [], layers: [], skippedEntities: {}, keyStats: { ...EMPTY.keyStats } };
+  const parsed: ParsedDwg = { ...base, features: [...base.features], notes: [...base.notes], layers: [...base.layers] };
+  if (parsed.format === "none") parsed.format = "hydraulic";
+  for (const m of models) {
+    const net = await readHydraulicModel(m.path, m.filename);
+    parsed.features.push(...net.features);
+    parsed.notes.push(...net.notes);
+    for (const [name, n] of countBy(net.features.map((f) => f.outputLayer ?? f.infraFeatureClass))) {
+      parsed.layers.push({ name: `${m.filename}: ${name}`, entityCount: n, types: {} });
+    }
+  }
+  return { ...drawing, upload: drawing.upload ?? models.at(-1), parsed };
+}
+
+function countBy(values: string[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const v of values) m.set(v, (m.get(v) ?? 0) + 1);
+  return m;
+}
+
+async function loadDrawing(
   store: DomainStore,
   projectId: string,
   profile: MappingProfile,
