@@ -42,10 +42,11 @@ Exit code `0` = no blocking finding, `1` = blocking findings, `2` = bad usage.
 | G3-007 | Linear layers arrived complete (plan length in the model vs the package) | warning; blocking over 10 % |
 | G3-008 | Design roads were built over their full length (sections per region vs the IMX) | blocking |
 | G3-009 | Every road in the IMX arrived in the model (matched by name) | warning |
+| G3-012 | Attributes arrived: each column the layer fills (`fields` in the manifest: SIZE_X, PIPE_MATERIAL, HEIGHT...) has values in the model; says whether it is mapped | warning |
 | G3-011 | Each package layer is imported once (a second data source on the same file doubles its features) | warning |
 | G3-010 | Names arrived: the layer's name field (checklist: *Common → Name*) is in the model's `NAME` and matches the package | warning |
 
-## Names into the model: `model-names`
+## Names and attributes into the model: `model-names`
 
 ```bash
 pnpm model:names "model.sqlite" --package package.zip [--out "copy.sqlite"]
@@ -53,7 +54,8 @@ pnpm model:names "model.sqlite" --package package.zip [--out "copy.sqlite"]
 
 InfraWorks keeps a Shapefile field only when it is mapped in Configure, and does not map `NAME` by
 itself. This writes `<model> (names).sqlite` (and a copy of `<model>.files`) with `NAME` filled from
-each layer's `NAME` field, matched row by row on `EXTERNAL_ID` (the Shapefile record number, from
+each layer's `NAME` field and every other column the layer lists (`fields`: SIZE_X, PIPE_MATERIAL,
+HEIGHT...), matched row by row on `EXTERNAL_ID` (the Shapefile record number, from
 InfraWorks' default mapping `EXTERNAL_ID = FeatId`), and *Name = NAME* recorded in each data
 source's `CONFIG`, so a Refresh keeps the names. Rows that already have another name are kept.
 

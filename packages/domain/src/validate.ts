@@ -164,7 +164,10 @@ export function validateCollection(
   const seenIds = new Map<string, number>();
   for (const f of collection.features) {
     if (f.infraFeatureClass === "unmapped") continue;
-    const attr = findLayerMapping(profile, f.provenance.sourceLayer ?? "")?.joinKeyAttribute;
+    // Network elements (pipes, manholes) are named uniquely in their model, like ids.
+    const attr =
+      findLayerMapping(profile, f.provenance.sourceLayer ?? "")?.joinKeyAttribute ??
+      (f.infraFeatureClass === "pipeline" || f.infraFeatureClass === "pipe_connector" ? f.nameAttribute : undefined);
     const v = attr ? f.attributes[attr] : undefined;
     if (v === undefined || v === null || String(v).trim() === "") continue;
     const k = `${f.outputLayer ?? f.infraFeatureClass}\u0000${String(v).trim()}`;

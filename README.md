@@ -162,6 +162,23 @@ profile* and reused for that team's next drawing:
   `plots.shp` (Type: Parcels) from the baseplan's `MP-PLT-LIN` lines, numbered by the `MP-PLT-TXT`
   text inside each plot (`parcel_id`), with `closeGaps: 0.5`: on Al Qairawan 10100, 6,555 plots,
   5,944 numbered (5,938 of the 5,952 numbers alone in their plot); 442 gaps of up to 0.5 m closed.
+- **Networks from hydraulic models**: a SewerGEMS model database (`<model>.stsw.sqlite`, next to the
+  `.stsw`) is read directly, as the designer's own data, in preference to labels on a drawing:
+  `pnpm package:build "<model>.stsw.sqlite"`, or upload it as kind `hydraulic`. Active elements only
+  (`IsDeleted = 0`); OpenFlows stores feet internally, so everything is converted to metres.
+  - `sewer_pipes.shp` (Type: Pipelines): `label`, `diameter_mm`, `size_m`, `material`,
+    `inv_start_m` / `inv_end_m` (ends as drawn), `slope_pct`, `flow` (`start-to-end` or
+    `end-to-start`: models often draw pipes against the flow), `length_m`, `node_start` / `node_end`.
+  - `sewer_manholes.shp` (Type: Pipeline Connectors): `label`, `kind` (Manhole / Outfall), `rim_m`,
+    `invert_m`, `depth_m`, `size_m`. A rim of 0 or below the invert counts as no level.
+  - Each layer records the InfraWorks columns its fields fill (`fields` in the manifest: `SIZE_X`,
+    `SIZE_Y`, `PIPE_MATERIAL`, `UTILITY_TYPE`, `NETWORKNAME`; `HEIGHT` = depth for manholes); the
+    checklist lists them for the Table tab, `pnpm model:names` fills them on a copy, and Gate G3
+    (`G3-012`) warns when they are empty. Invert levels stay in the attributes and are not yet put
+    into InfraWorks' elevation columns, whose meaning (offset or level) is still to be checked.
+  - Duplicate element labels in the model raise `ASSET_ID_DUPLICATE`.
+  - Al Qairawan (Rev.03): 902 pipes (63.16 km, 200-800 mm, HDPE corrugated / ductile iron), 900
+    manholes and 1 outfall; 258 deleted pipes left out; 15 labels used twice.
 - **Names beside the features** (`labels`): a rule may take a name from text written next to its
   features — each label goes to the nearest feature within `maxDistance`, and a feature named by
   several labels takes the name most of them give, so a link road never borrows a neighbour's

@@ -27,6 +27,9 @@ export interface PackageLayer {
   nameField?: string;
   names?: Set<string>;
   namedCount?: number;
+  /** InfraWorks column → .dbf field (beyond Name), and how many package features carry a value for it. */
+  fields?: Record<string, string>;
+  fieldCounts?: Record<string, number>;
 }
 
 export interface PackageInfo {
@@ -49,6 +52,8 @@ export interface LayerComparison {
   centreOffset: number | null;
   /** Names (Configure → Common → Name): package features carrying one, model rows with one, and those that match. */
   names?: { field: string; package: number; model: number; matched: number };
+  /** Other mapped columns: package features with a value, model rows with one. */
+  fields?: Record<string, { field: string; package: number; model: number }>;
 }
 
 export interface RegionComparison {
@@ -96,5 +101,6 @@ export const EXPECTED_TABLE: Record<string, string[]> = {
   water: ["WATER_AREAS", "STREAMS"],
   parcel: ["PARCELS"],
   pipeline: ["PIPELINES"],
+  pipe_connector: ["PIPE_CONNECTORS"],
   annotation: ["POIS"],
 };

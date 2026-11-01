@@ -1,6 +1,7 @@
 /**
  * Build an InfraWorks package from one drawing, from the command line:
- *   pnpm package:build <drawing.dxf|dwg> [--profile <id>] [--name <project>] [--epsg <code>]
+ *   pnpm package:build <drawing.dxf|dwg | model.stsw.sqlite> [--profile <id>] [--name <project>] [--epsg <code>]
+ * A SewerGEMS / WaterGEMS model database (<model>.stsw.sqlite) gives the network's pipes and manholes.
  * Uses the data folder from DATA_DIR (.env), so the package lands where both machines see it.
  */
 import { copyFileSync, mkdirSync } from "node:fs";
@@ -35,7 +36,7 @@ const dir = join(store.uploadDir, project.id);
 mkdirSync(dir, { recursive: true });
 const dest = join(dir, basename(src));
 copyFileSync(resolve(src), dest);
-const kind = extname(src).toLowerCase() === ".dwg" ? "dwg" : "dxf";
+const kind = /\.(stsw|wtg)\.sqlite$/i.test(src) ? "hydraulic" : extname(src).toLowerCase() === ".dwg" ? "dwg" : "dxf";
 store.addUpload({ projectId: project.id, filename: basename(src), kind, path: dest, size: 0 });
 
 try {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-const CLASSES = ["road_centerline", "coverage", "water", "parcel", "pipeline", "annotation", "unmapped"] as const;
+const CLASSES = ["road_centerline", "coverage", "water", "parcel", "pipeline", "pipe_connector", "annotation", "unmapped"] as const;
 /** Profiles shipped with the tool (BUILTIN_PROFILES in @infraworks/domain): read-only starting points. */
 const BUILTIN_IDS = new Set(["ldip-default", "parsons-ldip-roads"]);
 type FeatureClass = (typeof CLASSES)[number];

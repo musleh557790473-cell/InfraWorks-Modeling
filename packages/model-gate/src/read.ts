@@ -74,7 +74,22 @@ export function readPackage(path: string): PackageInfo {
       nameAttribute?: string;
       namedCount?: number;
       geojson?: string;
+      fields?: Record<string, string>;
+      fieldAttributes?: Record<string, string>;
     }[];
+  };
+  const countsOf = (l: { fieldAttributes?: Record<string, string>; geojson?: string }): Record<string, number> | undefined => {
+    if (!l.fieldAttributes || !l.geojson) return undefined;
+    const gj = JSON.parse(read(l.geojson)) as { features: { properties?: Record<string, unknown> | null }[] };
+    return Object.fromEntries(
+      Object.entries(l.fieldAttributes).map(([col, attr]) => [
+        col,
+        gj.features.filter((f) => {
+          const v = f.properties?.[attr];
+          return v !== undefined && v !== null && String(v).trim() !== "";
+        }).length,
+      ]),
+    );
   };
   const namesOf = (l: { nameAttribute?: string; geojson?: string }): Set<string> | undefined => {
     if (!l.nameAttribute || !l.geojson) return undefined;
@@ -98,6 +113,7 @@ export function readPackage(path: string): PackageInfo {
         extent: l.extent ? { minX: l.extent[0], minY: l.extent[1], maxX: l.extent[2], maxY: l.extent[3] } : null,
         length: l.length ?? 0,
         ...(l.nameField ? { nameField: l.nameField, names: namesOf(l), namedCount: l.namedCount } : {}),
+        ...(l.fields && Object.keys(l.fields).length ? { fields: l.fields, fieldCounts: countsOf(l) } : {}),
       }))
     : manifest.layers
         .filter((l) => l.format === "geojson")
@@ -186,6 +202,17 @@ export function importedNames(h: ModelHandle, table: string, dataSourceGuid: str
   if (!cols.includes("DATA_SOURCE_ID") || !cols.includes("NAME")) return [];
   const rows = h.db.prepare(`select NAME from "${table}" where DATA_SOURCE_ID = ?`).all(dataSourceGuid) as { NAME: unknown }[];
   return rows.map((r) => (r.NAME === null || r.NAME === undefined ? "" : String(r.NAME).trim())).filter((s) => s !== "");
+}
+
+/** Rows of a data source with a value in a column; -1 when the table has no such column. */
+export function importedFilled(h: ModelHandle, table: string, dataSourceGuid: string, column: string): number {
+  if (!h.tables.has(table)) return -1;
+  const cols = (h.db.prepare(`pragma table_info("${table}")`).all() as { name: string }[]).map((c) => c.name.toUpperCase());
+  if (!cols.includes(column.toUpperCase()) || !cols.includes("DATA_SOURCE_ID")) return -1;
+  const r = h.db
+    .prepare(`select count(*) n from "${table}" where DATA_SOURCE_ID = ? and "${column}" is not null and trim(cast("${column}" as text)) != ''`)
+    .get(dataSourceGuid) as { n: number };
+  return r.n;
 }
 
 /** Design-road regions and the cross-sections InfraWorks actually built for each. */

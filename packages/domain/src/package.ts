@@ -159,6 +159,7 @@ const KIND_OF: Record<string, ShapeKind> = {
 
 /** InfraWorks data source type for each class and geometry kind (Data Source Configuration → Type). */
 export function infraWorksType(cls: InfraFeatureClass, kind: ShapeKind): string {
+  if (cls === "pipe_connector") return "Pipeline Connectors";
   if (kind === "point") return "Points of Interest";
   switch (cls) {
     case "road_centerline":
@@ -247,6 +248,15 @@ function writeShapefileLayers(stagingDir: string, byLayer: ReturnType<typeof fea
       // The field InfraWorks' Name should take: the attribute the mapping names features by.
       const nameAttribute = mostCommonValue(feats.map((f) => f.nameAttribute).filter((a): a is string => Boolean(a)));
       const nameField = nameAttribute ? res.fields.find((fl) => fl.source === "name")?.dbf : undefined;
+      // Other InfraWorks columns this layer fills (SIZE_X, PIPE_MATERIAL...), by .dbf field.
+      const fieldAttributes = feats.find((f) => f.infraWorksFields)?.infraWorksFields;
+      const fields = fieldAttributes
+        ? Object.fromEntries(
+            Object.entries(fieldAttributes)
+              .map(([col, attr]) => [col, res.fields.find((fl) => fl.source === attr)?.dbf] as const)
+              .filter((e): e is readonly [string, string] => Boolean(e[1])),
+          )
+        : {};
       const namedCount = nameAttribute
         ? list.filter((s) => s.attributes[nameAttribute] !== undefined && s.attributes[nameAttribute] !== null && String(s.attributes[nameAttribute]).trim() !== "").length
         : 0;
@@ -261,6 +271,7 @@ function writeShapefileLayers(stagingDir: string, byLayer: ReturnType<typeof fea
         ...(kind === "line" ? { length: res.length } : {}),
         infraWorksType: infraWorksType(cls, kind),
         ...(nameField && nameAttribute ? { nameField, nameAttribute, namedCount, geojson: `layers/${layer}.geojson` } : {}),
+        ...(Object.keys(fields).length ? { fields, fieldAttributes, geojson: `layers/${layer}.geojson` } : {}),
       });
     }
   }
@@ -286,6 +297,9 @@ export function importChecklist(
       ...(l.nameField
         ? [`       and on the Common tab: Name = ${l.nameField} (${l.namedCount} of ${l.featureCount} have one; it holds ${l.nameAttribute}). InfraWorks keeps only the fields you map.`]
         : []),
+      ...(l.fields && Object.keys(l.fields).length
+        ? [`       and on the Table tab: ${Object.entries(l.fields).map(([col, dbf]) => `${col} = ${dbf}`).join(", ")} (model:names below does these too).`]
+        : []),
     ]),
     prj
       ? `   - Coordinate System: check it reads ${crs.infraWorksCrsHint} (taken from the .prj). If it shows LL84 or is empty, set ${crs.infraWorksCrsHint}.`
@@ -294,7 +308,7 @@ export function importChecklist(
     "4. Attribute names are shortened to 10 characters in the .dbf; shp/field_names.csv maps each to its original name. Any field you do not map in Configure is not kept by InfraWorks.",
     ...(hasOverlay ? ["5. Optional: add the drawing in overlay/ as a 2D overlay for reference."] : []),
     `${hasOverlay ? 6 : 5}. Close the model, then check the import: pnpm gate:model "<model>.sqlite" --package <this package>.zip`,
-    ...(shpLayers.some((l) => l.nameField)
+    ...(shpLayers.some((l) => l.nameField || l.fields)
       ? [
           "   InfraWorks does not map NAME by itself. Instead of mapping it by hand, after closing the model run",
           "   pnpm model:names \"<model>.sqlite\" --package <this package>.zip and open the \"<model> (names)\" copy it writes.",

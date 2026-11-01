@@ -16,8 +16,8 @@ export interface ParsedDwgLayer {
 export interface ParsedDwg {
   layers: ParsedDwgLayer[];
   features: DomainFeature[];
-  /** "dxf" — vector geometry read from a DXF (uploaded, or converted from DWG). "none" — nothing read. */
-  format: "dxf" | "none";
+  /** "dxf" — vector geometry read from a DXF (uploaded, or converted from DWG). "hydraulic" — only a hydraulic model. "none" — nothing read. */
+  format: "dxf" | "hydraulic" | "none";
   notes: string[];
   /** Entity types present in model space that the reader does not convert, with counts. */
   skippedEntities: Record<string, number>;
