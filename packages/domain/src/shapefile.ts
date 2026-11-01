@@ -149,7 +149,8 @@ function planFields(features: ShpFeature[]): ShpField[] {
   return keys.map((k) => {
     const values = features.map((f) => f.attributes[k]).filter((v) => v !== null && v !== undefined && v !== "");
     const numeric = values.length > 0 && values.every((v) => typeof v === "number" ? Number.isFinite(v) : NUMERIC.test(String(v).trim()));
-    if (numeric) {
+    // NAME stays text even when every value is digits (plot 1000, not 1000.0 in InfraWorks).
+    if (numeric && k !== "name") {
       const decimals = Math.min(8, Math.max(0, ...values.map((v) => (String(v).split(".")[1] ?? "").length)));
       return { source: k, dbf: names.get(k)!, type: "N", length: 19, decimals };
     }

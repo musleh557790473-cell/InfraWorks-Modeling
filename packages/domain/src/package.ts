@@ -11,6 +11,7 @@ import type {
 } from "./types.js";
 import type { ProjectRecord } from "./store.js";
 import { esriWkt, writeShapefile } from "./shapefile.js";
+import { dropDegenerateRings } from "./areas.js";
 import type { ShapeKind, ShpFeature } from "./shapefile.js";
 
 /** Package layers: one per mapping output layer, which defaults to the feature class. */
@@ -179,7 +180,17 @@ export function infraWorksType(cls: InfraFeatureClass, kind: ShapeKind): string 
 function toShp(f: DomainFeature): ShpFeature[] {
   const kind = KIND_OF[f.geometry.type];
   if (!kind) return [];
-  const attributes = { ...f.attributes, src_file: f.provenance.sourceFile, src_layer: f.provenance.sourceLayer ?? null };
+  // A field called NAME first, holding the feature's name (road name, plot number): the field
+  // InfraWorks' Name should take. A CAD attribute already called "name" moves to name_cad.
+  const { name: cadName, ...rest } = f.attributes;
+  const named = f.nameAttribute ? f.attributes[f.nameAttribute] : undefined;
+  const attributes = {
+    ...(f.nameAttribute ? { name: named === undefined || named === null || String(named).trim() === "" ? null : String(named).trim() } : {}),
+    ...(f.nameAttribute ? rest : f.attributes),
+    ...(f.nameAttribute && cadName !== undefined && cadName !== null && cadName !== "" ? { name_cad: cadName } : {}),
+    src_file: f.provenance.sourceFile,
+    src_layer: f.provenance.sourceLayer ?? null,
+  };
   const c = f.geometry.coordinates;
   if (f.geometry.type === "MultiPoint") return (c as number[][]).map((p) => ({ kind, parts: [[p]], attributes }));
   let parts: number[][][];
@@ -191,12 +202,19 @@ function toShp(f: DomainFeature): ShpFeature[] {
       parts = [c as number[][]];
       break;
     case "MultiLineString":
-    case "Polygon":
       parts = c as number[][][];
       break;
+    case "Polygon": {
+      // No ring without area reaches InfraWorks: one such hole makes it drop the whole area.
+      const [poly] = dropDegenerateRings([c as [number, number][][]]);
+      if (!poly) return [];
+      parts = poly;
+      break;
+    }
     case "MultiPolygon": {
       // Each polygon's first ring is an outer ring, the rest its holes.
-      const polys = c as number[][][][];
+      const polys = dropDegenerateRings(c as [number, number][][][]) as number[][][][];
+      if (!polys.length) return [];
       return [{ kind, parts: polys.flat(), holes: polys.flatMap((p) => p.map((_, i) => i > 0)), attributes }];
     }
     default:
@@ -226,6 +244,12 @@ function writeShapefileLayers(stagingDir: string, byLayer: ReturnType<typeof fea
       const res = writeShapefile(join(stagingDir, "shp", name), kind, list, epsg);
       files.push(...res.files.map((p) => `shp/${basename(p)}`));
       for (const fl of res.fields) fieldRows.push(`${name}.shp,${fl.dbf},"${fl.source.replace(/"/g, '""')}",${fl.type}`);
+      // The field InfraWorks' Name should take: the attribute the mapping names features by.
+      const nameAttribute = mostCommonValue(feats.map((f) => f.nameAttribute).filter((a): a is string => Boolean(a)));
+      const nameField = nameAttribute ? res.fields.find((fl) => fl.source === "name")?.dbf : undefined;
+      const namedCount = nameAttribute
+        ? list.filter((s) => s.attributes[nameAttribute] !== undefined && s.attributes[nameAttribute] !== null && String(s.attributes[nameAttribute]).trim() !== "").length
+        : 0;
       layers.push({
         name,
         infraFeatureClass: cls,
@@ -236,6 +260,7 @@ function writeShapefileLayers(stagingDir: string, byLayer: ReturnType<typeof fea
         extent: res.bbox,
         ...(kind === "line" ? { length: res.length } : {}),
         infraWorksType: infraWorksType(cls, kind),
+        ...(nameField && nameAttribute ? { nameField, nameAttribute, namedCount, geojson: `layers/${layer}.geojson` } : {}),
       });
     }
   }
@@ -256,14 +281,25 @@ export function importChecklist(
     `1. Create or open the model with coordinate system ${crs.infraWorksCrsHint} (EPSG:${crs.epsg}).`,
     "2. Data Sources → Add File Data Source → SHP, and select the files in shp/ (InfraWorks cannot import the GeoJSON in layers/ — those are for GIS tools and checks).",
     "3. For each data source, open Configure and set:",
-    ...shpLayers.map((l) => `   - ${basename(l.path)} → Type: ${l.infraWorksType} (${l.featureCount} feature(s))`),
+    ...shpLayers.flatMap((l) => [
+      `   - ${basename(l.path)} → Type: ${l.infraWorksType} (${l.featureCount} feature(s))`,
+      ...(l.nameField
+        ? [`       and on the Common tab: Name = ${l.nameField} (${l.namedCount} of ${l.featureCount} have one; it holds ${l.nameAttribute}). InfraWorks keeps only the fields you map.`]
+        : []),
+    ]),
     prj
       ? `   - Coordinate System: check it reads ${crs.infraWorksCrsHint} (taken from the .prj). If it shows LL84 or is empty, set ${crs.infraWorksCrsHint}.`
       : `   - Coordinate System: set ${crs.infraWorksCrsHint} by hand (no .prj is written for EPSG:${crs.epsg}).`,
     "   - Then Close & Refresh.",
-    "4. Attribute names are shortened to 10 characters in the .dbf; shp/field_names.csv maps each to its original name (use it when setting Common properties such as Name).",
+    "4. Attribute names are shortened to 10 characters in the .dbf; shp/field_names.csv maps each to its original name. Any field you do not map in Configure is not kept by InfraWorks.",
     ...(hasOverlay ? ["5. Optional: add the drawing in overlay/ as a 2D overlay for reference."] : []),
     `${hasOverlay ? 6 : 5}. Close the model, then check the import: pnpm gate:model "<model>.sqlite" --package <this package>.zip`,
+    ...(shpLayers.some((l) => l.nameField)
+      ? [
+          "   InfraWorks does not map NAME by itself. Instead of mapping it by hand, after closing the model run",
+          "   pnpm model:names \"<model>.sqlite\" --package <this package>.zip and open the \"<model> (names)\" copy it writes.",
+        ]
+      : []),
     "Review validation_report.json. Outputs are NOT FOR ISSUE until Human Review Gate approval.",
   ];
   return steps;
@@ -277,4 +313,10 @@ async function zipDirectory(sourceDir: string, zipPath: string) {
   archive.pipe(output);
   archive.directory(sourceDir, false);
   await Promise.race([Promise.all([archive.finalize(), finished(output)]), failed]);
+}
+
+function mostCommonValue(values: string[]): string | undefined {
+  const n = new Map<string, number>();
+  for (const v of values) n.set(v, (n.get(v) ?? 0) + 1);
+  return [...n.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
 }

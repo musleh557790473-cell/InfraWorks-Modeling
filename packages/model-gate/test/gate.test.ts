@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,7 +9,9 @@ import Database from "better-sqlite3";
 import AdmZip from "adm-zip";
 import { createFileStore, runBuildPipeline } from "@infraworks/domain";
 
-import { runModelGate } from "../src/gate.js";
+import { nameMapping, runModelGate } from "../src/gate.js";
+import { fillNames } from "../src/names.js";
+import { DatabaseSync } from "node:sqlite";
 
 const fixtures = resolve(dirname(fileURLToPath(import.meta.url)), "../../../fixtures");
 const UTM38N =
@@ -77,6 +79,10 @@ interface Damage {
   truncateRoads?: boolean;
   /** Connection string per layer file, as InfraWorks wrote it (default C:/Imports/pkg/layers/<file>). */
   conn?: (file: string) => string;
+  /** Name left unmapped in Configure, or mapped to another field. Default: Name = the checklist's field. */
+  names?: "unmapped" | "other";
+  /** Import this feature class's layer twice (a second data source on the same file). */
+  twice?: string;
 }
 
 /** An InfraWorks-shaped model that imported the package — faithfully, unless told otherwise. */
@@ -101,14 +107,26 @@ function makeModel(name: string, d: Damage = {}): string {
   const zip = new AdmZip(packagePath);
   const manifest = JSON.parse(zip.getEntry("manifest.json")!.getData().toString("utf8"));
   let id = 0;
-  for (const layer of manifest.layers.filter((l: { format: string }) => l.format === "geojson")) {
+  const layers = manifest.layers.filter((l: { format: string; infraFeatureClass: string }) => l.format === "geojson");
+  for (const layer of [...layers, ...layers.filter((l: { infraFeatureClass: string }) => l.infraFeatureClass === d.twice)]) {
     if (layer.infraFeatureClass === d.skipLayer) continue;
     const file = layer.path.split("/").pop();
     const guid = `ds-${++id}`;
     db.prepare(
-      "insert into DATA_SOURCES (GUID, NAME, CONNECTION_STRING, TARGET_CLASS_NAME, SOURCE_CS) values (?,?,?,?,?)",
-    ).run(guid, file, d.conn?.(file) ?? `C:/Imports/pkg/layers/${file}`, TABLE[layer.infraFeatureClass], d.sourceCs?.[layer.infraFeatureClass] ?? UTM38N);
+      "insert into DATA_SOURCES (GUID, NAME, CONNECTION_STRING, TARGET_CLASS_NAME, SOURCE_CS, CONFIG) values (?,?,?,?,?,?)",
+    ).run(
+      guid,
+      file,
+      d.conn?.(file) ?? `C:/Imports/pkg/layers/${file}`,
+      TABLE[layer.infraFeatureClass],
+      d.sourceCs?.[layer.infraFeatureClass] ?? UTM38N,
+      // As InfraWorks writes Configure: Name mapped to another field, or left out.
+      d.names === "other" ? JSON.stringify({ propertyMappings: { EXTERNAL_ID: { expression: "FeatId" }, NAME: { expression: "LAYER" } } }) : JSON.stringify({ propertyMappings: { EXTERNAL_ID: { expression: "FeatId" } } }),
+    );
     const gj = JSON.parse(zip.getEntry(layer.path)!.getData().toString("utf8"));
+    const nameAttr = manifest.layers.find((l: { format: string; geojson?: string }) => l.format === "shp" && l.geojson === layer.path)?.nameAttribute;
+    let n = 0;
+    let record = 0;
     const [dx, dy] = d.shift?.[layer.infraFeatureClass] ?? [0, 0];
     const mv = (c: unknown): unknown => (typeof (c as number[])[0] === "number" ? [(c as number[])[0]! + dx, (c as number[])[1]! + dy] : (c as unknown[]).map(mv));
     for (const feat of gj.features) {
@@ -117,10 +135,14 @@ function makeModel(name: string, d: Damage = {}): string {
         const c = coords as number[][];
         coords = [c[0], [(c[0]![0]! + c[1]![0]!) / 2, (c[0]![1]! + c[1]![1]!) / 2]]; // half the road
       }
-      db.prepare(`insert into ${TABLE[layer.infraFeatureClass]} (GUID, GEOMETRY, DATA_SOURCE_ID) values (?,?,?)`).run(
+      const name = d.names === "unmapped" ? null : d.names === "other" ? `F-${++n}` : nameAttr ? (feat.properties?.[nameAttr] ?? null) : null;
+      // EXTERNAL_ID = the Shapefile record number, as InfraWorks maps it (EXTERNAL_ID = FeatId).
+      db.prepare(`insert into ${TABLE[layer.infraFeatureClass]} (GUID, NAME, GEOMETRY, DATA_SOURCE_ID, EXTERNAL_ID) values (?,?,?,?,?)`).run(
         feat.id,
+        name,
         fgf(feat.geometry.type, coords),
         guid,
+        String(++record),
       );
     }
   }
@@ -138,6 +160,82 @@ test("a faithful import passes", () => {
   assert.equal(r.schemaVersion, "17.18.0");
   assert.ok(r.layers.every((l) => l.modelCount === l.packageCount));
   assert.ok(r.layers.every((l) => (l.centreOffset ?? 0) < 1e-6));
+});
+
+test("G3-010 names left unmapped in Configure are a warning that names the field to map", () => {
+  const good = runModelGate(makeModel("named.sqlite"), { packagePath });
+  const roads = good.layers.find((l) => l.infraFeatureClass === "road_centerline")!;
+  assert.equal(roads.names?.field, "NAME");
+  assert.equal(roads.names?.matched, roads.names?.package);
+  assert.ok(!rules(good).includes("G3-010"));
+
+  const r = runModelGate(makeModel("unnamed.sqlite", { names: "unmapped" }), { packagePath });
+  assert.equal(r.ok, true, "a warning: the geometry is fine");
+  const w = r.findings.find((x) => x.ruleId === "G3-010" && /road_centerline/.test(x.message))!;
+  assert.equal(w.severity, "warning");
+  assert.match(w.message, /no feature has a Name in the model.*\(Name is not mapped\).*Name = NAME/);
+});
+
+test("G3-010 Name mapped to another field is caught", () => {
+  const r = runModelGate(makeModel("misnamed.sqlite", { names: "other" }), { packagePath });
+  assert.ok(r.findings.some((x) => x.ruleId === "G3-010" && /Name is mapped to LAYER\. Set Name = NAME/.test(x.message)), JSON.stringify(r.findings));
+  assert.equal(nameMapping('{"propertyMappings":{"NAME":{"expression":"ROAD_NAME"}}}'), "ROAD_NAME");
+  assert.equal(nameMapping('{"propertyMappings":{}}'), null);
+  assert.equal(nameMapping("not json"), null);
+});
+
+test("G3-011 a layer imported twice is named, with both data sources", () => {
+  const r = runModelGate(makeModel("twice.sqlite", { twice: "parcel" }), { packagePath });
+  const w = r.findings.find((x) => x.ruleId === "G3-011")!;
+  assert.equal(w.severity, "warning");
+  assert.match(w.message, /parcel\.shp is imported 2 times/, w.message);
+  assert.ok(!rules(runModelGate(makeModel("once.sqlite"), { packagePath })).includes("G3-011"));
+});
+
+test("model-names fills NAME on a copy and records Name = NAME in Configure; the model itself is untouched", () => {
+  const model = makeModel("tofill.sqlite", { names: "unmapped" });
+  // InfraWorks' own update trigger, with its double-quoted "INVALID" that better-sqlite3 rejects.
+  const iw = new DatabaseSync(model, { enableDoubleQuotedStringLiterals: true } as ConstructorParameters<typeof DatabaseSync>[1]);
+  iw.exec(`create table __journal_ROADS (id integer);
+    create trigger "__ROADS_IDENTITY_CONSTRAINTS_UPDATE" before update on "ROADS" for each row begin
+      select case when old.DATA_SOURCE_ID != new.DATA_SOURCE_ID and new.DATA_SOURCE_ID != "INVALID"
+        then raise(abort, 'ROADS.DATA_SOURCE_ID must not be changed.') end; end;
+    create trigger "__ROADS_update" after update on "ROADS" begin insert into "__journal_ROADS" values(new.rowid); end;`);
+  iw.close();
+
+  const out = join(work, "tofill (names).sqlite");
+  const r = fillNames(model, packagePath, out);
+  const roads = r.layers.find((l) => l.table === "ROADS")!;
+  assert.equal(roads.skipped, undefined);
+  assert.ok(roads.filled > 0);
+  assert.equal(roads.field, "NAME");
+
+  const after = runModelGate(out, { packagePath });
+  assert.ok(!rules(after).includes("G3-010"), JSON.stringify(after.findings));
+  const row = after.layers.find((l) => l.infraFeatureClass === "road_centerline")!;
+  assert.equal(row.names?.matched, row.names?.package);
+  const db = new Database(out, { readonly: true });
+  const cfg = JSON.parse((db.prepare("select CONFIG from DATA_SOURCES where TARGET_CLASS_NAME = 'ROADS'").get() as { CONFIG: string }).CONFIG);
+  assert.equal(cfg.propertyMappings.NAME.expression, "NAME");
+  assert.ok((db.prepare("select count(*) n from __journal_ROADS").get() as { n: number }).n > 0, "InfraWorks' change log records the edits");
+  db.close();
+
+  assert.ok(rules(runModelGate(model, { packagePath })).includes("G3-010"), "the original keeps no names");
+  assert.throws(() => fillNames(model, packagePath, out), /already exists/);
+});
+
+test("model-names copies the model's .files folder, and refuses while the model is open (.lock)", () => {
+  const model = makeModel("withfiles.sqlite", { names: "unmapped" });
+  mkdirSync(join(work, "withfiles.files", "styles"), { recursive: true });
+  writeFileSync(join(work, "withfiles.files", "styles", "a.json"), "{}");
+  writeFileSync(join(work, "withfiles.lock"), "2026-11-01T10:25:32Z");
+  const out = join(work, "withfiles (names).sqlite");
+  assert.throws(() => fillNames(model, packagePath, out), /open in InfraWorks/);
+  assert.equal(existsSync(out), false, "nothing written");
+  rmSync(join(work, "withfiles.lock"));
+  const r = fillNames(model, packagePath, out);
+  assert.equal(r.filesFolder, join(work, "withfiles (names).files"));
+  assert.ok(existsSync(join(work, "withfiles (names).files", "styles", "a.json")));
 });
 
 test("G3-003 a layer that was never imported is blocking", () => {

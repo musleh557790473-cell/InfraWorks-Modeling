@@ -62,7 +62,9 @@ export function subtractAreas(features: DomainFeature[], profile: Pick<MappingPr
       const near = cutters.filter((c) => overlaps(c.bbox, box));
       used += near.length;
       area0 += areaOf(own);
-      const out = near.length ? polygonClipping.difference(own, ...near.map((c) => c.polys)) : own;
+      // Clipping can leave a hole of a few millimetres with no area where a cutter grazes another;
+      // InfraWorks then drops the whole area (Al Qairawan's road reserve came in empty).
+      const out = dropDegenerateRings(near.length ? polygonClipping.difference(own, ...near.map((c) => c.polys)) : own);
       area1 += areaOf(out);
       if (!out.length) {
         dropped.add(t.id);
@@ -81,6 +83,25 @@ export function subtractAreas(features: DomainFeature[], profile: Pick<MappingPr
     features: features.filter((f) => !dropped.has(f.id)).map((f) => replaced.get(f.id) ?? f),
     notes,
   };
+}
+
+/**
+ * Rings with no real area: fewer than 3 distinct points, or so thin that their area is under a
+ * millionth of their perimeter squared (a hole of a millimetre, a zero-width spike). A polygon
+ * whose outer ring goes is dropped; a hole that goes simply disappears.
+ */
+export function isDegenerateRing(ring: number[][]): boolean {
+  const distinct = new Set(ring.map((p) => `${p[0]},${p[1]}`));
+  if (distinct.size < 3) return true;
+  let perimeter = 0;
+  for (let i = 1; i < ring.length; i++) perimeter += Math.hypot(ring[i]![0]! - ring[i - 1]![0]!, ring[i]![1]! - ring[i - 1]![1]!);
+  return Math.abs(shoelace(ring)) < 1e-6 * perimeter * perimeter;
+}
+
+export function dropDegenerateRings(polys: ClipPolygon[]): ClipPolygon[] {
+  return polys
+    .filter((p) => p[0] && !isDegenerateRing(p[0]))
+    .map((p) => [p[0]!, ...p.slice(1).filter((h) => !isDegenerateRing(h))] as ClipPolygon);
 }
 
 /** Plan area, holes taken out. */

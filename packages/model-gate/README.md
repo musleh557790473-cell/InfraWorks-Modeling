@@ -42,6 +42,27 @@ Exit code `0` = no blocking finding, `1` = blocking findings, `2` = bad usage.
 | G3-007 | Linear layers arrived complete (plan length in the model vs the package) | warning; blocking over 10 % |
 | G3-008 | Design roads were built over their full length (sections per region vs the IMX) | blocking |
 | G3-009 | Every road in the IMX arrived in the model (matched by name) | warning |
+| G3-011 | Each package layer is imported once (a second data source on the same file doubles its features) | warning |
+| G3-010 | Names arrived: the layer's name field (checklist: *Common → Name*) is in the model's `NAME` and matches the package | warning |
+
+## Names into the model: `model-names`
+
+```bash
+pnpm model:names "model.sqlite" --package package.zip [--out "copy.sqlite"]
+```
+
+InfraWorks keeps a Shapefile field only when it is mapped in Configure, and does not map `NAME` by
+itself. This writes `<model> (names).sqlite` (and a copy of `<model>.files`) with `NAME` filled from
+each layer's `NAME` field, matched row by row on `EXTERNAL_ID` (the Shapefile record number, from
+InfraWorks' default mapping `EXTERNAL_ID = FeatId`), and *Name = NAME* recorded in each data
+source's `CONFIG`, so a Refresh keeps the names. Rows that already have another name are kept.
+
+- The model itself is never changed; it refuses while `<model>.lock` is there (open in InfraWorks).
+- A layer is left alone, and said so, when its row count differs from the file's record count or
+  `EXTERNAL_ID` is mapped to something other than `FeatId`.
+- Writes go through Node's SQLite (`node:sqlite`, Node 22.16+ / 24) with double-quoted literals
+  allowed: InfraWorks' own triggers use them, and better-sqlite3 rejects them. InfraWorks' journal
+  triggers log the edits as they do for its own.
 
 ## How it reads the model
 

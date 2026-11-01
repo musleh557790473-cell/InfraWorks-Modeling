@@ -7,7 +7,16 @@ const CLASSES = ["road_centerline", "coverage", "water", "parcel", "pipeline", "
 const BUILTIN_IDS = new Set(["ldip-default", "parsons-ldip-roads"]);
 type FeatureClass = (typeof CLASSES)[number];
 
-type LayerMapping = { dwgLayer: string; infraFeatureClass: FeatureClass; joinKeyAttribute?: string };
+type LayerMapping = {
+  dwgLayer: string;
+  infraFeatureClass: FeatureClass;
+  joinKeyAttribute?: string;
+  /** Set in code or a saved profile (not edited here): kept when the rule is saved again. */
+  outputLayer?: string;
+  subtract?: string[];
+  polygonize?: { closeGaps?: number };
+  labels?: { layers: string[]; attribute: string; maxDistance?: number };
+};
 type ReportJoin = { reportFile: string; joinKeyColumn: string; featureJoinAttribute: string; sheet?: string };
 type AssetKeys = {
   pattern?: string;
@@ -90,7 +99,18 @@ export function MappingEditor({ api, projectId, current, onApplied }: {
       const k = r.rule.trim().toUpperCase();
       if (seen.has(k)) continue; // first rule wins, as in the build
       seen.add(k);
-      layers.push({ dwgLayer: r.rule.trim(), infraFeatureClass: r.cls, ...(r.joinAttr.trim() ? { joinKeyAttribute: r.joinAttr.trim() } : {}) });
+      // A rule this editor does not show in full (package layer, cut-outs, areas from lines) keeps
+      // those settings when the same rule is saved again with the same class.
+      const from = base?.layers.find((l) => l.dwgLayer.toUpperCase() === k && l.infraFeatureClass === r.cls);
+      const extras = from
+        ? {
+            ...(from.outputLayer ? { outputLayer: from.outputLayer } : {}),
+            ...(from.subtract ? { subtract: from.subtract } : {}),
+            ...(from.polygonize ? { polygonize: from.polygonize } : {}),
+            ...(from.labels ? { labels: from.labels } : {}),
+          }
+        : {};
+      layers.push({ dwgLayer: r.rule.trim(), infraFeatureClass: r.cls, ...(r.joinAttr.trim() ? { joinKeyAttribute: r.joinAttr.trim() } : {}), ...extras });
     }
     // Keep a saved team profile's rules that this drawing did not exercise (the team's other drawings
     // may need them) — but never copy the built-in default's rules into a team profile.

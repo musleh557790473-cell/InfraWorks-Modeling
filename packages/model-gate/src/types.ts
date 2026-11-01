@@ -23,6 +23,10 @@ export interface PackageLayer {
   extent: Extent2d | null;
   /** Total plan length of line features, in CRS units. */
   length: number;
+  /** The .dbf field the checklist says to map to Name, and the names the package's features carry. */
+  nameField?: string;
+  names?: Set<string>;
+  namedCount?: number;
 }
 
 export interface PackageInfo {
@@ -43,6 +47,8 @@ export interface LayerComparison {
   packageLength: number;
   modelLength: number;
   centreOffset: number | null;
+  /** Names (Configure → Common → Name): package features carrying one, model rows with one, and those that match. */
+  names?: { field: string; package: number; model: number; matched: number };
 }
 
 export interface RegionComparison {

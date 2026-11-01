@@ -143,7 +143,7 @@ profile* and reused for that team's next drawing:
   bound xref (`<xref>$0$RD_CL`) are matched and suggested by their own name (`RD_CL`).
 - **Built-in profiles**: the LDIP default, and *Parsons / LDIP road layout* (`RD_CL*` and
   `RD_PR_CNRL*` → roads, `Project Boundary` → coverage; on Al Qairawan also `road_reserve`,
-  `blocks` and `asphalt`, below). Start from one and save it as your team's profile.
+  `blocks`, `asphalt` and `plots`, below). Start from one and save it as your team's profile.
 - **Areas around the roads**: a rule may name its own package layer (`outputLayer`), so rules of
   one class ship as separate Shapefiles, and may cut other layers' closed areas out of its own
   (`subtract`). Al Qairawan draws its right-of-way lines (`RD_ROW`) closed around the blocks
@@ -155,6 +155,30 @@ profile* and reused for that team's next drawing:
   On coverage, parcel and water layers a polyline whose ends meet within 1 cm counts as closed
   (42 of Al Qairawan's "open" blocks end under 1 cm from their start); open lines on coverage and
   parcel layers cannot become areas, so they stay out of the Shapefiles and `AREA_NOT_CLOSED` counts them.
+- **Plots drawn as separate lines** (`polygonize`): a rule may build its areas from the faces its
+  lines enclose. The lines are split where they cross or end on one another, loose ends are dropped,
+  and `closeGaps` joins line ends that stop short of another line (drafting gaps) up to the given
+  distance. Only a label *inside* an area names it, never a neighbour's. The Parsons profile builds
+  `plots.shp` (Type: Parcels) from the baseplan's `MP-PLT-LIN` lines, numbered by the `MP-PLT-TXT`
+  text inside each plot (`parcel_id`), with `closeGaps: 0.5`: on Al Qairawan 10100, 6,555 plots,
+  5,944 numbered (5,938 of the 5,952 numbers alone in their plot); 442 gaps of up to 0.5 m closed.
+- **Names beside the features** (`labels`): a rule may take a name from text written next to its
+  features — each label goes to the nearest feature within `maxDistance`, and a feature named by
+  several labels takes the name most of them give, so a link road never borrows a neighbour's
+  name. The Parsons profile names Al Qairawan's centrelines from `0-Alignment Name` (`road_name`,
+  e.g. `R.6.G.12`): 280 of 332 named.
+- **Names in InfraWorks**: InfraWorks keeps a `.dbf` field only when it is mapped in *Configure*.
+  Every Shapefile whose features have a name carries it first, in a text field called `NAME`
+  (the road name, the plot number; `nameField` / `nameAttribute` in the manifest), the checklist
+  says *Common tab: Name = NAME*, and Gate G3 (`G3-010`) reads the model's Configure settings and
+  warns when the names did not arrive, saying whether Name was left unmapped or mapped elsewhere.
+  InfraWorks does not map a field called `NAME` by itself (tried on Al Qairawan), so
+  `pnpm model:names "<model>.sqlite" --package <package>.zip` does it on a **copy**: it copies the
+  model and its `<model>.files` folder to `<model> (names)`, fills `NAME` row by row (InfraWorks
+  keeps each row's Shapefile record number in `EXTERNAL_ID`), and records *Name = NAME* in each
+  data source's Configure settings, so a Refresh keeps them. It refuses while the model is open
+  (`<model>.lock`) and never changes the model itself. On Al Qairawan: 280/280 road names and
+  5,944/5,944 plot numbers, G3 PASS with no warning.
 - **Asset ids** are looked for in every usual place, in order:
   1. XDATA (`xdataApps`, default `INFRAWORKS`; `*` = any application)
   2. a block attribute (`attributeTags`, default `ASSET_ID, ROAD_ID, PARCEL_ID, PLOT_ID, PLOT_NO`)
@@ -176,6 +200,7 @@ REST (`/mapping-profiles`, `/projects/{id}/scan-layers`, `/projects/{id}/reports
 - Coordinates must fall inside the project CRS (`COORDS_OUTSIDE_CRS` blocks drawings left in local coordinates).
 - Drawing units other than metres on a UTM project → `DRAWING_UNITS_NOT_METRES`.
 - Features on id-carrying layers without an id → `ASSET_ID_MISSING`.
+- One id on two features of a layer (two plots numbered alike in the drawing) → `ASSET_ID_DUPLICATE`.
 - Features read but none on a mapped layer → `NOTHING_MAPPED` blocks the build (the package would
   be empty); the message names the most used layers to map.
 - GeoJSON layers carry a `crs` member (`urn:ogc:def:crs:EPSG::<code>`) so InfraWorks/GDAL read
@@ -199,4 +224,5 @@ MCP tools: `create_project`, `upload_input`, `list_mapping_profiles`, `save_mapp
 - `overlay/` — the source drawing, for an optional 2D overlay
 - `IMPORT_CHECKLIST.txt` — step-by-step import written for this package's own files:
   Add File Data Source → SHP, the Type for each file (Roads, Coverage Areas, Parcels, Water Areas,
-  Streams, Pipelines, Points of Interest), the coordinate system check, then Gate G3.
+  Streams, Pipelines, Points of Interest), the field to map to Name on the Common tab, the
+  coordinate system check, then Gate G3.
