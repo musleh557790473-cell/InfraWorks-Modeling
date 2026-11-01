@@ -34,7 +34,7 @@ function* positions(coords: unknown): Generator<number[]> {
   for (const c of coords) yield* positions(c);
 }
 
-function outsideEnvelope(f: DomainFeature, env: NonNullable<ReturnType<typeof crsEnvelope>>): boolean {
+export function outsideEnvelope(f: DomainFeature, env: NonNullable<ReturnType<typeof crsEnvelope>>): boolean {
   for (const p of positions(f.geometry.coordinates)) {
     const [x, y] = p as [number, number];
     if (!Number.isFinite(x) || !Number.isFinite(y)) return true;
@@ -51,12 +51,49 @@ export function validateCollection(
     reportRowCount: number;
     hasCad: boolean;
     cad?: Partial<
-      Pick<ParsedDwg, "format" | "notes" | "skippedEntities" | "insunits" | "keyStats" | "paperSpaceSkipped" | "truncated" | "extractedXrefs">
+      Pick<ParsedDwg, "format" | "notes" | "skippedEntities" | "insunits" | "keyStats" | "paperSpaceSkipped" | "truncated" | "extractedXrefs" | "pipeStats" | "relocatedXrefs">
     >;
     conversionError?: string;
+    /** A handful of mapped features far off the CRS (stray copies, usually at 0,0), left out of the package. */
+    strayOutside?: { count: number; layers: string[] };
   },
 ): ValidationReport {
   const issues: ValidationIssue[] = [];
+  if (opts.strayOutside) {
+    issues.push({
+      code: "COORDS_OUTSIDE_CRS_LEFT_OUT",
+      severity: "warning",
+      message:
+        `${opts.strayOutside.count} feature(s) lie outside EPSG:${collection.crs.epsg} (stray copies, usually at 0,0) ` +
+        `while the rest of the drawing fits it, so they were left out of the package. Layers: ` +
+        `${opts.strayOutside.layers.join(", ")}. Move or delete them in CAD.`,
+      context: { count: String(opts.strayOutside.count), layers: opts.strayOutside.layers.join("; ") },
+    });
+  }
+  for (const p of opts.cad?.pipeStats ?? []) {
+    issues.push({
+      code: p.unsized ? "PIPE_SIZE_MISSING" : "PIPE_SIZES",
+      severity: p.unsized ? "warning" : "info",
+      message:
+        `${p.layer}: ${p.pipes} pipe(s); size from the layer name for ${p.fromLayer}, from the nearest size label for ` +
+        `${p.fromLabel - (p.carried ?? 0)}` +
+        (p.carried ? `, carried along the network from a labelled neighbour for ${p.carried}` : "") +
+        (p.unsized ? `, none found for ${p.unsized} (they ship without a size; InfraWorks then uses its default).` : "."),
+      context: { layer: p.layer, pipes: String(p.pipes), fromLayer: String(p.fromLayer), fromLabel: String(p.fromLabel), unsized: String(p.unsized) },
+    });
+  }
+  const moved = opts.cad?.relocatedXrefs ?? [];
+  if (moved.length) {
+    issues.push({
+      code: "XREF_READ_AT_OWN_COORDINATES",
+      severity: "warning",
+      message:
+        `The sheet moves or rotates xref(s) ${moved.map((x) => `"${x}"`).join(", ")} away from the project CRS (to suit ` +
+        `the paper), while their own coordinates fit it, so they were read where they were drawn. Check the result ` +
+        `lines up with the other layers.`,
+      context: { xrefs: moved.join("; ") },
+    });
+  }
 
   if (!collection.crs?.epsg) {
     issues.push({

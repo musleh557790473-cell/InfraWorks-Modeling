@@ -29,6 +29,8 @@ function featuresByLayer(features: DomainFeature[]) {
 
 /** Classes InfraWorks only builds from closed areas: open lines on them are not shipped. */
 const AREA_ONLY: InfraFeatureClass[] = ["coverage", "parcel"];
+/** Line classes: a closed cable or pipe ring ships as a line, not as an area file of its own. */
+const LINE_ONLY: InfraFeatureClass[] = ["road_centerline", "pipeline"];
 
 /**
  * Coordinates stay in the project CRS (e.g. UTM metres), which RFC 7946 GeoJSON does not
@@ -236,6 +238,10 @@ function writeShapefileLayers(stagingDir: string, byLayer: ReturnType<typeof fea
       for (const s of toShp(f)) {
         // An open line cannot become a coverage or parcel: AREA_NOT_CLOSED reports it instead.
         if (AREA_ONLY.includes(cls) && s.kind !== "area") continue;
+        if (LINE_ONLY.includes(cls) && s.kind === "area") {
+          byKind.set("line", [...(byKind.get("line") ?? []), { kind: "line", parts: s.parts, attributes: s.attributes }]);
+          continue;
+        }
         byKind.set(s.kind, [...(byKind.get(s.kind) ?? []), s]);
       }
     }
