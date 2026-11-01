@@ -79,6 +79,8 @@ interface Damage {
   conn?: (file: string) => string;
   /** Name left unmapped in Configure, or mapped to another field. Default: Name = the checklist's field. */
   names?: "unmapped" | "other";
+  /** Import this feature class's layer twice (a second data source on the same file). */
+  twice?: string;
 }
 
 /** An InfraWorks-shaped model that imported the package — faithfully, unless told otherwise. */
@@ -103,7 +105,8 @@ function makeModel(name: string, d: Damage = {}): string {
   const zip = new AdmZip(packagePath);
   const manifest = JSON.parse(zip.getEntry("manifest.json")!.getData().toString("utf8"));
   let id = 0;
-  for (const layer of manifest.layers.filter((l: { format: string }) => l.format === "geojson")) {
+  const layers = manifest.layers.filter((l: { format: string; infraFeatureClass: string }) => l.format === "geojson");
+  for (const layer of [...layers, ...layers.filter((l: { infraFeatureClass: string }) => l.infraFeatureClass === d.twice)]) {
     if (layer.infraFeatureClass === d.skipLayer) continue;
     const file = layer.path.split("/").pop();
     const guid = `ds-${++id}`;
@@ -174,6 +177,14 @@ test("G3-010 Name mapped to another field is caught", () => {
   assert.equal(nameMapping('{"propertyMappings":{"NAME":{"expression":"ROAD_NAME"}}}'), "ROAD_NAME");
   assert.equal(nameMapping('{"propertyMappings":{}}'), null);
   assert.equal(nameMapping("not json"), null);
+});
+
+test("G3-011 a layer imported twice is named, with both data sources", () => {
+  const r = runModelGate(makeModel("twice.sqlite", { twice: "parcel" }), { packagePath });
+  const w = r.findings.find((x) => x.ruleId === "G3-011")!;
+  assert.equal(w.severity, "warning");
+  assert.match(w.message, /parcel\.shp is imported 2 times/, w.message);
+  assert.ok(!rules(runModelGate(makeModel("once.sqlite"), { packagePath })).includes("G3-011"));
 });
 
 test("G3-003 a layer that was never imported is blocking", () => {

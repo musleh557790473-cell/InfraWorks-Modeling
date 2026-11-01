@@ -56,17 +56,20 @@ export function nameMapping(config: string | null | undefined): string | null {
 }
 
 function findSource(sources: DataSourceRow[], file: string): DataSourceRow | undefined {
+  return findSources(sources, file).at(-1); // the latest re-import wins
+}
+
+/** Every data source that reads this file, oldest first. */
+function findSources(sources: DataSourceRow[], file: string): DataSourceRow[] {
   const want = stem(file.toLowerCase());
-  return sources
-    .filter((s) => {
+  return sources.filter((s) => {
       const conn = (s.CONNECTION_STRING ?? "").replace(/\\/g, "/").toLowerCase();
       // Connection strings are a plain path, a ";"-separated list, or key="path"; pairs.
       return conn
         .split(/[;="]/)
         .map((part) => part.trim().split("/").pop() ?? "")
         .some((name) => name !== "" && stem(name) === want);
-    })
-    .at(-1); // the latest re-import wins
+    });
 }
 
 /**
@@ -178,6 +181,21 @@ function compareLayers(h: ModelHandle, pkg: PackageInfo, out: ModelFinding[], ro
         }),
       );
       continue;
+    }
+
+    /* G3-011 one data source per layer: a second import of the same file doubles its features */
+    const all = findSources(sources, layer.file);
+    if (all.length > 1) {
+      out.push(
+        f(
+          "G3-011",
+          "Each layer imported once",
+          "warning",
+          `${layer.file} is imported ${all.length} times: ${all.map((s) => `"${s.NAME ?? "?"}" (${s.TARGET_CLASS_NAME ?? "?"})`).join(", ")}. ` +
+            `Its features are in the model more than once; delete all but one. This check reads the last ("${src.NAME ?? "?"}").`,
+          { layer: layer.name, count: String(all.length) },
+        ),
+      );
     }
 
     /* G3-004 imported as the right class, in the right CRS */
