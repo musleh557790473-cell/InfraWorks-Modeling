@@ -1,0 +1,30 @@
+﻿const fs=require('fs');const path=require('path');
+const [profPath,outDir,prjSrc]=process.argv.slice(2);
+const prof=JSON.parse(fs.readFileSync(profPath,'utf8')).find(p=>p.name==='R.6.E.1');
+const A=[659155.50,2748176.91],B=[659203.64,2748295.69]; const L=Math.hypot(B[0]-A[0],B[1]-A[1]);
+const zAt=s=>{const p=prof.pts; for(let i=1;i<p.length;i++) if(s<=p[i][0]+1e-9){const a=p[i-1],b=p[i]; return b[0]===a[0]?b[1]:a[1]+(b[1]-a[1])*(s-a[0])/(b[0]-a[0])} return p.at(-1)[1]};
+const st=new Set(prof.pts.map(p=>+p[0].toFixed(3))); for(let s=0;s<L;s+=5)st.add(s); st.add(+L.toFixed(3));
+const stations=[...st].filter(s=>s<=L+1e-6).sort((a,b)=>a-b);
+const pts=stations.map(s=>[A[0]+(B[0]-A[0])*s/L, A[1]+(B[1]-A[1])*s/L, zAt(s), s]);
+// PolyLineZ (13), one record
+const n=pts.length; const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),zs=pts.map(p=>p[2]);
+const bb=[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)], zr=[Math.min(...zs),Math.max(...zs)];
+const contentLen=4+32+4+4+4+16*n+16+8*n+16+8*n;
+const rec=Buffer.alloc(8+contentLen); rec.writeInt32BE(1,0); rec.writeInt32BE(contentLen/2,4);
+let o=8; rec.writeInt32LE(13,o); o+=4; bb.forEach(v=>{rec.writeDoubleLE(v,o);o+=8}); rec.writeInt32LE(1,o);o+=4; rec.writeInt32LE(n,o);o+=4; rec.writeInt32LE(0,o);o+=4;
+pts.forEach(p=>{rec.writeDoubleLE(p[0],o);rec.writeDoubleLE(p[1],o+8);o+=16}); rec.writeDoubleLE(zr[0],o);rec.writeDoubleLE(zr[1],o+8);o+=16; pts.forEach(p=>{rec.writeDoubleLE(p[2],o);o+=8});
+rec.writeDoubleLE(0,o);rec.writeDoubleLE(0,o+8);o+=16; pts.forEach(()=>{rec.writeDoubleLE(0,o);o+=8});
+const hdr=(len)=>{const h=Buffer.alloc(100);h.writeInt32BE(9994,0);h.writeInt32BE(len/2,24);h.writeInt32LE(1000,28);h.writeInt32LE(13,32);[...bb].forEach((v,i)=>h.writeDoubleLE(v,36+8*i));h.writeDoubleLE(zr[0],68);h.writeDoubleLE(zr[1],76);return h};
+fs.writeFileSync(path.join(outDir,'road_pilot.shp'),Buffer.concat([hdr(100+rec.length),rec]));
+const shx=Buffer.alloc(8); shx.writeInt32BE(50,0); shx.writeInt32BE(contentLen/2,4);
+fs.writeFileSync(path.join(outDir,'road_pilot.shx'),Buffer.concat([hdr(108),shx]));
+// DBF
+const fields=[['NAME','C',20,'R.6.E.1'],['SECTION','C',4,'A3'],['ROW_M','N',8,'20.0'],['LANES','N',4,'2'],['LANE_W_M','N',8,'3.30'],['XFALL_PCT','N',8,'2.0'],['SIDEW_M','N',8,'6.40'],['KERB_MM','N',6,'150'],['LENGTH_M','N',10,L.toFixed(3)],['Z_START','N',10,zs[0].toFixed(3)],['Z_END','N',10,zs.at(-1).toFixed(3)],['PROF_SRC','C',60,'ROD-DWG-40000 profile R.6.E.1 (FG line)'],['SECT_SRC','C',80,'ROD-DWG-30000-001 A3; report criteria table: 2.0% crossfall']];
+const rl=1+fields.reduce((a,f)=>a+f[2],0); const hl=32+32*fields.length+1;
+const dbf=Buffer.alloc(hl+rl+1,0); dbf[0]=3; dbf[1]=126;dbf[2]=11;dbf[3]=2; dbf.writeUInt32LE(1,4); dbf.writeUInt16LE(hl,8); dbf.writeUInt16LE(rl,10); dbf[29]=0x57;
+fields.forEach((f,i)=>{const b=32+32*i; dbf.write(f[0],b,'latin1'); dbf.write(f[1],b+11,'latin1'); dbf[b+16]=f[2]; dbf[b+17]=(f[1]==='N'&&f[3].includes('.'))?f[3].split('.')[1].length:0});
+dbf[hl-1]=0x0d; let q=hl; dbf[q++]=0x20; fields.forEach(f=>{const v=f[1]==='N'?f[3].padStart(f[2]):f[3].padEnd(f[2]); dbf.write(v.slice(0,f[2]),q,'latin1'); q+=f[2]}); dbf[q]=0x1a;
+fs.writeFileSync(path.join(outDir,'road_pilot.dbf'),dbf);
+fs.copyFileSync(prjSrc,path.join(outDir,'road_pilot.prj'));
+fs.writeFileSync(path.join(outDir,'road_pilot_profile.csv'),'station_m,x,y,pgl_m\n'+pts.map(p=>[p[3].toFixed(3),p[0].toFixed(3),p[1].toFixed(3),p[2].toFixed(3)].join(',')).join('\n')+'\n');
+console.log('points',n,'length',L.toFixed(3),'z',zs[0].toFixed(3),'->',zs.at(-1).toFixed(3),'min',zr[0].toFixed(3));
