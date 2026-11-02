@@ -102,6 +102,26 @@ test("a sheet that rotates its xref off the CRS is read at the xref's own coordi
   assert.equal(v.ok, true);
 });
 
+test("a symbol keeps its named attributes, not tags without a letter or typed-in X / Y coordinates", () => {
+  // The Al Qairawan mini pillar block: ATTRIBs "-2" = "2", and x / y texts far from where it stands.
+  const attrib = (tag: string, value: string) => [0, "ATTRIB", 8, "MH", 10, X, 20, Y, 1, value, 2, tag];
+  const p = parseDxf(
+    dxf(
+      ...blocks("PILLAR"),
+      0, "SECTION", 2, "ENTITIES",
+      0, "INSERT", 8, "MH", 2, "PILLAR", 66, 1, 10, X, 20, Y,
+      ...attrib("-2", "2"), ...attrib("x", "655304.471"), ...attrib("y", "2363764.988"), ...attrib("PILLAR_NO", "MP-12"),
+      0, "SEQEND", 8, "MH",
+      0, "ENDSEC", 0, "EOF",
+    ),
+    "t.dxf",
+    PROFILE,
+  );
+  const a = p.features.find((f) => f.outputLayer === "sewer_manholes")!.attributes;
+  assert.equal(a.pillar_no, "MP-12");
+  assert.ok(!("-2" in a) && !("x" in a) && !("y" in a), JSON.stringify(a));
+});
+
 test("an xref renamed by EXPORTTOAUTOCAD (Xref Storm Network_1, layers still Xref Storm Network$0$) is still read at its own coordinates", async () => {
   // Al Qairawan STO exported with EXPORTTOAUTOCAD: the block became "…_1", its layers kept the prefix.
   const sheet = dxf(

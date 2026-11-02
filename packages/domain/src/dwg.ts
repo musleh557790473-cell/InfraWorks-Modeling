@@ -222,6 +222,15 @@ function samplePoint(b: Block): Pt | undefined {
   return undefined;
 }
 
+/**
+ * Block attributes worth shipping. Tags without a letter ("-2" holding "2") say nothing, and X / Y /
+ * Z texts are coordinates typed into the symbol, which go stale when it is copied (the Al Qairawan
+ * mini pillars read y = 2,363,764 while they stand at 2,748,000): the geometry is the position.
+ */
+function keepAttribTag(tag: string): boolean {
+  return /[A-Za-z]/.test(tag) && !/^[XYZ]$/i.test(tag.trim());
+}
+
 function isBoundXref(b: Block): boolean {
   if (b.name === "" || b.name.startsWith("*") || /\$\d+\$/.test(b.name)) return false;
   // EXPORTTOAUTOCAD may rename the block on a name clash ("Xref Storm Network_1") while its layers
@@ -673,7 +682,7 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
           for (const a of children) {
             const ai = readInfo(a);
             const tag = ai.str.get(2);
-            if (tag) attribs[tag] = plainText(ai.str.get(1) ?? "");
+            if (tag && keepAttribTag(tag)) attribs[tag] = plainText(ai.str.get(1) ?? "");
           }
           const cls = classOf(layer);
           const rule = findLayerMapping(profile, layer);

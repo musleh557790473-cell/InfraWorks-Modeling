@@ -105,6 +105,12 @@ test("field names: ≤ 10 ASCII characters, unique, Arabic names get FIELD_n", (
   assert.deepEqual([...m.values()], ["DESIGN_SPE", "DESIGN_S_2", "FIELD_1", "ASSET_ID"]);
 });
 
+test("field names: shortening keeps the unit, so diameter_mm never reads as metres", () => {
+  const m = dbfFieldNames(["diameter_mm", "size_mm", "off_start_m", "conn_type"]);
+  // off_start_m keeps OFF_START_: imported sewer models map ELEV_FROM to it.
+  assert.deepEqual([...m.values()], ["DIAMETE_MM", "SIZE_MM", "OFF_START_", "CONN_TYPE"]);
+});
+
 test(".prj: ESRI WKT for UTM north and south, none for an unknown EPSG", () => {
   assert.match(esriWkt(32638)!, /WGS_1984_UTM_Zone_38N.*"Central_Meridian",45\.0.*"False_Northing",0\.0|WGS_1984_UTM_Zone_38N.*"False_Northing",0\.0.*"Central_Meridian",45\.0/);
   assert.match(esriWkt(32736)!, /Zone_36S.*"False_Northing",10000000\.0/);
