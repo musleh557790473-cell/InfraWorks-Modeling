@@ -41,14 +41,65 @@ On the laptop with ODA, a clean DXF of the DWGs may avoid this.
 - The model terrain is flat at Z = 0, so it drew a 693 m fill wall.
 - "Convert to component road" lost the profile (elevation range 0–0, grade 0%).
 
+## Session 2 (2 Nov 2026, evening): terrain, Parsons models, component roads
+
+**Parsons road models** (`Vol. 04_Models\Roads\DWG\ROD-MOD-90000-00x.dwg`, converted with ODA):
+one AECC_TIN_SURFACE each on `C-TOPO`, no corridors, alignments or profiles. IFC file names say
+which: 001 = NGL, 002 = Mass Grading, 003 = **Road Surface** (finished road TIN). So roads are
+rebuilt from the drawings; 003 can later check that PGL = finished road level.
+
+**Model.** Working copy `C:\IW\Al Qairawan Test (road pilot).sqlite` (+ `.files`), on THIS
+laptop only. Base: `TAWAZUN PROGRAM\Infraworks\Al Qairawan Test` (UTM84-38N, survey, DEM,
+hydrology); OSM `roads` source deleted. Lessons (also in CLAUDE.md):
+- InfraWorks 2026 imports Civil 3D DWG only with Civil 3D 2026 installed (this laptop has 2027):
+  the surface came from the LandXML beside the DWG
+  (`Qairawan Rough Grading-Rev-01\LDIP-RCRC-LAI-LDIP-01-CIV-DWG-00002-01.xml`, exported from
+  REV 08-10-2026; no CRS, set UTM84-38N). Data source `Mass Grading REV 08-10-2026`, on top.
+- The model's two older `Al_Qairawan_Mass Grading` surfaces (IMX, 7–8 Sep) are an earlier
+  revision: 438–442k triangles, min 676.85 vs 437,340 / 677.20 in REV 08-10. Switched off.
+- Under OneDrive the model broke: a LandXML resource path reached 263 chars, InfraWorks' Git in
+  `.files` failed ("Filename too long") and the model would not open. Copied with robocopy to
+  `C:\IW`, opened fine.
+
+**R.6.E.1 on the real terrain** (`road_pilot.shp` re-imported):
+- Planning road keeps all 29 PGL vertices (Z 692.783 → 694.207), on the terrain, no fill wall.
+- PGL minus Mass Grading REV 08-10 along the road: 0.38–0.78 m, mean 0.55 m (`tinz.cjs`).
+  Do not assume a pavement thickness from this; check against ROD-MOD-90000-003 instead.
+- No name: `NAME = R.6.E.1` is in the DBF but not mapped, and conversion clears
+  `DATA_SOURCE_ID`/`EXTERNAL_ID`, so the name must be written before / with the component road.
+- "Convert to Component Road" keeps the levels (elevation range 692.783–694.207) but fits the
+  profile to TWO grades with one PVI at 0+064.082 (1.027%, 1.195%). The drawing dips to 692.637
+  at 0+007.9; InfraWorks gives ~692.864 there (+0.23 m). Not acceptable.
+
+**Decision (user): approach A** — write component roads straight into a model copy (like
+`model:names`), with the name and Parsons' PVIs / vertical curves, for all roads at once.
+
+How InfraWorks stores the converted R.6.E.1 (`cdscan.cjs`; GUIDs link the rows):
+- `CONSTRAINED_DEFINITIONS`: ASSET_TYPE `ROADS`, FK_DEFAULT_ASSET_GUID = ROADS.GUID,
+  REFERENCE_POINT (WKB-like point, start XYZ), DESIGN_STANDARDS `AASHTO_Metric_2011`.
+- `ROADS`: FK_PARENT_TABLE `CONSTRAINED_DEFINITIONS` + FK_PARENT_GUID; GEOMETRY start→end 3D;
+  MANUAL_STYLE (JSON cross-section), FUNCTION `Local`, MAX_SPEED 40, GRADING_DATA blob (116 B).
+- `H_CONSTRAINTS`: horizontal elements, chained by FK_PREV/NEXT; a straight is CONSTRAINT_TYPE 3
+  with PASSTHROUGH_PT_1/2 = start/end XY. Arc format still unknown (need a sample).
+- `V_CONSTRAINTS`: profile tangents, CONSTRAINT_TYPE 15, chained; PASSTHROUGH_PT_1/2 =
+  (station, elevation); GEOMETRY the 3D segment; CURVE_TYPE/PARAM_* null so far (vertical
+  curve format unknown, need a sample).
+- `CONSTRAINED_DEF_GEOM_LOCATIONS`: TYPE 1/2 at station 0, TYPE 3 at the end, each pointing to
+  an H constraint. `CONSTRAINED_DEF_RPSYSTEMS`: GEOMETRY, LENGTH_2D, JSON_RANGE_HASH (hashes of
+  CLGeometry, GradingData, Primitives, SectionGeom...: a cache key).
+- Derived: `PRIMITIVES` (5 rows), `TERRAIN_OPERATIONS` (5). `.files\exploded\<TABLE>\0` mirrors
+  each table as JSON in InfraWorks' Git; it is rebuilt from the sqlite on open (that is how
+  `model:names` edits survive). To verify: whether InfraWorks rebuilds PRIMITIVES /
+  TERRAIN_OPERATIONS for rows we write without them.
+
 ## Next steps
 
-1. Terrain first: mass grading surface `Al_Qairawan_Mass Grading` (219,031 pts, 677–699 m),
-   `Al-Qairawan Grading\Qairawan Rough Grading-Rev-01\REV 08-10-2026\LDIP-RCRC-LAI-LDIP-01-CIV-DWG-00002-01.dwg`
-   (+ LandXML beside it). Import via Data Sources > Autodesk Civil 3D DWG, as terrain.
-2. Check Parsons' road models `Vol. 04_Models\Roads\DWG\LDIP-RCRC-SAP-01-AQ-ROD-MOD-90000-00[1-3].dwg`
-   (also IFC/NWC) in Civil 3D Prospector: if they hold corridors, import them directly instead
-   of rebuilding roads from the drawings.
-3. Otherwise retry R.6.E.1 on the real terrain and find how InfraWorks keeps the profile on a
-   component road (e.g. edit the vertical profile, or import as a design road).
-4. Then productise: profile reader + PolyLineZ in `packages/domain`, tests, all 250 roads.
+1. Inputs: `DATA_DIR\inputs\road-pilot` is online-only in OneDrive and would not download on
+   this laptop. On the other laptop make it local first; read the profile DXF for PVI and
+   vertical-curve labels (if Parsons prints them), otherwise derive PVIs from the FG polyline.
+2. Samples from InfraWorks (any model on a short path such as `C:\IW`): (a) a component road
+   whose profile has a vertical curve and 3+ PVIs; (b) a component road with a horizontal arc.
+   Read them with `cdscan.cjs` to learn V curve and H arc storage.
+3. Write R.6.E.1 as a component road into a fresh copy (name, Parsons PVIs), user tests.
+4. Productise in `packages/domain` with tests (profile reader with the PGL-label check,
+   PolyLineZ writer, section type from ROW width, component-road writer); then all 250 roads.

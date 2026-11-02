@@ -67,6 +67,13 @@ pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"
 ## InfraWorks facts (verified in InfraWorks 2026 models)
 
 - A model is `<name>.sqlite` + `<name>.files`; `<name>.lock` while open. Work on copies only.
+- Keep models on a short path outside OneDrive (e.g. `C:\IW`). `.files` is a Git repo that
+  InfraWorks commits on every edit; a LandXML import writes
+  `Resources\LandXML\<guid>\<surface>.aecc.<32 hex>.pnt`, and past 260 characters its Git fails
+  ("Filename too long") and the model no longer opens. Copy such a model with robocopy to a
+  short path and open it there. Copy-Item also fails on OneDrive online-only files.
+- InfraWorks 2026 imports Civil 3D DWG only with Civil 3D 2026 installed; with another release
+  use the LandXML export of the surface (set UTM84-38N by hand: the file carries no CRS).
 - InfraWorks keeps a Shapefile field only when mapped in Configure, and maps nothing by itself
   (not even a field called NAME). Rows keep the Shapefile record number in `EXTERNAL_ID`
   (mapping `EXTERNAL_ID = FeatId`), so `model:names` fills columns on a copy and records each
