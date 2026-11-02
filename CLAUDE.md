@@ -38,7 +38,8 @@ holds how we work and what has been learned the hard way.
 
 ```bash
 pnpm install && pnpm build && pnpm test          # expect 0 failures
-pnpm package:build "<drawing.dxf | model.stsw.sqlite>" [--profile parsons-ldip-roads]
+pnpm package:build "<drawing.dxf | model.stsw.sqlite | model.wtg.sqlite>" [--profile parsons-ldip-roads]
+#   WaterGEMS: --utility <Water|Irrigation> --cover <m> --cover-source "<where the cover comes from>"
 pnpm gate:model "<model>.sqlite" --package <package.zip>      # Gate G3, on a closed model
 pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"]
 ```
@@ -82,14 +83,30 @@ pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"
 - Data tables `<Type>_<Group>_Data` keyed by `DomainElementID` + `AlternativeID`; all lengths,
   levels and diameters in feet internally (x 0.3048).
 - Models often draw pipes against the flow: name ends start/end as drawn, record the flow.
+- Real live elements only: `IsDeleted = 0`, `ElementType = 3` (9 is a prototype), and active in
+  the model's active scenario, child alternatives overriding their parent (irrigation's
+  Peak-Distribution switches the transmission pipe off). Zero-length pipes are left out.
+- WaterGEMS (pressure) has no inverts: depth only from a stated cover (`--cover`, with
+  `--cover-source`): centre = cover + half the outside diameter below the terrain. PE pipes
+  carry the bore: an inside diameter within 1.5 mm of a standard size x 9/11 is that SDR 11
+  nominal size (130.8 mm is 160), per the PWT notes "HDPE PE100-SDR11".
 
 ## Where things stand (2 Nov 2026)
 
-- main `a5e1dce`: PRs #1-#13 merged. Al Narjis and Al Qairawan roads, Al Qairawan plots
-  (6,555, numbered), road reserve, blocks, asphalt; Al Qairawan sewer from SewerGEMS (902 pipes,
-  901 manholes) with names, sizes, materials, network name and depths, all checked by G3 and
-  seen in InfraWorks ("Al qirawan test 3 (depth)").
-- Next: potable water and irrigation from WaterGEMS
-  (`...\Al-Qairawan Grading\01 Submission Folder\Vol. 01_Drawings\Potable Water\Potable Water Hydraulic Model.zip`,
-  `...\Irrigation\Hydraulic Model_IRR.zip`). Explore the schema first: WaterGEMS is a pressure
-  model with no inverts. Then storm drainage and dry utilities from drawings (no models found).
+main after PR #16 (`8a84407`). Al Qairawan, all in UTM 38N, checked by Gate G3 and seen in
+InfraWorks unless noted:
+
+- Roads (332 centrelines, 280 named), plots (6,555, 5,944 numbered), road reserve, blocks,
+  asphalt. Al Narjis: one sheet window only (11 centrelines).
+- Sewer from SewerGEMS: 902 pipes, 901 manholes; names, sizes, materials, depths.
+- Potable water from WaterGEMS: 895 pipes (74.07 km), reservoir R-2; cover 1.0 m
+  (PWT-DWG-10000-001 note 5).
+- Irrigation from WaterGEMS: 1,074 pipes (51.75 km), valves, pump, reservoir; cover 0.80 m
+  ASSUMED by AICC, pending confirmation from Parsons.
+- From the drawings (PR #14, no hydraulic model): storm drainage (648 pipes sized from layer
+  names, 663 manholes/outfalls), water valves (818) and hydrants (351), irrigation valves (199),
+  and dry networks (LV/MV cables, substations, pillars, street lighting, telecom, security, CCTV).
+  Their check in InfraWorks is still to be reported.
+
+Open points: confirm the irrigation cover with Parsons; the full Al Narjis road layout
+(`Xref Road Layout Al Narjis.dwg`) from Parsons; Al Narjis and other districts through the same path.
