@@ -128,7 +128,11 @@ export function dbfFieldNames(sources: string[]): Map<string, string> {
   const out = new Map<string, string>();
   let n = 0;
   for (const s of sources) {
-    let base = asciiName(s).slice(0, 10) || `FIELD_${++n}`;
+    const full = asciiName(s);
+    // Shortening keeps "_MM": diameter_mm is DIAMETE_MM, not DIAMETER_M (which reads as metres).
+    // Only MM: other names (OFF_START_ from off_start_m) are already mapped in imported models.
+    const unit = full.length > 10 ? /^(.+?)(_MM)$/.exec(full) : null;
+    let base = (unit ? unit[1]!.slice(0, 10 - unit[2]!.length) + unit[2] : full.slice(0, 10)) || `FIELD_${++n}`;
     let name = base;
     for (let i = 2; used.has(name); i++) {
       const suffix = `_${i}`;

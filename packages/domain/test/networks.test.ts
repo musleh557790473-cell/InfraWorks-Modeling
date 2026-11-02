@@ -102,6 +102,127 @@ test("a sheet that rotates its xref off the CRS is read at the xref's own coordi
   assert.equal(v.ok, true);
 });
 
+test("a cable rule's fixed size goes on its lines, with its source, and not on symbols drawn on the same layer", () => {
+  const profile: MappingProfile = {
+    id: "t",
+    name: "t",
+    layers: [
+      {
+        dwgLayer: "SL",
+        infraFeatureClass: "pipeline",
+        explode: false,
+        size: { fixed: { mm: 110, source: "report: 110 mm duct" } },
+        symbols: { infraFeatureClass: "annotation", outputLayer: "street_lights" },
+      },
+    ],
+    reportJoins: [],
+    assetKeys: AssetKeyConfig.parse({}),
+  };
+  const p = parseDxf(
+    dxf(
+      ...blocks("POLE"),
+      0, "SECTION", 2, "ENTITIES",
+      ...pline("SL", [[0, 0], [50, 0]]),
+      // A closed ring on the cable layer (Al Qairawan's AAMSLCrdr outline) is sized too.
+      0, "LWPOLYLINE", 8, "SL", 90, 4, 70, 1, 10, X, 20, Y + 10, 10, X + 20, 20, Y + 10, 10, X + 20, 20, Y + 30, 10, X, 20, Y + 30,
+      ...insert("SL", "POLE", 10, 1),
+      0, "ENDSEC", 0, "EOF",
+    ),
+    "t.dxf",
+    profile,
+  );
+  const ring = p.features.find((f) => f.geometry.type === "Polygon");
+  if (ring) assert.equal(ring.attributes.size_m, 0.11);
+  const line = p.features.find((f) => f.geometry.type === "LineString")!.attributes;
+  assert.deepEqual([line.size_m, line.size_y_m, line.size_from, line.size_src], [0.11, 0.11, "fixed", "report: 110 mm duct"]);
+  const pole = p.features.find((f) => f.outputLayer === "street_lights")!.attributes;
+  assert.equal(pole.size_m, undefined);
+  assert.deepEqual(p.pipeStats!.map((s) => [s.pipes, s.fixed, s.unsized]), [[2, 2, 0]]);
+});
+
+test("depth from the documents: pipes by their cover, cables to their centre, manholes to the deepest invert", () => {
+  const profile: MappingProfile = {
+    id: "t",
+    name: "t",
+    layers: [
+      { dwgLayer: "PIPE-SEWER-*", infraFeatureClass: "pipeline", attributes: { network: "Storm" }, size: { fromLayer: String.raw`(\d+)\s*mm` }, depth: { coverM: 1.2, source: "report §8" } },
+      { dwgLayer: "PIPE-NOSIZE", infraFeatureClass: "pipeline", attributes: { network: "Storm" }, depth: { coverM: 1.2, source: "report §8" } },
+      { dwgLayer: "LV", infraFeatureClass: "pipeline", outputLayer: "lv_cables", attributes: { network: "LV" }, depth: { centreM: 0.65, source: "report §3.3.3" } },
+      { dwgLayer: "MH", infraFeatureClass: "pipe_connector", attributes: { network: "Storm" }, depth: { fromPipes: 2, source: "report §8" } },
+    ],
+    reportJoins: [],
+    assetKeys: AssetKeyConfig.parse({}),
+  };
+  const p = parseDxf(
+    dxf(
+      ...blocks("MH-1"),
+      0, "SECTION", 2, "ENTITIES",
+      // A 400 and an 800 mm pipe end at the first manhole; the second has no pipe near it.
+      ...pline("PIPE-SEWER-400mm", [[0, 0], [50, 0]]),
+      ...pline("PIPE-SEWER-800mm", [[50.5, 0], [100, 0]]),
+      ...pline("PIPE-NOSIZE", [[0, 30], [50, 30]]),
+      ...pline("LV", [[0, 60], [50, 60]]),
+      // A run drawn through its manhole as one polyline: the manhole sits on an inner vertex.
+      ...pline("PIPE-SEWER-500mm", [[0, 100], [40, 100], [80, 120]]),
+      ...insert("MH", "MH-1", 50, 0),
+      ...insert("MH", "MH-1", 200, 200),
+      ...insert("MH", "MH-1", 40, 100.5),
+      0, "ENDSEC", 0, "EOF",
+    ),
+    "t.dxf",
+    profile,
+  );
+  const at = (layer: string) => p.features.filter((f) => f.provenance.sourceLayer === layer).map((f) => f.attributes);
+  // Centre = cover + half the size below the terrain.
+  assert.deepEqual(at("PIPE-SEWER-400mm").map((a) => [a.off_start_m, a.off_end_m, a.cover_m, a.depth_src]), [[-1.4, -1.4, 1.2, "report §8"]]);
+  assert.equal(at("PIPE-SEWER-800mm")[0]!.off_start_m, -1.6);
+  assert.equal(at("PIPE-NOSIZE")[0]!.off_start_m, undefined);
+  assert.deepEqual(at("LV").map((a) => [a.off_start_m, a.centre_m]), [[-0.65, 0.65]]);
+  // The manhole reaches the 800 mm pipe's invert: 1.2 + 0.8.
+  assert.deepEqual(at("MH").map((a) => [a.depth_m, a.off_base_m]), [[2, -2], [undefined, undefined], [1.7, -1.7]]);
+  assert.deepEqual(
+    p.depthStats!.map((s) => [s.layer, s.placed, s.features]),
+    [["PIPE-SEWER-*", 3, 3], ["PIPE-NOSIZE", 0, 1], ["lv_cables", 1, 1], ["MH", 2, 3]],
+  );
+});
+
+test("a symbol keeps its named attributes, not tags without a letter or typed-in X / Y coordinates", () => {
+  // The Al Qairawan mini pillar block: ATTRIBs "-2" = "2", and x / y texts far from where it stands.
+  const attrib = (tag: string, value: string) => [0, "ATTRIB", 8, "MH", 10, X, 20, Y, 1, value, 2, tag];
+  const p = parseDxf(
+    dxf(
+      ...blocks("PILLAR"),
+      0, "SECTION", 2, "ENTITIES",
+      0, "INSERT", 8, "MH", 2, "PILLAR", 66, 1, 10, X, 20, Y,
+      ...attrib("-2", "2"), ...attrib("x", "655304.471"), ...attrib("y", "2363764.988"), ...attrib("PILLAR_NO", "MP-12"),
+      0, "SEQEND", 8, "MH",
+      0, "ENDSEC", 0, "EOF",
+    ),
+    "t.dxf",
+    PROFILE,
+  );
+  const a = p.features.find((f) => f.outputLayer === "sewer_manholes")!.attributes;
+  assert.equal(a.pillar_no, "MP-12");
+  assert.ok(!("-2" in a) && !("x" in a) && !("y" in a), JSON.stringify(a));
+});
+
+test("an xref renamed by EXPORTTOAUTOCAD (Xref Storm Network_1, layers still Xref Storm Network$0$) is still read at its own coordinates", async () => {
+  // Al Qairawan STO exported with EXPORTTOAUTOCAD: the block became "…_1", its layers kept the prefix.
+  const sheet = dxf(
+    0, "SECTION", 2, "BLOCKS",
+    0, "BLOCK", 2, "Xref Storm Network_1", 10, 0, 20, 0,
+    ...pline("Xref Storm Network$0$PIPE-SEWER-400mm", [[0, 0], [100, 0]]),
+    0, "ENDBLK", 0, "ENDSEC",
+    0, "SECTION", 2, "ENTITIES",
+    0, "INSERT", 8, "0", 2, "Xref Storm Network_1", 10, 663988.92, 20, 2757118.87, 50, 295.27,
+    0, "ENDSEC", 0, "EOF",
+  );
+  const v = await build([{ name: "sto.dxf", text: sheet }], PROFILE);
+  assert.ok(v.issues.some((i) => i.code === "XREF_READ_AT_OWN_COORDINATES"), JSON.stringify(v.issues));
+  assert.ok(!v.issues.some((i) => i.code === "COORDS_OUTSIDE_CRS"));
+  assert.equal(v.ok, true);
+});
+
 test("several drawings combine into one package; a couple of stray pipes at 0,0 are left out, not blocking", async () => {
   const pipes = (n: number) => Array.from({ length: n }, (_, i) => pline("PIPE-SEWER-200mm", [[0, i * 5], [40, i * 5]])).flat();
   const sewer = dxf(0, "SECTION", 2, "ENTITIES", ...pipes(20), 0, "LWPOLYLINE", 8, "PIPE-SEWER-800mm", 90, 2, 70, 0, 10, 0, 20, 0, 10, 50, 20, 0, 0, "ENDSEC", 0, "EOF");

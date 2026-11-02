@@ -51,7 +51,7 @@ export function validateCollection(
     reportRowCount: number;
     hasCad: boolean;
     cad?: Partial<
-      Pick<ParsedDwg, "format" | "notes" | "skippedEntities" | "insunits" | "keyStats" | "paperSpaceSkipped" | "truncated" | "extractedXrefs" | "pipeStats" | "relocatedXrefs">
+      Pick<ParsedDwg, "format" | "notes" | "skippedEntities" | "insunits" | "keyStats" | "paperSpaceSkipped" | "truncated" | "extractedXrefs" | "pipeStats" | "relocatedXrefs" | "depthStats">
     >;
     conversionError?: string;
     /** A handful of mapped features far off the CRS (stray copies, usually at 0,0), left out of the package. */
@@ -78,8 +78,20 @@ export function validateCollection(
         `${p.layer}: ${p.pipes} pipe(s); size from the layer name for ${p.fromLayer}, from the nearest size label for ` +
         `${p.fromLabel - (p.carried ?? 0)}` +
         (p.carried ? `, carried along the network from a labelled neighbour for ${p.carried}` : "") +
+        (p.fixed ? `, the rule's fixed size for ${p.fixed}` : "") +
         (p.unsized ? `, none found for ${p.unsized} (they ship without a size; InfraWorks then uses its default).` : "."),
       context: { layer: p.layer, pipes: String(p.pipes), fromLayer: String(p.fromLayer), fromLabel: String(p.fromLabel), unsized: String(p.unsized) },
+    });
+  }
+  for (const d of opts.cad?.depthStats ?? []) {
+    const short = d.features - d.placed;
+    issues.push({
+      code: short ? "DEPTH_PARTLY_GIVEN" : "DEPTH_FROM_DOCUMENTS",
+      severity: short ? "warning" : "info",
+      message:
+        `${d.layer}: depth for ${d.placed} of ${d.features} (${d.rule}), from ${d.source}.` +
+        (short ? ` ${short} keep none and sit on the terrain.` : ""),
+      context: { layer: d.layer, features: String(d.features), placed: String(d.placed), source: d.source },
     });
   }
   const moved = opts.cad?.relocatedXrefs ?? [];

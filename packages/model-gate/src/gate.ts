@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 
 import { openImx, readRegions } from "@infraworks/imx-gate";
@@ -53,6 +54,50 @@ export function nameMapping(config: string | null | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+/** The field names in a .dbf header, upper case. */
+export function dbfFieldList(dbf: Buffer): string[] {
+  const headerLen = dbf.readUInt16LE(8);
+  const out: string[] = [];
+  for (let p = 32; p < headerLen - 1 && dbf[p] !== 0x0d; p += 32) out.push(dbf.subarray(p, p + 11).toString("latin1").replace(/\0.*$/, "").toUpperCase());
+  return out;
+}
+
+/** The .shp path in a data source's connection string ("File=\"C:\\…\\x.shp\";" or a plain path). */
+export function shapefileOf(connection: string | null | undefined): string | null {
+  const m = /([A-Za-z]:[\\/][^";=]*?\.shp|\\\\[^";=]*?\.shp|\/[^";=]*?\.shp)/i.exec(connection ?? "");
+  return m ? m[1]!.replace(/\\\\/g, "\\") : null;
+}
+
+/**
+ * Configure mappings whose field the connected Shapefile lacks (an older export of the same layer:
+ * model:names filled the column, but a Refresh re-reads the file and empties it). Null when the
+ * file is not on this machine or every mapped field is there.
+ */
+export function staleMappings(src: DataSourceRow): { file: string; fields: string[]; columns: string[] } | null {
+  const shp = shapefileOf(src.CONNECTION_STRING);
+  if (!shp) return null;
+  const dbfPath = shp.replace(/\.shp$/i, ".dbf");
+  if (!existsSync(dbfPath)) return null;
+  let mappings: Record<string, { expression?: string }> = {};
+  try {
+    mappings = (JSON.parse(src.CONFIG ?? "{}") as { propertyMappings?: typeof mappings }).propertyMappings ?? {};
+  } catch {
+    return null;
+  }
+  const have = new Set(dbfFieldList(readFileSync(dbfPath)));
+  const fields: string[] = [];
+  const columns: string[] = [];
+  for (const [col, m] of Object.entries(mappings)) {
+    const e = m.expression?.trim() ?? "";
+    // Only plain field names: expressions, constants and FeatId (InfraWorks' own record number)
+    // are not read from the .dbf.
+    if (!/^[A-Za-z_][A-Za-z0-9_]{0,10}$/.test(e) || /^FeatId$/i.test(e) || have.has(e.toUpperCase())) continue;
+    fields.push(e);
+    columns.push(col);
+  }
+  return fields.length ? { file: shp, fields, columns } : null;
 }
 
 function findSource(sources: DataSourceRow[], file: string): DataSourceRow | undefined {
@@ -367,6 +412,22 @@ function compareLayers(h: ModelHandle, pkg: PackageInfo, out: ModelFinding[], ro
       if (partial.length) {
         out.push(f("G3-012", "Attributes arrived", "warning", `${layer.file}: only part arrived: ${partial.join(", ")}.`, { layer: layer.name }));
       }
+    }
+
+    /* G3-013 a Refresh keeps them: every mapped field exists in the Shapefile the source reads */
+    const stale = staleMappings(src);
+    if (stale) {
+      out.push(
+        f(
+          "G3-013",
+          "Refresh keeps the attributes",
+          "warning",
+          `${layer.file}: the data source reads ${stale.file}, which has no ${stale.fields.join(", ")} ` +
+            `(mapped to ${stale.columns.join(", ")}). A Refresh would empty them: point the source at this ` +
+            `package's shp folder (or re-import from it), then run model:names again.`,
+          { layer: layer.name, file: stale.file },
+        ),
+      );
     }
   }
 

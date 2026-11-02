@@ -3,8 +3,8 @@ import { nanoid } from "nanoid";
 import { subtractAreas } from "./areas.js";
 import { findLayerMapping, matchesLayer, stripBoundXrefPrefix } from "./layers.js";
 import { polygonize } from "./polygonize.js";
-import { sizePipes } from "./networks.js";
-import type { PipeStats } from "./networks.js";
+import { depthNetworks, sizePipes } from "./networks.js";
+import type { DepthStats, PipeStats } from "./networks.js";
 import { resolveAssetKeys } from "./types.js";
 import type { AssetKeyConfig, DomainFeature, Geometry, InfraFeatureClass, MappingProfile } from "./types.js";
 
@@ -39,6 +39,8 @@ export interface ParsedDwg {
   relocatedXrefs?: string[];
   /** Pipe sizes found per rule, for the build report. */
   pipeStats?: PipeStats[];
+  /** Depths given from the project's documents per rule, for the build report. */
+  depthStats?: DepthStats[];
 }
 
 /** Default XDATA application that carries asset ids (kept for existing drawings). */
@@ -222,12 +224,24 @@ function samplePoint(b: Block): Pt | undefined {
   return undefined;
 }
 
+/**
+ * Block attributes worth shipping. Tags without a letter ("-2" holding "2") say nothing, and X / Y /
+ * Z texts are coordinates typed into the symbol, which go stale when it is copied (the Al Qairawan
+ * mini pillars read y = 2,363,764 while they stand at 2,748,000): the geometry is the position.
+ */
+function keepAttribTag(tag: string): boolean {
+  return /[A-Za-z]/.test(tag) && !/^[XYZ]$/i.test(tag.trim());
+}
+
 function isBoundXref(b: Block): boolean {
   if (b.name === "" || b.name.startsWith("*") || /\$\d+\$/.test(b.name)) return false;
-  const prefix = b.name.toUpperCase() + "$";
+  // EXPORTTOAUTOCAD may rename the block on a name clash ("Xref Storm Network_1") while its layers
+  // keep the xref's own prefix ("Xref Storm Network$0$…"): accept either name.
+  const name = b.name.toUpperCase();
+  const prefixes = [name + "$", name.replace(/_\d+$/, "") + "$"];
   return b.entities.some((e) => {
     const layer = readInfo(e).layer.toUpperCase();
-    return layer.startsWith(prefix) && /^\d+\$/.test(layer.slice(prefix.length));
+    return prefixes.some((prefix) => layer.startsWith(prefix) && /^\d+\$/.test(layer.slice(prefix.length)));
   });
 }
 
@@ -670,7 +684,7 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
           for (const a of children) {
             const ai = readInfo(a);
             const tag = ai.str.get(2);
-            if (tag) attribs[tag] = plainText(ai.str.get(1) ?? "");
+            if (tag && keepAttribTag(tag)) attribs[tag] = plainText(ai.str.get(1) ?? "");
           }
           const cls = classOf(layer);
           const rule = findLayerMapping(profile, layer);
@@ -892,7 +906,8 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
   }
 
   const sized = sizePipes(features, labels, profile);
-  features.splice(0, features.length, ...sized.features);
+  const deep = depthNetworks(sized.features, profile);
+  features.splice(0, features.length, ...deep.features);
   const cut = subtractAreas(features, profile);
 
   const notes = [
@@ -906,7 +921,7 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
         `Map their layers (by their own names, without the "<xref>$0$" prefix) to read them.`,
     );
   }
-  notes.push(...sized.notes, ...cut.notes);
+  notes.push(...sized.notes, ...deep.notes, ...cut.notes);
   notes.push(...polygonNotes);
   if (multiLabelled) {
     notes.push(`${multiLabelled} area(s) hold more than one label: a dividing line is probably missing there (the last label was used)`);
@@ -928,6 +943,7 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
     ...(truncated ? { truncated } : {}),
     ...(extractedXrefs.length ? { extractedXrefs } : {}),
     ...(sized.stats.length ? { pipeStats: sized.stats } : {}),
+    ...(deep.stats.length ? { depthStats: deep.stats } : {}),
     ...(relocatedXrefs.length ? { relocatedXrefs } : {}),
   };
 }
