@@ -144,6 +144,20 @@ export const LayerMapping = z.object({
   /** Ship each feature as one point at the centre of its shape (CCTV cameras drawn as circles). */
   asPoint: z.boolean().optional(),
   /**
+   * Depth from the project's documents when the drawing carries none, always with its `source`:
+   * `coverM` soil over a pipe crown, `centreM` a cable's depth to its centre, `fromPipes` a node
+   * reaching the deepest pipe invert within that many metres. Fills off_start_m / off_end_m (lines)
+   * or depth_m / off_base_m (nodes).
+   */
+  depth: z
+    .object({
+      coverM: z.number().positive().optional(),
+      centreM: z.number().positive().optional(),
+      fromPipes: z.number().positive().optional(),
+      source: z.string().min(1),
+    })
+    .optional(),
+  /**
    * Where symbol inserts on this layer go when the rule itself is for lines: Al Qairawan draws the
    * street-light cable and the light poles on one layer (AAMSLCrdr), so the poles become points of
    * their own class and package layer.
@@ -359,6 +373,12 @@ export const PARSONS_LDIP_ROADS_PROFILE: MappingProfile = {
 /** The InfraWorks columns a drawing's pipes and connectors fill, as the hydraulic readers set them. */
 const PIPE_COLUMNS = { SIZE_X: "size_m", SIZE_Y: "size_y_m", NETWORKNAME: "network" };
 const CONNECTOR_COLUMNS = { NETWORKNAME: "network" };
+/** Depth from the documents: a pipe's or cable's two end offsets, a node's depth and offset. */
+const LINE_DEPTH_COLUMNS = { ELEV_FROM: "off_start_m", ELEV_TO: "off_end_m" };
+const NODE_DEPTH_COLUMNS = { HEIGHT: "depth_m", ELEVATION_OFFSET: "off_base_m" };
+/** Al Qairawan 30% concept design report, where the drawings give no depth. */
+const AQ_REPORT = "LDIP-RCRC-SAP-01-AQ-DES-RPT-00001";
+const STORM_COVER = { coverM: 1.2, source: `${AQ_REPORT} §8 minimum cover: soil above top of pipe not less than 1.2 m` };
 /** Constant attributes: the utility, and the network name it leads ("Storm - Al Qairawan"). */
 const net = (utility: string, conn_type?: string) => ({ utility, network: `${utility} - Al Qairawan`, ...(conn_type ? { conn_type } : {}) });
 
@@ -379,9 +399,19 @@ export const PARSONS_LDIP_WET_PROFILE: MappingProfile = {
   name: "Parsons / LDIP wet utilities (drawings)",
   team: "Parsons",
   layers: [
-    { dwgLayer: "*SW_Pipe Dia *", infraFeatureClass: "pipeline", outputLayer: "storm_pipes", attributes: net("Storm"), fields: PIPE_COLUMNS, size: { fromLayer: String.raw`Dia\s*(\d+)` } },
-    { dwgLayer: "C-SSWR-MNHL-P", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: net("Storm", "Manhole"), fields: CONNECTOR_COLUMNS },
-    { dwgLayer: "Xref Storm Network$0$C-STRM-STRC", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: net("Storm", "Outfall"), fields: CONNECTOR_COLUMNS },
+    // GRP: the legend of STO-DWG-10000-001..019 ("Ø 400mm GRP PIPE" … 800 mm). No storm model was
+    // issued, so depth is the report's minimum cover; its Table 8.9 lists deeper covers for some pipes.
+    {
+      dwgLayer: "*SW_Pipe Dia *",
+      infraFeatureClass: "pipeline",
+      outputLayer: "storm_pipes",
+      attributes: { ...net("Storm"), material: "GRP", material_src: "STO-DWG-10000-001 legend" },
+      fields: { ...PIPE_COLUMNS, PIPE_MATERIAL: "material", ...LINE_DEPTH_COLUMNS },
+      size: { fromLayer: String.raw`Dia\s*(\d+)` },
+      depth: STORM_COVER,
+    },
+    { dwgLayer: "C-SSWR-MNHL-P", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: net("Storm", "Manhole"), fields: { ...CONNECTOR_COLUMNS, ...NODE_DEPTH_COLUMNS }, depth: { fromPipes: 2, source: STORM_COVER.source } },
+    { dwgLayer: "Xref Storm Network$0$C-STRM-STRC", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: net("Storm", "Outfall"), fields: { ...CONNECTOR_COLUMNS, ...NODE_DEPTH_COLUMNS }, depth: { fromPipes: 2, source: STORM_COVER.source } },
     { dwgLayer: "Xref Potable Water$0$RD2", infraFeatureClass: "pipe_connector", outputLayer: "water_hydrants", attributes: net("Water", "Fire Hydrant"), fields: CONNECTOR_COLUMNS },
     { dwgLayer: "C-WATR-APPT", infraFeatureClass: "pipe_connector", outputLayer: "water_valves", attributes: net("Water", "Valve"), fields: CONNECTOR_COLUMNS },
     { dwgLayer: "Motorized Gate Valve", infraFeatureClass: "pipe_connector", outputLayer: "water_valves", attributes: net("Water", "Motorized Gate Valve"), fields: CONNECTOR_COLUMNS },
@@ -410,6 +440,12 @@ const SL = "Xref_Qairawan_SL Network$0$";
 const TEL = "Xref Primary Telecom Network$0$";
 const SEC = "Xref Primary Security Network$0$";
 const cable = { infraFeatureClass: "pipeline" as const, explode: false, fields: { NETWORKNAME: "network" } };
+// Burial depth to the cable centre: AQ report §3.3.3 service conditions, "0.65 meter for LV and 0.80
+// meter for MV". Nothing in the report or sheets gives HV, street lighting, telecom or security depths.
+const buried = (centreM: number, kind: string) => ({
+  fields: { ...cable.fields, ...LINE_DEPTH_COLUMNS },
+  depth: { centreM, source: `${AQ_REPORT} §3.3.3 burial depth to the cable centre, ${kind}` },
+});
 const node = { infraFeatureClass: "pipe_connector" as const, fields: CONNECTOR_COLUMNS };
 export const PARSONS_LDIP_DRY_PROFILE: MappingProfile = {
   id: "parsons-ldip-dry-utilities",
@@ -417,11 +453,11 @@ export const PARSONS_LDIP_DRY_PROFILE: MappingProfile = {
   team: "Parsons",
   layers: [
     // Low voltage: cables (cross-section in the layer name, kept in src_layer), house connections, pillars.
-    { dwgLayer: `${LV}E-POWER-CABL*`, ...cable, outputLayer: "lv_cables", attributes: net("Electrical LV") },
-    { dwgLayer: `${LV}Electrical LV -HC`, ...cable, outputLayer: "lv_cables", attributes: net("Electrical LV", "House Connection") },
+    { dwgLayer: `${LV}E-POWER-CABL*`, ...cable, ...buried(0.65, "LV"), outputLayer: "lv_cables", attributes: net("Electrical LV") },
+    { dwgLayer: `${LV}Electrical LV -HC`, ...cable, ...buried(0.65, "LV"), outputLayer: "lv_cables", attributes: net("Electrical LV", "House Connection") },
     { dwgLayer: `${LV}E-POWR-MINI-PILLAR-*`, ...node, outputLayer: "lv_pillars", attributes: net("Electrical LV", "Mini Pillar") },
     // Medium voltage: cables, distribution and primary substations.
-    { dwgLayer: `${MV}MV Cables*`, ...cable, outputLayer: "mv_cables", attributes: net("Electrical MV") },
+    { dwgLayer: `${MV}MV Cables*`, ...cable, ...buried(0.8, "MV"), outputLayer: "mv_cables", attributes: net("Electrical MV") },
     { dwgLayer: `${MV}HV Cables`, ...cable, outputLayer: "mv_cables", attributes: net("Electrical HV") },
     { dwgLayer: `${MV}DSS`, ...node, outputLayer: "substations", attributes: net("Electrical MV", "Distribution Substation") },
     { dwgLayer: `${MV}PSS`, ...node, outputLayer: "substations", asPoint: true, attributes: net("Electrical MV", "Primary Substation") },

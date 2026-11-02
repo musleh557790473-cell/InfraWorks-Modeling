@@ -258,6 +258,15 @@ profile* and reused for that team's next drawing:
     | Telecom | 510 ducts | 455 handholes |
     | Security | 352 ducts | 269 handholes, 685 CCTV cameras |
 
+  - **Depths and materials from the documents** (the drawings carry none; each feature keeps its
+    source in `depth_src` / `material_src`, and the build report lists them as `DEPTH_FROM_DOCUMENTS`):
+    - storm pipes: GRP (legend of STO-DWG-10000-001); centre at the minimum cover 1.2 m + half the
+      diameter below the terrain (design report DES-RPT-00001 §8). The report's Table 8.9 lists
+      deeper covers for some pipes under other labels (CO-xxx), so these depths are a minimum.
+    - storm manholes and outfalls: down to the invert of the deepest pipe through them (cover +
+      diameter, 1.6 to 2.5 m).
+    - LV cables 0.65 m and MV cables 0.80 m to the cable centre (report §3.3.3).
+    - No depth found for HV, street lighting, telecom or security: they sit on the terrain.
   - **What ships as what:** pipes and cables ship as Pipelines and nodes as Pipeline Connectors,
     each layer listing the InfraWorks columns its fields fill (`fields`, e.g. `SIZE_X` ← `size_m`,
     `NETWORKNAME` ← `network`). Street lights and cameras ship as Points of Interest.
@@ -271,7 +280,10 @@ profile* and reused for that team's next drawing:
     - `explode: false`: a layer's symbols stay one point each.
   - **The reader also learned** from these sheets:
     - A sheet that rotates its xrefs off the CRS (the storm sheet, 295° about a point off site) is
-      read at the xrefs' own coordinates (`XREF_READ_AT_OWN_COORDINATES`).
+      read at the xrefs' own coordinates (`XREF_READ_AT_OWN_COORDINATES`), also when EXPORTTOAUTOCAD
+      renamed the xref block ("Xref Storm Network_1") and its layers kept the old prefix.
+    - Block attributes without a letter in their tag ("-2") and typed-in X / Y coordinates are
+      not shipped; `diameter_mm` ships as `DIAMETE_MM`, never as a field that reads as metres.
     - A block of only inserts, or of geometry pasted in world coordinates at 0,0, is a group and is
       opened.
     - An xref holding only mapped symbols is opened, once.

@@ -50,6 +50,13 @@ pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"
   A plain export stops at Civil 3D objects and leaves a DXF without EOF (`DXF_TRUNCATED`);
   EXPORTTOAUTOCAD may set `$INSUNITS` to feet while coordinates stay UTM metres.
 - Sheets bind the design in as xrefs (`<xref>$0$<layer>`): read through the bound xref.
+  EXPORTTOAUTOCAD may rename an xref block (`Xref Storm Network_1`) while its layers keep the old
+  prefix; the reader accepts both.
+- ODA File Converter is installed on one laptop only. On the other, ask the user for DXF exports
+  (to `C:\Temp\dxf`); never invent a converter or download one unasked.
+- Depths missing from drawings come from the design report `LDIP-RCRC-SAP-01-AQ-DES-RPT-00001`
+  (Vol. 02_Reports): storm min cover 1.2 m (§8), LV 0.65 m / MV 0.80 m to cable centre (§3.3.3).
+  Utility corridor sections (UTL-DWG-30000) give widths only, no depths.
 - Projects are in UTM 38N (EPSG:32638, InfraWorks `UTM84-38N`): Riyadh (Al Narjis, Al Qairawan).
   NEOM is UTM 36N. A model created in the wrong zone fails G3-002 / G3-006.
 - Prefer the designer's own data to drawing labels: SewerGEMS / WaterGEMS models

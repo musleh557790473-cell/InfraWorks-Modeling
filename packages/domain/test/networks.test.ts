@@ -102,6 +102,52 @@ test("a sheet that rotates its xref off the CRS is read at the xref's own coordi
   assert.equal(v.ok, true);
 });
 
+test("depth from the documents: pipes by their cover, cables to their centre, manholes to the deepest invert", () => {
+  const profile: MappingProfile = {
+    id: "t",
+    name: "t",
+    layers: [
+      { dwgLayer: "PIPE-SEWER-*", infraFeatureClass: "pipeline", attributes: { network: "Storm" }, size: { fromLayer: String.raw`(\d+)\s*mm` }, depth: { coverM: 1.2, source: "report §8" } },
+      { dwgLayer: "PIPE-NOSIZE", infraFeatureClass: "pipeline", attributes: { network: "Storm" }, depth: { coverM: 1.2, source: "report §8" } },
+      { dwgLayer: "LV", infraFeatureClass: "pipeline", outputLayer: "lv_cables", attributes: { network: "LV" }, depth: { centreM: 0.65, source: "report §3.3.3" } },
+      { dwgLayer: "MH", infraFeatureClass: "pipe_connector", attributes: { network: "Storm" }, depth: { fromPipes: 2, source: "report §8" } },
+    ],
+    reportJoins: [],
+    assetKeys: AssetKeyConfig.parse({}),
+  };
+  const p = parseDxf(
+    dxf(
+      ...blocks("MH-1"),
+      0, "SECTION", 2, "ENTITIES",
+      // A 400 and an 800 mm pipe end at the first manhole; the second has no pipe near it.
+      ...pline("PIPE-SEWER-400mm", [[0, 0], [50, 0]]),
+      ...pline("PIPE-SEWER-800mm", [[50.5, 0], [100, 0]]),
+      ...pline("PIPE-NOSIZE", [[0, 30], [50, 30]]),
+      ...pline("LV", [[0, 60], [50, 60]]),
+      // A run drawn through its manhole as one polyline: the manhole sits on an inner vertex.
+      ...pline("PIPE-SEWER-500mm", [[0, 100], [40, 100], [80, 120]]),
+      ...insert("MH", "MH-1", 50, 0),
+      ...insert("MH", "MH-1", 200, 200),
+      ...insert("MH", "MH-1", 40, 100.5),
+      0, "ENDSEC", 0, "EOF",
+    ),
+    "t.dxf",
+    profile,
+  );
+  const at = (layer: string) => p.features.filter((f) => f.provenance.sourceLayer === layer).map((f) => f.attributes);
+  // Centre = cover + half the size below the terrain.
+  assert.deepEqual(at("PIPE-SEWER-400mm").map((a) => [a.off_start_m, a.off_end_m, a.cover_m, a.depth_src]), [[-1.4, -1.4, 1.2, "report §8"]]);
+  assert.equal(at("PIPE-SEWER-800mm")[0]!.off_start_m, -1.6);
+  assert.equal(at("PIPE-NOSIZE")[0]!.off_start_m, undefined);
+  assert.deepEqual(at("LV").map((a) => [a.off_start_m, a.centre_m]), [[-0.65, 0.65]]);
+  // The manhole reaches the 800 mm pipe's invert: 1.2 + 0.8.
+  assert.deepEqual(at("MH").map((a) => [a.depth_m, a.off_base_m]), [[2, -2], [undefined, undefined], [1.7, -1.7]]);
+  assert.deepEqual(
+    p.depthStats!.map((s) => [s.layer, s.placed, s.features]),
+    [["PIPE-SEWER-*", 3, 3], ["PIPE-NOSIZE", 0, 1], ["lv_cables", 1, 1], ["MH", 2, 3]],
+  );
+});
+
 test("a symbol keeps its named attributes, not tags without a letter or typed-in X / Y coordinates", () => {
   // The Al Qairawan mini pillar block: ATTRIBs "-2" = "2", and x / y texts far from where it stands.
   const attrib = (tag: string, value: string) => [0, "ATTRIB", 8, "MH", 10, X, 20, Y, 1, value, 2, tag];

@@ -141,6 +141,7 @@ function combine(loads: CadLoad[]): CadLoad {
     if (p.extractedXrefs) parsed.extractedXrefs = [...(parsed.extractedXrefs ?? []), ...p.extractedXrefs];
     if (p.relocatedXrefs) parsed.relocatedXrefs = [...(parsed.relocatedXrefs ?? []), ...p.relocatedXrefs.map((x) => `${x} (${name})`)];
     if (p.pipeStats) parsed.pipeStats = [...(parsed.pipeStats ?? []), ...p.pipeStats.map((s) => ({ ...s, layer: `${s.layer} (${name})` }))];
+    if (p.depthStats) parsed.depthStats = [...(parsed.depthStats ?? []), ...p.depthStats.map((s) => ({ ...s, layer: `${s.layer} (${name})` }))];
     if (l.conversionError) failed.push(`${name}: ${l.conversionError}`);
   }
   return { upload: loads[0]?.upload, parsed, ...(failed.length ? { conversionError: failed.join("; ") } : {}) };

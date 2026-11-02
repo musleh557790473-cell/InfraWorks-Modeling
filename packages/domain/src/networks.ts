@@ -185,3 +185,103 @@ export function sizePipes(
   );
   return { features: out, notes, stats };
 }
+
+/** What the depth step did, per rule, for the build report. */
+export interface DepthStats {
+  layer: string;
+  features: number;
+  /** Given a depth. The rest (a pipe without a size, a node with no pipe end near it) keep none. */
+  placed: number;
+  rule: string;
+  source: string;
+}
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/**
+ * Depths from the project's documents, for networks whose drawings carry none. InfraWorks places a
+ * pipe on the terrain plus an offset at each end (ELEV_FROM / ELEV_TO), and a connector on the
+ * terrain lowered by ELEVATION_OFFSET and rising by HEIGHT:
+ * - `coverM`: soil over the pipe crown, so its centre lies cover + half its size below the ground;
+ * - `centreM`: a cable's burial depth to its centre;
+ * - `fromPipes`: a manhole reaches the invert of the deepest pipe with a vertex within that many
+ *   metres (cover + size), so it spans invert to rim. Al Qairawan draws some runs through their
+ *   manholes as one polyline, so inner vertices count as well as ends.
+ */
+export function depthNetworks(
+  features: DomainFeature[],
+  profile: Pick<MappingProfile, "layers">,
+): { features: DomainFeature[]; notes: string[]; stats: DepthStats[] } {
+  const rules = profile.layers.filter((l) => l.depth);
+  if (!rules.length) return { features, notes: [], stats: [] };
+  const byRule = new Map<LayerMapping, DepthStats>();
+  const statOf = (rule: LayerMapping, how: string) =>
+    byRule.get(rule) ?? byRule.set(rule, { layer: rule.outputLayer ?? rule.dwgLayer, features: 0, placed: 0, rule: how, source: rule.depth!.source }).get(rule)!;
+
+  // Lines first: pipes and cables.
+  const out = features.map((f) => {
+    const rule = findLayerMapping(profile, f.provenance.sourceLayer ?? "");
+    const d = rule?.depth;
+    if (!rule || !d || !linesOf(f).length || (d.coverM === undefined && d.centreM === undefined)) return f;
+    const st = statOf(rule, d.coverM !== undefined ? `cover ${d.coverM} m over the crown` : `${d.centreM} m to the centre`);
+    st.features += 1;
+    const size = Number(f.attributes.size_m);
+    let offset: number | null = null;
+    if (d.coverM !== undefined) offset = Number.isFinite(size) && size > 0 ? -(d.coverM + size / 2) : null;
+    else offset = -d.centreM!;
+    if (offset === null) return f;
+    st.placed += 1;
+    const o = round3(offset);
+    return {
+      ...f,
+      attributes: {
+        ...f.attributes,
+        ...(d.coverM !== undefined ? { cover_m: d.coverM } : { centre_m: d.centreM! }),
+        depth_src: d.source,
+        off_start_m: o,
+        off_end_m: o,
+      },
+    };
+  });
+
+  // Then nodes: the invert of the deepest pipe ending near each.
+  const ends: { at: Pt; invert: number; network: unknown }[] = [];
+  for (const f of out) {
+    const cover = Number(f.attributes.cover_m);
+    const size = Number(f.attributes.size_m);
+    if (!Number.isFinite(cover) || !Number.isFinite(size)) continue;
+    // Every vertex, not only the ends: a run may be drawn through its manholes as one polyline.
+    for (const line of linesOf(f)) for (const p of line) ends.push({ at: p, invert: cover + size, network: f.attributes.network });
+  }
+  const grid = new Map<string, typeof ends>();
+  for (const e of ends) {
+    const k = `${Math.floor(e.at[0]! / CELL)},${Math.floor(e.at[1]! / CELL)}`;
+    (grid.get(k) ?? grid.set(k, []).get(k)!).push(e);
+  }
+  for (let i = 0; i < out.length; i++) {
+    const f = out[i]!;
+    const rule = findLayerMapping(profile, f.provenance.sourceLayer ?? "");
+    const reach = rule?.depth?.fromPipes;
+    if (!rule || reach === undefined || f.geometry.type !== "Point") continue;
+    const st = statOf(rule, `invert of the deepest pipe within ${reach} m`);
+    st.features += 1;
+    const p = f.geometry.coordinates as Pt;
+    const cx = Math.floor(p[0]! / CELL);
+    const cy = Math.floor(p[1]! / CELL);
+    const r = Math.ceil(reach / CELL);
+    let depth = 0;
+    for (let x = cx - r; x <= cx + r; x++) for (let y = cy - r; y <= cy + r; y++) {
+      for (const e of grid.get(`${x},${y}`) ?? []) {
+        if (e.network !== f.attributes.network) continue;
+        if (Math.hypot(e.at[0]! - p[0]!, e.at[1]! - p[1]!) <= reach) depth = Math.max(depth, e.invert);
+      }
+    }
+    if (!depth) continue;
+    st.placed += 1;
+    out[i] = { ...f, attributes: { ...f.attributes, depth_m: round3(depth), depth_src: rule.depth!.source, off_base_m: round3(-depth) } };
+  }
+
+  const stats = [...byRule.values()];
+  const notes = stats.map((s) => `${s.layer}: depth for ${s.placed} of ${s.features} (${s.rule}; ${s.source})`);
+  return { features: out, notes, stats };
+}

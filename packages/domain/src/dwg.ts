@@ -3,8 +3,8 @@ import { nanoid } from "nanoid";
 import { subtractAreas } from "./areas.js";
 import { findLayerMapping, matchesLayer, stripBoundXrefPrefix } from "./layers.js";
 import { polygonize } from "./polygonize.js";
-import { sizePipes } from "./networks.js";
-import type { PipeStats } from "./networks.js";
+import { depthNetworks, sizePipes } from "./networks.js";
+import type { DepthStats, PipeStats } from "./networks.js";
 import { resolveAssetKeys } from "./types.js";
 import type { AssetKeyConfig, DomainFeature, Geometry, InfraFeatureClass, MappingProfile } from "./types.js";
 
@@ -39,6 +39,8 @@ export interface ParsedDwg {
   relocatedXrefs?: string[];
   /** Pipe sizes found per rule, for the build report. */
   pipeStats?: PipeStats[];
+  /** Depths given from the project's documents per rule, for the build report. */
+  depthStats?: DepthStats[];
 }
 
 /** Default XDATA application that carries asset ids (kept for existing drawings). */
@@ -904,7 +906,8 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
   }
 
   const sized = sizePipes(features, labels, profile);
-  features.splice(0, features.length, ...sized.features);
+  const deep = depthNetworks(sized.features, profile);
+  features.splice(0, features.length, ...deep.features);
   const cut = subtractAreas(features, profile);
 
   const notes = [
@@ -918,7 +921,7 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
         `Map their layers (by their own names, without the "<xref>$0$" prefix) to read them.`,
     );
   }
-  notes.push(...sized.notes, ...cut.notes);
+  notes.push(...sized.notes, ...deep.notes, ...cut.notes);
   notes.push(...polygonNotes);
   if (multiLabelled) {
     notes.push(`${multiLabelled} area(s) hold more than one label: a dividing line is probably missing there (the last label was used)`);
@@ -940,6 +943,7 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
     ...(truncated ? { truncated } : {}),
     ...(extractedXrefs.length ? { extractedXrefs } : {}),
     ...(sized.stats.length ? { pipeStats: sized.stats } : {}),
+    ...(deep.stats.length ? { depthStats: deep.stats } : {}),
     ...(relocatedXrefs.length ? { relocatedXrefs } : {}),
   };
 }
