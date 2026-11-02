@@ -3,6 +3,8 @@ import { nanoid } from "nanoid";
 import { subtractAreas } from "./areas.js";
 import { findLayerMapping, matchesLayer, stripBoundXrefPrefix } from "./layers.js";
 import { polygonize } from "./polygonize.js";
+import { sizePipes } from "./networks.js";
+import type { PipeStats } from "./networks.js";
 import { resolveAssetKeys } from "./types.js";
 import type { AssetKeyConfig, DomainFeature, Geometry, InfraFeatureClass, MappingProfile } from "./types.js";
 
@@ -33,6 +35,10 @@ export interface ParsedDwg {
   truncated?: boolean;
   /** Bound xrefs read at their own coordinates because model space had nothing to convert (a plotted sheet). */
   extractedXrefs?: string[];
+  /** Bound xrefs read at their own coordinates because the sheet had moved them off the CRS. */
+  relocatedXrefs?: string[];
+  /** Pipe sizes found per rule, for the build report. */
+  pipeStats?: PipeStats[];
 }
 
 /** Default XDATA application that carries asset ids (kept for existing drawings). */
@@ -41,6 +47,10 @@ export const DXF_XDATA_APP = "INFRAWORKS";
 /** Bookkeeping records, not drawing content: never reported as skipped. */
 const IGNORED = new Set(["ATTDEF", "SEQEND", "VIEWPORT", "ENDBLK", "VERTEX", "ATTRIB"]);
 const GEOMETRY_CLASSES: InfraFeatureClass[] = ["road_centerline", "coverage", "water", "parcel", "pipeline"];
+/** Classes that are lines in InfraWorks: a symbol point on their layer is not one of them. */
+const LINE_CLASSES: InfraFeatureClass[] = ["road_centerline", "pipeline"];
+/** Classes that are points: a stray line or area on their layer is not one of them. */
+const POINT_CLASSES: InfraFeatureClass[] = ["pipe_connector", "annotation"];
 const MAX_BLOCK_DEPTH = 8;
 /** Chord angle when turning arcs into line segments. */
 const ARC_STEP_RAD = (5 * Math.PI) / 180;
@@ -174,6 +184,44 @@ function readSections(pairs: Pair[]) {
  * A bound xref: binding keeps the xref as a block of the same name and renames its layers to
  * "<name>$0$<layer>". Nested pieces ("<name>$0$<block>") and anonymous blocks are not counted.
  */
+/** One point at the centre of a shape's extent (a camera drawn as a circle becomes its centre). */
+function centreOf(g: Geometry): Geometry {
+  if (g.type === "Point") return g;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const walk = (c: unknown): void => {
+    if (!Array.isArray(c)) return;
+    if (typeof c[0] === "number") {
+      xs.push(c[0] as number);
+      ys.push(c[1] as number);
+    } else c.forEach(walk);
+  };
+  walk(g.coordinates);
+  if (!xs.length) return g;
+  return { type: "Point", coordinates: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2] };
+}
+
+/**
+ * A block that is a group rather than a symbol: it holds only other inserts, or its drawn content
+ * lies more than 1 km from its base point (geometry pasted in world coordinates at 0,0).
+ */
+function isGroup(b: Block): boolean {
+  const own = b.entities.filter((e) => e.type !== "ATTRIB" && e.type !== "SEQEND" && e.type !== "ATTDEF");
+  if (own.length && own.every((e) => e.type === "INSERT")) return true;
+  const p = samplePoint(b);
+  return Boolean(p && Math.hypot(p[0] - b.base[0], p[1] - b.base[1]) > 1000);
+}
+
+/** A coordinate drawn in the block, to tell where its content lies. */
+function samplePoint(b: Block): Pt | undefined {
+  for (const e of b.entities) {
+    if (e.type === "INSERT" || e.type === "ATTRIB" || e.type === "SEQEND") continue;
+    const p = readInfo(e).points[0];
+    if (p && Number.isFinite(p[0]) && Number.isFinite(p[1]) && (p[0] !== 0 || p[1] !== 0)) return p;
+  }
+  return undefined;
+}
+
 function isBoundXref(b: Block): boolean {
   if (b.name === "" || b.name.startsWith("*") || /\$\d+\$/.test(b.name)) return false;
   const prefix = b.name.toUpperCase() + "$";
@@ -281,7 +329,8 @@ function readInfo(e: RawEntity): Info {
         info.str.set(2, p.value);
         break;
       default:
-        if ((p.code >= 11 && p.code <= 59) || p.code === 40 || p.code === 41 || p.code === 210 || p.code === 220 || p.code === 230) {
+        // 72/73: TEXT justification, which says whether 11/21 is the text's real position.
+        if ((p.code >= 11 && p.code <= 59) || p.code === 40 || p.code === 41 || p.code === 72 || p.code === 73 || p.code === 210 || p.code === 220 || p.code === 230) {
           const n = Number(p.value);
           if (Number.isFinite(n)) info.num.set(p.code, n);
         }
@@ -464,6 +513,10 @@ interface Candidate {
   attribs: Record<string, string>;
   /** An area built from separate lines: only a label inside it names it, never a neighbour's. */
   labelInside?: boolean;
+  /** Block name of a symbol insert read as a point (manhole, valve, hydrant), without its xref prefix. */
+  block?: string;
+  /** A symbol insert kept as one point. */
+  symbol?: boolean;
 }
 
 interface Label {
@@ -474,7 +527,15 @@ interface Label {
 
 /* ---------------------------------------------------------------- main */
 
-export function parseDxf(text: string, filename: string, profile: MappingProfile): ParsedDwg {
+/** Plausible coordinate range of the project CRS, as validate.ts' crsEnvelope gives it. */
+export interface ParseEnvelope {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+export function parseDxf(text: string, filename: string, profile: MappingProfile, opts: { envelope?: ParseEnvelope | null } = {}): ParsedDwg {
   const { entities, blocks, insunits, truncated } = readSections(toPairs(text));
   const keys = resolveAssetKeys(profile);
   const pattern = keys.pattern ? safeRegExp(keys.pattern) : null;
@@ -498,7 +559,8 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
     if (!b || depth > MAX_BLOCK_DEPTH) return false;
     return group(b.entities).some(({ e }) => {
       const info = readInfo(e);
-      if (e.type === "INSERT") return blockHasGeometry(info.str.get(2) ?? "", depth + 1);
+      // A symbol inserted on a mapped layer (a valve on C-WATR-APPT) is content too: open the xref holding it.
+      if (e.type === "INSERT") return classOf(info.layer) !== "unmapped" || blockHasGeometry(info.str.get(2) ?? "", depth + 1);
       return GEOMETRY_CLASSES.includes(classOf(info.layer));
     });
   });
@@ -512,6 +574,7 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
     depth: number;
   }
 
+  const relocatedXrefs: string[] = [];
   const walk = (items: Item[], ctx: Ctx) => {
     for (const { e, children } of items) {
       const info = readInfo(e);
@@ -521,9 +584,9 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
       }
       const layer = info.layer === "0" && ctx.byBlockLayer ? ctx.byBlockLayer : info.layer;
       const xdata = [...info.xdata, ...ctx.xdata];
-      const add = (geometry: Geometry, attribs = ctx.attribs) => {
+      const add = (geometry: Geometry, attribs = ctx.attribs, block?: string) => {
         count(layer, e.type);
-        candidates.push({ layer, geometry, handle: info.handle, xdata, attribs });
+        candidates.push({ layer, geometry, handle: info.handle, xdata, attribs, ...(block ? { block } : {}) });
       };
       // OCS points go to WCS first (mirrored objects), then through the enclosing blocks.
       const ocs = usesOcs(e.type, info.flags) ? ocsOf(info) : identity;
@@ -589,7 +652,13 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
         case "TEXT":
         case "MTEXT": {
           const content = plainText(info.str.get(1) ?? "");
-          if (content && info.points[0]) labels.push({ layer, text: content, at: toWcs(info.points[0]) });
+          // A justified TEXT sits at its alignment point (11/21); 10/20 is then only the left
+          // end of its baseline.
+          const aligned = e.type === "TEXT" && ((info.num.get(72) ?? 0) !== 0 || (info.num.get(73) ?? 0) !== 0);
+          const ax = info.num.get(11);
+          const ay = info.num.get(21);
+          const at: Pt | undefined = aligned && ax !== undefined && ay !== undefined ? [ax, ay] : info.points[0];
+          if (content && at) labels.push({ layer, text: content, at: toWcs(at) });
           count(layer, e.type);
           break;
         }
@@ -604,14 +673,39 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
             if (tag) attribs[tag] = plainText(ai.str.get(1) ?? "");
           }
           const cls = classOf(layer);
+          const rule = findLayerMapping(profile, layer);
+          const explode = rule?.explode;
+          // A block that only groups other inserts, or whose content sits far from its base point
+          // (a paste at 0,0 of world-coordinate geometry), is a group, never a symbol: open it.
+          const grouped = Boolean(block && (rule || blockHasGeometry(name, 0)) && isGroup(block));
+          // A connector or point-of-interest layer keeps each symbol as one point.
+          const pointLayer = cls === "pipe_connector" || cls === "annotation";
           const expand =
-            block && ctx.depth < MAX_BLOCK_DEPTH && (GEOMETRY_CLASSES.includes(cls) || blockHasGeometry(name, 0));
+            block &&
+            ctx.depth < MAX_BLOCK_DEPTH &&
+            (grouped ||
+              (explode !== false && !(pointLayer && explode !== true) && (GEOMETRY_CLASSES.includes(cls) || explode === true || blockHasGeometry(name, 0))));
           if (!expand) {
             // A symbol (tree, pole, manhole, title block…): one point carrying its attributes.
-            add({ type: "Point", coordinates: toWcs(ins) }, attribs);
+            // Anonymous (*U…) names are dynamic-block copies and say nothing about the symbol.
+            const own = stripBoundXrefPrefix(name);
+            add({ type: "Point", coordinates: toWcs(ins) }, attribs, own && !own.startsWith("*") ? own : undefined);
+            candidates[candidates.length - 1]!.symbol = true;
             break;
           }
-          const xf = insertTransform(toWcs, block.base, ins, info.num.get(41) ?? 1, info.num.get(42) ?? 1, info.num.get(50) ?? 0);
+          let xf = insertTransform(toWcs, block.base, ins, info.num.get(41) ?? 1, info.num.get(42) ?? 1, info.num.get(50) ?? 0);
+          // A sheet may move and rotate its xrefs to suit the paper (Al Qairawan's storm sheet turns
+          // every xref 295° about a point off site). An xref's own coordinates are the designer's;
+          // when they fit the project CRS and the moved copy does not, read it where it was drawn.
+          const env = opts.envelope;
+          if (env && ctx.depth === 0 && isBoundXref(block)) {
+            const p = samplePoint(block);
+            const inside = (q: Pt) => q[0] >= env.minX && q[0] <= env.maxX && q[1] >= env.minY && q[1] <= env.maxY;
+            if (p && inside(p) && !inside(xf(p))) {
+              xf = identity;
+              if (!relocatedXrefs.includes(block.name)) relocatedXrefs.push(block.name);
+            }
+          }
           walk(group(block.entities), { xf, byBlockLayer: layer, attribs, xdata, depth: ctx.depth + 1 });
           break;
         }
@@ -629,7 +723,12 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
   // Title blocks and logos are bound xrefs too, but carry no mapped layers, so they are left out.
   const extractedXrefs: string[] = [];
   const unmappedXrefs: string[] = [];
-  const hasMappedGeometry = candidates.some((c) => c.geometry.type !== "Point" && GEOMETRY_CLASSES.includes(classOf(c.layer)));
+  // Mapped content already read: lines or areas, or points on a point class (valves, hydrants), so
+  // the xrefs that held them are not read a second time below.
+  const hasMappedGeometry = candidates.some((c) => {
+    const k = classOf(c.layer);
+    return c.geometry.type === "Point" ? POINT_CLASSES.includes(k) : GEOMETRY_CLASSES.includes(k);
+  });
   if (!hasMappedGeometry) {
     for (const b of [...blocks.values()].filter(isBoundXref)) {
       if (!blockHasGeometry(b.name, 0)) {
@@ -681,6 +780,8 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
     const mapping = findLayerMapping(profile, c.layer);
     const attributes: DomainFeature["attributes"] = { layer: c.layer };
     for (const [tag, v] of Object.entries(c.attribs)) if (v) attributes[tag.toLowerCase()] = v;
+    if (c.block) attributes.block = c.block;
+    for (const [k, v] of Object.entries(mapping?.attributes ?? {})) attributes[k] = v;
 
     const joinAttr = mapping?.joinKeyAttribute;
     if (joinAttr) {
@@ -724,13 +825,24 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
       else keyStats.missing += 1;
     }
 
+    // Where the feature goes: a symbol on a line layer may have its own class (light poles on the
+    // cable layer); otherwise a point on a line class, or a line on a point class, is not shipped.
+    const sym = c.symbol && mapping?.symbols ? mapping.symbols : undefined;
+    if (sym) for (const [k, v] of Object.entries(sym.attributes ?? {})) attributes[k] = v;
+    const geometry = mapping?.asPoint ? centreOf(c.geometry) : c.geometry;
+    let cls: InfraFeatureClass = sym?.infraFeatureClass ?? mapping?.infraFeatureClass ?? "unmapped";
+    const isPoint = geometry.type === "Point" || geometry.type === "MultiPoint";
+    if ((LINE_CLASSES.includes(cls) && isPoint) || (POINT_CLASSES.includes(cls) && !isPoint)) cls = "unmapped";
+    const outputLayer = sym ? sym.outputLayer : mapping?.outputLayer;
+    const fields = sym ? sym.fields : mapping?.fields;
     return {
       id: nanoid(8),
-      infraFeatureClass: mapping?.infraFeatureClass ?? "unmapped",
-      geometry: c.geometry,
+      infraFeatureClass: cls,
+      geometry,
       attributes,
       provenance: { sourceFile: filename, sourceLayer: c.layer, sourceEntityId: c.handle },
-      ...(mapping?.outputLayer ? { outputLayer: mapping.outputLayer } : {}),
+      ...(outputLayer && cls !== "unmapped" ? { outputLayer } : {}),
+      ...(fields && cls !== "unmapped" ? { infraWorksFields: fields } : {}),
       ...(mapping?.labels || mapping?.joinKeyAttribute ? { nameAttribute: mapping.labels?.attribute ?? mapping.joinKeyAttribute } : {}),
     };
   });
@@ -779,6 +891,8 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
     );
   }
 
+  const sized = sizePipes(features, labels, profile);
+  features.splice(0, features.length, ...sized.features);
   const cut = subtractAreas(features, profile);
 
   const notes = [
@@ -792,7 +906,7 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
         `Map their layers (by their own names, without the "<xref>$0$" prefix) to read them.`,
     );
   }
-  notes.push(...cut.notes);
+  notes.push(...sized.notes, ...cut.notes);
   notes.push(...polygonNotes);
   if (multiLabelled) {
     notes.push(`${multiLabelled} area(s) hold more than one label: a dividing line is probably missing there (the last label was used)`);
@@ -813,6 +927,8 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
     keyStats,
     ...(truncated ? { truncated } : {}),
     ...(extractedXrefs.length ? { extractedXrefs } : {}),
+    ...(sized.stats.length ? { pipeStats: sized.stats } : {}),
+    ...(relocatedXrefs.length ? { relocatedXrefs } : {}),
   };
 }
 

@@ -184,6 +184,107 @@ profile* and reused for that team's next drawing:
   - Duplicate element labels in the model raise `ASSET_ID_DUPLICATE`.
   - Al Qairawan (Rev.03): 902 pipes (63.16 km, 200-800 mm, HDPE corrugated / ductile iron), 900
     manholes and 1 outfall; 258 deleted pipes left out; 15 labels used twice.
+  - **WaterGEMS** (`<model>.wtg.sqlite`): a pressure model, with no inverts.
+
+    ```bash
+    pnpm package:build "<model>.wtg.sqlite" --utility Water --cover 1.0 --cover-source "<document>"
+    ```
+
+    The layers are `water_` or `irrigation_` (from `--utility`), with `NETWORKNAME` set to
+    `<utility> - <model>`.
+    - **Which elements:** only real, live elements, active in the model's active scenario.
+      `ElementType = 3`, since 9 is a prototype (a template). Child alternatives override their
+      parent: irrigation's *Peak-Distribution* switches its transmission pipe off.
+    - **`<prefix>_pipes`** (Pipelines):
+      - `diameter_mm` is the nominal size. WaterGEMS keeps the bore (`inside_mm`); a PE bore within
+        1.5 mm of a standard size × 9/11 is that SDR 11 size, so 130.8 mm is Ø160. The PWT notes
+        say "ALL PIPE DIAMETER ARE NOMINAL" and "HDPE PE100-SDR11". Other materials keep the bore.
+      - Also `material`, `node_start` / `node_end`, and `elev_start_m` / `elev_end_m`, the nodes'
+        Elevation.
+      - **Depth only from a given `--cover`:** the pipe centre is cover + half the outside diameter
+        below the terrain (`off_start_m` / `off_end_m` → `ELEV_FROM` / `ELEV_TO`), with the source
+        kept in `cover_src`. Without `--cover` no depth is shipped, and `ELEV_FROM` / `ELEV_TO` are
+        not listed.
+    - **`<prefix>_structures`** (Pipeline Connectors): reservoirs, tanks, valves, pumps, hydrants
+      (`kind`, `elev_m`). Junctions are only network points at bends and branches, so they do not
+      ship.
+    - **Al Qairawan potable water:**
+      - 895 pipes (74.07 km): HDPE Ø160-630 (778 of them Ø160) and 5 ductile iron, plus reservoir
+        R-2.
+      - Left out: 6 deleted pipes and 1 prototype.
+      - Cover 1.0 m: PWT-DWG-10000-001 note 5, "minimum cover above the crown".
+      - Node Elevation lies about 0.5 m (0.3-0.9 m) below the sewer rims nearby, so it is probably
+        another ground surface; it is kept as an attribute only.
+    - **Al Qairawan irrigation:**
+      - 1,074 pipes (51.75 km): HDPE Ø90-450, of which 736 are Ø90.
+      - 14 structures: 8 air valves, 4 isolation valves, 1 pump and 1 reservoir.
+      - Left out: 3,482 deleted pipes, 1 switched off and 4 of zero length.
+      - Node Elevation matches the sewer rims (median +0.03 m).
+      - Cover 0.80 m, **assumed by AICC pending confirmation**: no model, drawing or note gives one.
+    - **Confirmed in InfraWorks** on "qairawan test (names)", after importing with Type only and
+      running `model:names` once per package:
+      - PW (Polyline)-242 shows Ø0.63 m HDPE, network "Water - Qirawn Hyrdulic Model", Elevation
+        Offset From / To -1.315 m (1.0 m cover + half of 0.63 m).
+      - P-615 shows Ø0.45 m HDPE, "Irrigation - AlQairwan", -1.025 m (0.80 m + 0.225 m).
+      - The pipes lie below the ground at their size.
+      - Gate G3 passes with 0 warnings for both packages: 895 / 1,074 pipes, lengths equal, offset
+        0.00 m, all names in.
+      - The network names follow the model file names as issued, typos included.
+      - Where a water and an irrigation pipe cross at close depths, check the irrigation depth
+        once its cover is confirmed.
+- **Networks from drawings** (what no hydraulic model carries). Several sheets combine into one
+  package, which sets the project's `cadMode: "all"`; otherwise the newest drawing replaces earlier
+  ones:
+
+  ```bash
+  pnpm package:build PWT.dwg STO.dwg IRR.dwg --profile parsons-ldip-wet-utilities
+  pnpm package:build ELV.dwg EMV.dwg SLT.dwg TEL.dwg SEC.dwg --profile parsons-ldip-dry-utilities
+  ```
+
+  - **Wet** (*Parsons / LDIP wet utilities (drawings)*), for Al Qairawan:
+    - storm drainage: 648 pipes, sizes from the layer names (`…SW_Pipe Dia 400`), and 663 manholes
+      and outfalls. No storm model was issued.
+    - potable water: 818 valves and 351 fire hydrants. The WaterGEMS model has neither.
+    - irrigation: 199 gate and washout valves.
+
+    Water, sewer and irrigation pipes come from their hydraulic models.
+  - **Dry** (*Parsons / LDIP dry utilities (drawings)*), for Al Qairawan:
+
+    | Network | Lines | Points |
+    | --- | --- | --- |
+    | Low voltage | 2,317 cables | 1,354 pillars |
+    | Medium voltage | 149 cables | 102 substations |
+    | Street lighting | 203 cables | 1,882 street lights, 2 panels |
+    | Telecom | 510 ducts | 455 handholes |
+    | Security | 352 ducts | 269 handholes, 685 CCTV cameras |
+
+  - **What ships as what:** pipes and cables ship as Pipelines and nodes as Pipeline Connectors,
+    each layer listing the InfraWorks columns its fields fill (`fields`, e.g. `SIZE_X` ← `size_m`,
+    `NETWORKNAME` ← `network`). Street lights and cameras ship as Points of Interest.
+  - **Rule options:**
+    - `attributes`: constant fields, such as `utility` and `network` ("Storm - Al Qairawan").
+    - `fields`: InfraWorks columns.
+    - `size`: from the layer name or the nearest label, then carried along a run.
+    - `symbols`: lines and symbols on one layer go to different package layers (`AAMSLCrdr` is the
+      lighting cable and, as symbols, the poles).
+    - `asPoint`: a shape ships as its centre (cameras drawn as circles).
+    - `explode: false`: a layer's symbols stay one point each.
+  - **The reader also learned** from these sheets:
+    - A sheet that rotates its xrefs off the CRS (the storm sheet, 295° about a point off site) is
+      read at the xrefs' own coordinates (`XREF_READ_AT_OWN_COORDINATES`).
+    - A block of only inserts, or of geometry pasted in world coordinates at 0,0, is a group and is
+      opened.
+    - An xref holding only mapped symbols is opened, once.
+    - A connector or point layer keeps each symbol as one point. A line layer ships no stray
+      points, and its closed rings ship as lines.
+    - A few stray features off the CRS among many placed right are left out, not blocking
+      (`COORDS_OUTSIDE_CRS_LEFT_OUT`). There may be at most 5 (or 0.5 %), with 20 times as many
+      inside.
+    - A justified TEXT label is placed at its alignment point.
+  - **Worth raising with Parsons:**
+    - the sewer xref's "QIC Storm" pipes lie about 160 km away (another site);
+    - one closed outline on `AAMSLCrdr` (46.7 km round) ships with the lighting cables;
+    - the security handholes sit in an xref named "Narjes Overall Primary Security Network".
 - **Names beside the features** (`labels`): a rule may take a name from text written next to its
   features — each label goes to the nearest feature within `maxDistance`, and a feature named by
   several labels takes the name most of them give, so a link road never borrows a neighbour's

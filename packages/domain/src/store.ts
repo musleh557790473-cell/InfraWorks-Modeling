@@ -19,6 +19,8 @@ export interface UploadedFile {
   path: string;
   size: number;
   uploadedAt: string;
+  /** For a hydraulic model: which utility it is and what depth to give its pipes (see HydraulicOptions). */
+  hydraulic?: { utility?: string; prefix?: string; network?: string; coverM?: number; coverSource?: string };
 }
 
 export interface ProjectRecord {
@@ -29,6 +31,11 @@ export interface ProjectRecord {
   crsName: string;
   infraWorksCrsHint: string;
   mappingProfile: MappingProfile;
+  /**
+   * "latest" (default): the newest drawing replaces earlier ones, as a corrected upload should.
+   * "all": every drawing is read and combined, e.g. one sheet per utility network.
+   */
+  cadMode?: "latest" | "all";
   createdAt: string;
   updatedAt: string;
 }
