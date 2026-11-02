@@ -267,6 +267,9 @@ profile* and reused for that team's next drawing:
       diameter, 1.6 to 2.5 m).
     - LV cables 0.65 m and MV cables 0.80 m to the cable centre (report §3.3.3).
     - No depth found for HV, street lighting, telecom or security: they sit on the terrain.
+    - Cable sizes (`size_src` says which): MV 200 mm and street lighting 110 mm, the crossing
+      ducts of report §3.3.8.4 and §3.3.12.4.1; every other cable and duct 0.1 m, a display size
+      only, so InfraWorks does not draw it at its default width.
   - **What ships as what:** pipes and cables ship as Pipelines and nodes as Pipeline Connectors,
     each layer listing the InfraWorks columns its fields fill (`fields`, e.g. `SIZE_X` ← `size_m`,
     `NETWORKNAME` ← `network`). Street lights and cameras ship as Points of Interest.

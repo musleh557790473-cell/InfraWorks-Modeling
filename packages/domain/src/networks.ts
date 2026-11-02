@@ -17,6 +17,8 @@ export interface PipeStats {
   fromLabel: number;
   /** Of fromLabel: carried along the network from a labelled neighbour. */
   carried?: number;
+  /** Given the rule's fixed size (a documented duct, or a display size). */
+  fixed?: number;
   unsized: number;
 }
 
@@ -63,6 +65,8 @@ function linesOf(f: DomainFeature): Pt[][] {
   const g = f.geometry;
   if (g.type === "LineString") return [g.coordinates as Pt[]];
   if (g.type === "MultiLineString") return g.coordinates as Pt[][];
+  // A closed cable ring is read as a polygon and ships as a line: size and depth it like one.
+  if (g.type === "Polygon") return g.coordinates as Pt[][];
   return [];
 }
 
@@ -93,6 +97,10 @@ export function sizePipes(
         st.fromLayer += 1;
         return { ...f, attributes: { ...f.attributes, ...sizeAttributes(size.mm), size_from: "layer" } };
       }
+    }
+    if (rule.size.fixed && !rule.size.fromLabel) {
+      st.fixed = (st.fixed ?? 0) + 1;
+      return { ...f, attributes: { ...f.attributes, ...sizeAttributes([rule.size.fixed.mm]), size_from: "fixed", size_src: rule.size.fixed.source } };
     }
     return f;
   });
@@ -179,9 +187,12 @@ export function sizePipes(
     if (st) st.carried = carried;
   }
 
-  const stats = [...byRule.values()].map((s) => ({ ...s, unsized: s.pipes - s.fromLayer - s.fromLabel }));
+  const stats = [...byRule.values()].map((s) => ({ ...s, unsized: s.pipes - s.fromLayer - s.fromLabel - (s.fixed ?? 0) }));
   const notes = stats.map(
-    (s) => `${s.layer}: ${s.pipes} pipe(s), size from the layer name for ${s.fromLayer}, from a label for ${s.fromLabel}, none for ${s.unsized}`,
+    (s) =>
+      `${s.layer}: ${s.pipes} pipe(s), size from the layer name for ${s.fromLayer}, from a label for ${s.fromLabel}` +
+      (s.fixed ? `, fixed for ${s.fixed}` : "") +
+      `, none for ${s.unsized}`,
   );
   return { features: out, notes, stats };
 }

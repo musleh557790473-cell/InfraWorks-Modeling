@@ -126,6 +126,12 @@ export const LayerMapping = z.object({
   size: z
     .object({
       fromLayer: z.string().optional(),
+      /**
+       * One size for every line of the rule that got none from its layer name, with its source
+       * (kept in size_src): a duct size from the design report, or a display size InfraWorks needs
+       * so a cable is not drawn at its default width, saying so.
+       */
+      fixed: z.object({ mm: z.number().positive(), source: z.string().min(1) }).optional(),
       fromLabel: z
         .object({
           labels: z.array(z.string().min(1)).min(1),
@@ -439,7 +445,18 @@ const MV = "Xref_Qairawan_MV Network$0$";
 const SL = "Xref_Qairawan_SL Network$0$";
 const TEL = "Xref Primary Telecom Network$0$";
 const SEC = "Xref Primary Security Network$0$";
-const cable = { infraFeatureClass: "pipeline" as const, explode: false, fields: { NETWORKNAME: "network" } };
+// Every cable ships a size, or InfraWorks draws it at its default width. Only MV and street
+// lighting have one in the report, and only for their road-crossing ducts; the rest get 0.1 m,
+// marked as a display size.
+const DISPLAY_SIZE = { mm: 100, source: "display only: no size in the Parsons documents" };
+const cable = {
+  infraFeatureClass: "pipeline" as const,
+  explode: false,
+  fields: { NETWORKNAME: "network", SIZE_X: "size_m", SIZE_Y: "size_y_m" },
+  size: { fixed: DISPLAY_SIZE },
+};
+const MV_DUCT = { fixed: { mm: 200, source: "AQ report §3.3.8.4: MV crossing duct banks, 200 mm diameter" } };
+const SL_DUCT = { fixed: { mm: 110, source: "AQ report §3.3.12.4.1: street lighting crossing ducts, 110 mm O.D. uPVC" } };
 // Burial depth to the cable centre: AQ report §3.3.3 service conditions, "0.65 meter for LV and 0.80
 // meter for MV". Nothing in the report or sheets gives HV, street lighting, telecom or security depths.
 const buried = (centreM: number, kind: string) => ({
@@ -457,7 +474,7 @@ export const PARSONS_LDIP_DRY_PROFILE: MappingProfile = {
     { dwgLayer: `${LV}Electrical LV -HC`, ...cable, ...buried(0.65, "LV"), outputLayer: "lv_cables", attributes: net("Electrical LV", "House Connection") },
     { dwgLayer: `${LV}E-POWR-MINI-PILLAR-*`, ...node, outputLayer: "lv_pillars", attributes: net("Electrical LV", "Mini Pillar") },
     // Medium voltage: cables, distribution and primary substations.
-    { dwgLayer: `${MV}MV Cables*`, ...cable, ...buried(0.8, "MV"), outputLayer: "mv_cables", attributes: net("Electrical MV") },
+    { dwgLayer: `${MV}MV Cables*`, ...cable, ...buried(0.8, "MV"), size: MV_DUCT, outputLayer: "mv_cables", attributes: net("Electrical MV") },
     { dwgLayer: `${MV}HV Cables`, ...cable, outputLayer: "mv_cables", attributes: net("Electrical HV") },
     { dwgLayer: `${MV}DSS`, ...node, outputLayer: "substations", attributes: net("Electrical MV", "Distribution Substation") },
     { dwgLayer: `${MV}PSS`, ...node, outputLayer: "substations", asPoint: true, attributes: net("Electrical MV", "Primary Substation") },
@@ -465,6 +482,7 @@ export const PARSONS_LDIP_DRY_PROFILE: MappingProfile = {
     {
       dwgLayer: `${SL}AAMSLCrdr`,
       ...cable,
+      size: SL_DUCT,
       outputLayer: "streetlight_cables",
       attributes: net("Street Lighting"),
       symbols: { infraFeatureClass: "annotation", outputLayer: "street_lights", attributes: { conn_type: "Street Light" } },

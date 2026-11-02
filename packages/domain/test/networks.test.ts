@@ -102,6 +102,44 @@ test("a sheet that rotates its xref off the CRS is read at the xref's own coordi
   assert.equal(v.ok, true);
 });
 
+test("a cable rule's fixed size goes on its lines, with its source, and not on symbols drawn on the same layer", () => {
+  const profile: MappingProfile = {
+    id: "t",
+    name: "t",
+    layers: [
+      {
+        dwgLayer: "SL",
+        infraFeatureClass: "pipeline",
+        explode: false,
+        size: { fixed: { mm: 110, source: "report: 110 mm duct" } },
+        symbols: { infraFeatureClass: "annotation", outputLayer: "street_lights" },
+      },
+    ],
+    reportJoins: [],
+    assetKeys: AssetKeyConfig.parse({}),
+  };
+  const p = parseDxf(
+    dxf(
+      ...blocks("POLE"),
+      0, "SECTION", 2, "ENTITIES",
+      ...pline("SL", [[0, 0], [50, 0]]),
+      // A closed ring on the cable layer (Al Qairawan's AAMSLCrdr outline) is sized too.
+      0, "LWPOLYLINE", 8, "SL", 90, 4, 70, 1, 10, X, 20, Y + 10, 10, X + 20, 20, Y + 10, 10, X + 20, 20, Y + 30, 10, X, 20, Y + 30,
+      ...insert("SL", "POLE", 10, 1),
+      0, "ENDSEC", 0, "EOF",
+    ),
+    "t.dxf",
+    profile,
+  );
+  const ring = p.features.find((f) => f.geometry.type === "Polygon");
+  if (ring) assert.equal(ring.attributes.size_m, 0.11);
+  const line = p.features.find((f) => f.geometry.type === "LineString")!.attributes;
+  assert.deepEqual([line.size_m, line.size_y_m, line.size_from, line.size_src], [0.11, 0.11, "fixed", "report: 110 mm duct"]);
+  const pole = p.features.find((f) => f.outputLayer === "street_lights")!.attributes;
+  assert.equal(pole.size_m, undefined);
+  assert.deepEqual(p.pipeStats!.map((s) => [s.pipes, s.fixed, s.unsized]), [[2, 2, 0]]);
+});
+
 test("depth from the documents: pipes by their cover, cables to their centre, manholes to the deepest invert", () => {
   const profile: MappingProfile = {
     id: "t",
