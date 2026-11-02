@@ -102,6 +102,23 @@ test("a sheet that rotates its xref off the CRS is read at the xref's own coordi
   assert.equal(v.ok, true);
 });
 
+test("an xref renamed by EXPORTTOAUTOCAD (Xref Storm Network_1, layers still Xref Storm Network$0$) is still read at its own coordinates", async () => {
+  // Al Qairawan STO exported with EXPORTTOAUTOCAD: the block became "…_1", its layers kept the prefix.
+  const sheet = dxf(
+    0, "SECTION", 2, "BLOCKS",
+    0, "BLOCK", 2, "Xref Storm Network_1", 10, 0, 20, 0,
+    ...pline("Xref Storm Network$0$PIPE-SEWER-400mm", [[0, 0], [100, 0]]),
+    0, "ENDBLK", 0, "ENDSEC",
+    0, "SECTION", 2, "ENTITIES",
+    0, "INSERT", 8, "0", 2, "Xref Storm Network_1", 10, 663988.92, 20, 2757118.87, 50, 295.27,
+    0, "ENDSEC", 0, "EOF",
+  );
+  const v = await build([{ name: "sto.dxf", text: sheet }], PROFILE);
+  assert.ok(v.issues.some((i) => i.code === "XREF_READ_AT_OWN_COORDINATES"), JSON.stringify(v.issues));
+  assert.ok(!v.issues.some((i) => i.code === "COORDS_OUTSIDE_CRS"));
+  assert.equal(v.ok, true);
+});
+
 test("several drawings combine into one package; a couple of stray pipes at 0,0 are left out, not blocking", async () => {
   const pipes = (n: number) => Array.from({ length: n }, (_, i) => pline("PIPE-SEWER-200mm", [[0, i * 5], [40, i * 5]])).flat();
   const sewer = dxf(0, "SECTION", 2, "ENTITIES", ...pipes(20), 0, "LWPOLYLINE", 8, "PIPE-SEWER-800mm", 90, 2, 70, 0, 10, 0, 20, 0, 10, 50, 20, 0, 0, "ENDSEC", 0, "EOF");

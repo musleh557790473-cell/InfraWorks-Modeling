@@ -224,10 +224,13 @@ function samplePoint(b: Block): Pt | undefined {
 
 function isBoundXref(b: Block): boolean {
   if (b.name === "" || b.name.startsWith("*") || /\$\d+\$/.test(b.name)) return false;
-  const prefix = b.name.toUpperCase() + "$";
+  // EXPORTTOAUTOCAD may rename the block on a name clash ("Xref Storm Network_1") while its layers
+  // keep the xref's own prefix ("Xref Storm Network$0$…"): accept either name.
+  const name = b.name.toUpperCase();
+  const prefixes = [name + "$", name.replace(/_\d+$/, "") + "$"];
   return b.entities.some((e) => {
     const layer = readInfo(e).layer.toUpperCase();
-    return layer.startsWith(prefix) && /^\d+\$/.test(layer.slice(prefix.length));
+    return prefixes.some((prefix) => layer.startsWith(prefix) && /^\d+\$/.test(layer.slice(prefix.length)));
   });
 }
 
