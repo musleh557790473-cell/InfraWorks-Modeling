@@ -100,7 +100,7 @@ pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"
 
 ## Where things stand (2 Nov 2026)
 
-main after PR #16 (`8a84407`). Al Qairawan, all in UTM 38N, checked by Gate G3 and seen in
+main after PR #18 (`d8bd0e7`). Al Qairawan, all in UTM 38N, checked by Gate G3 and seen in
 InfraWorks unless noted:
 
 - Roads (332 centrelines, 280 named), plots (6,555, 5,944 numbered), road reserve, blocks,
@@ -110,10 +110,13 @@ InfraWorks unless noted:
   (PWT-DWG-10000-001 note 5).
 - Irrigation from WaterGEMS: 1,074 pipes (51.75 km), valves, pump, reservoir; cover 0.80 m
   ASSUMED by AICC, pending confirmation from Parsons.
-- From the drawings (PR #14, no hydraulic model): storm drainage (648 pipes sized from layer
-  names, 663 manholes/outfalls), water valves (818) and hydrants (351), irrigation valves (199),
-  and dry networks (LV/MV cables, substations, pillars, street lighting, telecom, security, CCTV).
-  Their check in InfraWorks is still to be reported.
+- From the drawings (PR #14, checked in PR #18, no hydraulic model): storm drainage (648 GRP
+  pipes sized from layer names, cover 1.2 m; 663 manholes/outfalls deep to the deepest pipe),
+  water valves (818) and hydrants (351), irrigation valves (199), and dry networks: LV (0.65 m)
+  and MV (0.80 m, 200 mm) cables, street lighting (110 mm), telecom, security, substations,
+  pillars, CCTV and street lights (Points of Interest). LV/HV/telecom/security sizes are 0.1 m
+  for display only. Model `Al qirwan test 4 (names)`: G3 PASS, 0 warnings.
 
-Open points: confirm the irrigation cover with Parsons; the full Al Narjis road layout
+Open points: confirm the irrigation cover with Parsons; depths of telecom, security and
+street-lighting ducts (not in the Parsons documents, drawn on the terrain); the full Al Narjis road layout
 (`Xref Road Layout Al Narjis.dwg`) from Parsons; Al Narjis and other districts through the same path.
