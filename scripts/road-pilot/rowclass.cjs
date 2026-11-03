@@ -49,8 +49,12 @@ for (const r of roads) {
   // the one drawn line doubled (symmetric typical sections), flagged as one-sided
   let { v: votes, rk: ranked, ok } = vote(ws), oneSided = false;
   if (!ok) { const o = vote(ws1); if (o.ok) { ({ v: votes, rk: ranked, ok } = o); oneSided = true; } }
+  // a local road whose sidewalk changes along it (R.1.E.1: A3 428 samples, A1 130): same carriageway,
+  // so take the majority type and flag it as mixed
+  let mixed = false;
+  if (!ok && ranked.length >= 2 && ranked[0][1] >= 5 && ranked[0][1] > ranked[1][1] && ranked.slice(0, 2).every(([t]) => t.startsWith("A"))) { ok = true; mixed = true; }
   const ev = {}; for (const x of es) { const k = x.toFixed(1); ev[k] = (ev[k] || 0) + 1; }
-  out[r.name] = { type: ok ? ranked[0][0] : null, ...(oneSided ? { oneSided: true } : {}), votes, samples: ws.length, oneSidedSamples: ws1.length, edge: Object.entries(ev).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null };
+  out[r.name] = { type: ok ? ranked[0][0] : null, ...(oneSided ? { oneSided: true } : {}), ...(mixed ? { mixed: true } : {}),votes, samples: ws.length, oneSidedSamples: ws1.length, edge: Object.entries(ev).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null };
   const k = `${ok ? ranked[0][0] : "unclassified"}${oneSided ? " one-sided" : ""} (edges ${out[r.name].edge})`; hist[k] = (hist[k] || 0) + 1;
 }
 fs.writeFileSync(outPath, JSON.stringify(out, null, 1));
