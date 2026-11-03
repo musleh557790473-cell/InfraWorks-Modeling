@@ -136,6 +136,15 @@ and `NAME = R.6.E.1`, in two copies: `C:\IW\Al Qairawan Test (R.6.E.1 A)` (V cha
   and 8 whose PVIs do not reach the alignment end (R.2.G.6 R.2.G.22 R.3.D.1 R.5.G.5 R.5.G.11
   R.7.G.2 R.9.G.2 R.13.G.15) left out. The user then selects all roads and edits Speed once.
 
+- Bulk edit failed: Model Explorer "Select All" selects all 162 roads, but editing Speed on the
+  multi-selection did not rebuild them (only single-road edits do).
+- **Root fix**: `cdnew.cjs` now computes each road's body from its own geometry (PRIMITIVES:
+  template cross-sections on the road's 3D path with mirrored ghost ends, vertexIndices [0, n-1];
+  TERRAIN_OPERATIONS: start / end transitions through every strip boundary, right edge, left edge
+  reversed, ring keys = corners, CutOut polygon; GEOMETRY = bbox polygon blob 3,0,1,5).
+  R.6.E.1 recomputed with `--regen` matches InfraWorks' own body within 4 mm.
+  `Al Qairawan Roads (Parsons 2)`: 162 roads, each with its own 5 + 5 body rows. To test.
+
 **Earlier plan for all roads** (from A/B, superseded): the user imports the centrelines as planning roads and runs
 "Convert to Component Road" on all of them at once (InfraWorks creates every table, including the
 derived rows); then a tool, like `model:names`, matches each component road to its Parsons road by
