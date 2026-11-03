@@ -260,6 +260,15 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
     of at most 90 (RA: 4 quarter circles, R 20.2 m). 19 roads rewritten (7 RA, loops, arcs just
     over 90 degrees). Approach roads still run through the roundabout centre, as Parsons draws
     the centrelines: part of the junction work.
+  - Productised (3 Nov 2026): `pnpm model:roads` (packages/model-gate/src/roads-cli.ts) runs the
+    whole chain from the three drawings; logic in packages/domain/src/roads/ and
+    packages/model-gate/src/roads/, tests in both packages' test/roads.test.ts. Checked against the
+    pilot on the real inputs: profile views, PVIs, alignments and crossfall identical for all 250
+    roads, sections identical but one sample count (R.10.G.2); written into a copy of Parsons 2,
+    H and V constraints identical to the working copy for all 250 roads. Differences: untyped
+    roads (RA) now take the template's original style (the pilot cloned them after refreshing the
+    template with A3); R.12.G.3's centreline was rebuilt by InfraWorks after an edit. The scripts in
+    this folder stay as the record of how each rule was found.
   - Finding a road in InfraWorks: Model Explorer > Roads > Select By Filter, `NAME = 'R.5.G.1'`, F.
 - `roadtin.cjs`: road centreline against the grading surface. Most roads sit 0.5-0.8 m above it
   (pavement). Larger only at junction mouths (R.3.G.3, R.0.D.16, R.3.E.1, R.3.F.1) and on R.3.G.1,

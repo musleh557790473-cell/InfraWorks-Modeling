@@ -45,6 +45,7 @@ pnpm package:build "<drawing.dxf | model.stsw.sqlite | model.wtg.sqlite>" [--pro
 #   WaterGEMS: --utility <Water|Irrigation> --cover <m> --cover-source "<where the cover comes from>"
 pnpm gate:model "<model>.sqlite" --package <package.zip>      # Gate G3, on a closed model
 pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"]
+pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profiles <40000.dxf> --surface <grading.xml> [--package <road_centerline>] [--dry]
 ```
 
 ## Inputs from Parsons

@@ -1,0 +1,159 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  assemblePvis, buildAlignments, buildSection, crossfallSides, orientRoads, pieceLen, readDxfBlock, readProfileViews, trimTo,
+  type Alignment, type DxfEnt, type ProfileView, type Seg,
+} from "../src/index.js";
+
+// ---------- small builders
+const pline = (layer: string, pts: [number, number][], bulges: number[] = []): DxfEnt => ({ type: "LWPOLYLINE", layer, x: pts.map((p) => p[0]), y: pts.map((p) => p[1]), bulge: pts.map((_, i) => bulges[i] ?? 0), txt: "" });
+const mtext = (layer: string, x: number, y: number, txt: string): DxfEnt => ({ type: "MTEXT", layer, x: [x], y: [y], bulge: [0], txt });
+const view = (name: string, len: number, z0 = 680, grade = 0): ProfileView => ({ name, tx: 0, ty: 0, datum: 678, k: 1, ve: 10, s0: 0, send: len, smaxLabel: len, nfg: 1, nchk: 0, maxd: null, pts: [[0, z0], [len, z0 + grade * len]] });
+const straight = (name: string, len: number): Alignment => ({ name, length: len, segs: [{ a: [0, 0], b: [len, 0], bulge: 0 }] });
+
+test("DXF block reader keeps bulges per vertex and drops the xref layer prefix", () => {
+  const dxf = ["0", "SECTION", "2", "BLOCKS", "0", "BLOCK", "2", "Xref Road Layout X", "0", "LWPOLYLINE", "8", "Xref Road Layout X$0$RD_PR_CNRL", "10", "0", "20", "0", "42", "0.5", "10", "10", "20", "0",
+    "0", "ENDBLK", "0", "ENDSEC", "0", "SECTION", "2", "ENTITIES", "0", "ENDSEC", "0", "EOF"].join("\n");
+  const [e] = readDxfBlock(dxf, "Xref Road Layout X");
+  assert.equal(e!.layer, "RD_PR_CNRL");
+  assert.deepEqual(e!.bulge, [0.5, 0]);
+});
+
+test("trimTo cuts an arc at the profile end (R.0.D.5: plan 0+416.889, profile 0+375)", () => {
+  const half: Seg[] = [{ a: [0, 0], b: [20, 0], bulge: 1 }]; // half circle, radius 10, length 10*pi
+  const t = trimTo(half, 10);
+  assert.ok(Math.abs(pieceLen(t) - 10) < 1e-9);
+  assert.ok(Math.abs(Math.hypot(t[0]!.b[0] - 10, t[0]!.b[1]) - 10) < 1e-9, "cut point stays on the circle");
+});
+
+test("alignments: an unnamed piece joins a road when the profile length says so (61 of 332 pieces had no name)", () => {
+  const layout = [pline("RD_PR_CNRL", [[0, 0], [60, 0]]), pline("RD_PR_CNRL", [[60, 0], [100, 0]]), pline("RD_PR_CNRL", [[60, 0], [60, 30]]), mtext("RD_C_CHAIN_TEXT", 0, 2, "0+000")];
+  const r = buildAlignments(layout, [view("R.1", 100)], [{ name: "R.1", start: [0, 0] }]);
+  assert.equal(r.roads.length, 1);
+  assert.ok(Math.abs(r.roads[0]!.length - 100) < 1e-9, "the 40 m piece, not the 30 m one");
+  assert.match(r.report[0]!, /1 unnamed piece\(s\) added/);
+});
+
+test("alignments: a road with no package name starts on its name-labelled piece (R.0.D.13's piece was named RA-6)", () => {
+  const layout = [pline("RD_PR_CNRL", [[0, 0], [80, 0]]), mtext("RD_C_CHAIN_TEXT", 0, 2, "0+000"), mtext("0-Alignment Name", 40, 3, "R.2")];
+  const r = buildAlignments(layout, [view("R.2", 80)], []);
+  assert.equal(r.roads[0]?.name, "R.2");
+  assert.match(r.report[0]!, /matched by profile length over all free pieces/);
+});
+
+test("alignments: a confirmed alignment longer than its profile is cut at the profile end", () => {
+  // the plan labels its end 0+416.889; Parsons' profile stops at 0+375.000
+  const layout = [pline("RD_PR_CNRL", [[0, 0], [200, 0]]), pline("RD_PR_CNRL", [[200, 0], [416.889, 0]]), mtext("RD_C_CHAIN_TEXT", 0, 2, "0+000"),
+    mtext("RD_C_CHAIN_TEXT", 416.889, 2, "0+416.889"), mtext("0-Alignment Name", 50, 3, "R.0.D.5")];
+  const r = buildAlignments(layout, [view("R.0.D.5", 375)], []);
+  assert.ok(Math.abs(r.roads[0]!.length - 375) < 1e-6);
+  assert.match(r.report.join("\n"), /end label 0\+416\.889\), cut to the profile end 375\.000/);
+});
+
+test("alignments: a loop road is opened at its vertex nearest the 0+000 tick", () => {
+  const sq: [number, number][] = [[0, 0], [50, 0], [50, 50], [0, 50], [0, 0]];
+  const layout = [pline("RD_PR_CNRL", sq), mtext("RD_C_CHAIN_TEXT", 50, 52, "0+000")];
+  const r = buildAlignments(layout, [view("R.L", 200)], [{ name: "R.L", start: [0, 0] }]);
+  assert.deepEqual(r.roads[0]!.segs[0]!.a, [50, 50]);
+});
+
+// ---------- profiles: a synthetic view (horizontal scale 1, vertical x10, datum 678)
+function profileEnts(opts: { nextTitleAt?: number; neighbourPvi?: boolean; curveLabels?: boolean }): DxfEnt[] {
+  const t0 = { x: 0, y: 100 }, rowY = t0.y - 16, x0 = 54, yOf = (z: number) => rowY + 5 + (z - 678) * 10;
+  const e: DxfEnt[] = [mtext("RD_C_PROF_TITL", t0.x, t0.y, "R.P"), mtext("RD_C_PROF_TITL", t0.x + 14, t0.y - 6, "Datum: 678.000")];
+  for (let s = 0; s <= 100; s += 25) e.push(mtext("RD_C_PROF_STN-MAJR", x0 + s, rowY, `0+${String(s).padStart(3, "0")}`));
+  for (const z of [679, 680, 681, 682]) e.push(mtext("RD_C_PROF_TEXT-GRID", x0 - 2, yOf(z), z.toFixed(3)));
+  // FG: 680.0 at 0, 681.0 at 50 (vertical curve 20 m there), 680.5 at 100
+  const fg: [number, number][] = [];
+  for (let s = 0; s <= 100; s += 1) {
+    const zt = s <= 50 ? 680 + s / 50 : 681 - (s - 50) / 100;
+    const x = s - 40, z = x >= 0 && x <= 20 ? 680.8 + 0.02 * x + ((-0.01 - 0.02) / 40) * x * x : zt;
+    fg.push([x0 + s, yOf(z)]);
+  }
+  e.push(pline("RD_C_PROF_FG", fg));
+  e.push(mtext("RD_C_PROF_LABL", x0 + 0.5, yOf(680) + 3, "STA 0+000.000\\PELEV 680.000"));
+  e.push(mtext("RD_C_PROF_LABL", x0 + 100.5, yOf(680.5) + 3, "STA 0+100.000\\PELEV 680.500"));
+  e.push(mtext("RD_C_PROF_LABL", x0 + 50, yOf(681) + 8, "PVI 0+050.000"));
+  e.push(mtext("RD_C_PROF_LABL", x0 + 50, yOf(681) + 10, "VC 20.000, K 667"));
+  if (opts.curveLabels !== false) {
+    e.push(mtext("RD_C_PROF_LABL", x0 + 40, yOf(680.8) + 3, "PVC 0+040.000\\PELEV 680.800"));
+    e.push(mtext("RD_C_PROF_LABL", x0 + 60, yOf(680.9) + 3, "PVT 0+060.000\\PELEV 680.900"));
+  }
+  if (opts.neighbourPvi) e.push(mtext("RD_C_PROF_LABL", x0 + 99, yOf(681) + 12, "STA 0+294.200\\PELEV 690.670"));
+  if (opts.nextTitleAt != null) e.push(mtext("RD_C_PROF_TITL", opts.nextTitleAt, t0.y, "R.NEXT"));
+  return e;
+}
+
+test("profile views: an FG line ending close to the next view's title is kept (R.14.G.9, R.8.G.4)", () => {
+  // the next title 10 m right of the FG end: a 20 m margin used to drop the whole line
+  const { views } = readProfileViews(profileEnts({ nextTitleAt: 54 + 100 + 10 }));
+  const v = views.find((q) => q.name === "R.P")!;
+  assert.ok(v.pts.length > 50);
+  assert.ok(Math.abs(v.pts[0]![1] - 680) < 1e-9 && Math.abs(v.pts[v.pts.length - 1]![1] - 680.5) < 1e-9);
+});
+
+test("PVIs: a neighbouring profile's label inside the window is dropped (R.3.G.6 carried R.2.F.5's PVIs)", () => {
+  const ents = profileEnts({ neighbourPvi: true });
+  const { views } = readProfileViews(ents);
+  const r = assemblePvis(ents, views);
+  assert.equal(r.dropped["R.P"], 1);
+  assert.deepEqual(r.roads["R.P"]!.map((p) => p.s), [0, 50, 100]);
+  assert.ok(Math.abs(r.roads["R.P"]![1]!.z! - 681) < 1e-3, "curve PVI level from the tangents");
+  assert.deepEqual(r.issues, []);
+});
+
+test("PVIs: a curve without printed PVC / PVT takes their levels from the FG line (R.14.G.11, R.7.G.8)", () => {
+  const ents = profileEnts({ curveLabels: false });
+  const { views } = readProfileViews(ents);
+  const p = assemblePvis(ents, views).roads["R.P"]!.find((q) => q.L)!;
+  assert.equal(p.pvcFromFG, true);
+  assert.ok(Math.abs(p.z! - 681) < 0.01);
+});
+
+// ---------- direction against a surface z = 690 + 0.02 x (rising with x), road levels 0.6 m above it
+const rising = (x: number) => 690 + 0.02 * x;
+const pviRising = (len: number) => [{ s: 0, z: 690.6, L: 0 }, { s: len, z: 690.6 + 0.02 * len, L: 0 }];
+
+test("direction: a road chained from the wrong end is reversed (R.5.G.1: rising 6 m where the surface falls 6 m)", () => {
+  const r: Alignment = { name: "R.X", length: 200, segs: [{ a: [200, 0], b: [0, 0], bulge: 0 }] };
+  const o = orientRoads([r], { "R.X": pviRising(200) }, rising);
+  assert.deepEqual(o.reversed, ["R.X"]);
+  assert.deepEqual(r.segs[0]!.a, [0, 0]);
+});
+
+test("direction: a junction at the same level keeps a road the surface alone would reverse (R.13.G.5)", () => {
+  const cross: Alignment = { name: "R.C", length: 100, segs: [{ a: [200, -50], b: [200, 50], bulge: 0 }] };
+  const r: Alignment = { name: "R.X", length: 200, segs: [{ a: [200, 0], b: [0, 0], bulge: 0 }] };
+  // R.X starts on R.C at R.C's level (694.6) and falls towards x = 0, where the surface is highest:
+  // the surface says reverse, the junction says keep
+  const pv = { "R.C": [{ s: 0, z: 694.6, L: 0 }, { s: 100, z: 694.6, L: 0 }], "R.X": [{ s: 0, z: 694.6, L: 0 }, { s: 200, z: 690.6, L: 0 }] };
+  const o = orientRoads([cross, r], pv, (x) => 694 - 0.02 * x);
+  assert.ok(!o.reversed.includes("R.X"));
+  assert.match(o.report.join("\n"), /R\.X.*KEPT \(junctions\)/);
+});
+
+// ---------- sections and crossfall
+test("sections: the median is raised 150 mm by upstand kerbs, lanes start at the profile level (C1)", () => {
+  const s = buildSection("C1");
+  assert.equal(s.width, 30);
+  const median = s.parts.filter((p) => p.role === "median").flatMap((p) => p.crossSection.map((q) => q[1]));
+  assert.ok(Math.abs(Math.max(...median) - 0.15) < 1e-9);
+  const shy = s.parts.find((p) => p.role === "shy")!.crossSection.map((q) => q[1]);
+  assert.ok(Math.abs(Math.max(...shy)) < 1e-9, "shy lane edge at the profile level");
+});
+
+test("sections: a local road falling left has its lane slopes flipped", () => {
+  const slopes = (fall: "left" | "right") => (buildSection("A1", { fall }).componentStyle as { references: { def: string; paramOverrides: { name: string; value: number }[] }[] }).references
+    .filter((r) => r.def.endsWith("/Lane")).map((r) => r.paramOverrides.find((p) => p.name === "Slope")!.value);
+  assert.deepEqual(slopes("right"), [0.02, -0.02]);
+  assert.deepEqual(slopes("left"), [-0.02, 0.02]);
+});
+
+test("crossfall: the side comes from the grading surface (falls right of the chainage at 2 %)", () => {
+  const r = straight("R.A", 100);
+  const surface = (_x: number, y: number) => 690 + 0.02 * y; // higher on the left (+y) of a road along +x
+  const out = crossfallSides([r], { "R.A": { type: "A1", votes: {}, samples: 0, oneSidedSamples: 0, edge: null } }, surface);
+  assert.equal(out["R.A"]!.fall, "right");
+  assert.equal(out["R.A"]!.xfall, 0.02);
+});

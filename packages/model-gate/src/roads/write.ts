@@ -1,0 +1,241 @@
+/**
+ * Component roads written straight into an InfraWorks model (closed in InfraWorks), cloned from a
+ * template road converted in InfraWorks itself (its CONSTRAINED_DEFINITIONS GUID).
+ *
+ * Tables: CONSTRAINED_DEFINITIONS (one per road), ROADS (name, 3D centreline, MANUAL_STYLE with the
+ * componentStyle), H_CONSTRAINTS (3 straight / 4 arc by start-mid-end), V_CONSTRAINTS (15 tangent with
+ * (station, level) points, 18 curve with PARAM_1 = length), CONSTRAINED_DEF_GEOM_LOCATIONS (start/end),
+ * CONSTRAINED_DEF_RPSYSTEMS (centreline, length, range hash), and the body InfraWorks draws:
+ * PRIMITIVES (one strip per component, marking lines) and TERRAIN_OPERATIONS (grading ring, CutOut).
+ *
+ * InfraWorks draws the body rows as stored and rebuilds them only when that one road is edited: the
+ * rows are computed here from each road's own geometry. The template's range hash is zeroed so its
+ * cached shapes are not taken as valid for the new road.
+ */
+import { randomUUID } from "node:crypto";
+import type { DatabaseSync } from "node:sqlite";
+
+import type { Section } from "@infraworks/domain";
+import type { RoadPlan, XYZ } from "./plan.js";
+
+type Row = Record<string, unknown>;
+
+const ptBlob = (x: number, y: number) => { const b = Buffer.alloc(32); b.writeUInt32LE(1, 0); b.writeUInt32LE(1, 4); b.writeDoubleLE(x, 8); b.writeDoubleLE(y, 16); return b; };
+const pt3Blob = (x: number, y: number, z: number) => { const b = ptBlob(x, y); b.writeDoubleLE(z, 24); return b; };
+export const lineBlob = (pts: readonly (readonly number[])[]) => {
+  const b = Buffer.alloc(12 + 24 * pts.length);
+  b.writeUInt32LE(2, 0); b.writeUInt32LE(1, 4); b.writeUInt32LE(pts.length, 8);
+  pts.forEach((p, i) => p.forEach((v, k) => b.writeDoubleLE(v, 12 + 24 * i + 8 * k)));
+  return b;
+};
+/** bbox polygon blob (3, 0, 1, 5 + five XY points), grown by m */
+const bboxBlob = (pts: readonly (readonly number[])[], m: number) => {
+  const xs = pts.map((p) => p[0]!), ys = pts.map((p) => p[1]!);
+  const x0 = Math.min(...xs) - m, x1 = Math.max(...xs) + m, y0 = Math.min(...ys) - m, y1 = Math.max(...ys) + m;
+  const b = Buffer.alloc(96);
+  [3, 0, 1, 5].forEach((v, i) => b.writeUInt32LE(v, 4 * i));
+  [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]].forEach((p, i) => { b.writeDoubleLE(p[0]!, 16 + 16 * i); b.writeDoubleLE(p[1]!, 24 + 16 * i); });
+  return b;
+};
+const num = (v: number) => (Number.isInteger(v) ? v.toFixed(1) : String(v));
+const jpts = (pts: readonly (readonly number[])[]) => "[" + pts.map((p) => `[ ${p.map(num).join(", ")} ]`).join(",") + "]";
+const json = (b: unknown) => JSON.parse(Buffer.from(b as Uint8Array).toString("utf8"));
+
+export class RoadWriter {
+  private readonly tCD: Row; private readonly tRoad: Row; private readonly tH: Row; private readonly tV: Row;
+  private readonly tLoc: Row[]; private readonly tRps: Row; private readonly tPrim: Row[]; private readonly tTop: Row[];
+
+  constructor(private readonly db: DatabaseSync, private readonly template: string) {
+    const one = (q: string, ...a: string[]) => { const r = this.all(q, ...a)[0]; if (!r) throw new Error(`template ${template}: nothing for "${q}"`); return r; };
+    this.tCD = one("select * from CONSTRAINED_DEFINITIONS where GUID=?", template);
+    this.tRoad = one("select * from ROADS where FK_PARENT_GUID=?", template);
+    this.tH = one("select * from H_CONSTRAINTS where FK_PARENT_GUID=? and CONSTRAINT_TYPE=3", template);
+    this.tV = one("select * from V_CONSTRAINTS where FK_PARENT_GUID=? and CONSTRAINT_TYPE=15", template);
+    this.tLoc = this.all("select * from CONSTRAINED_DEF_GEOM_LOCATIONS where FK_PARENT_GUID=? order by TYPE", template);
+    this.tRps = one("select * from CONSTRAINED_DEF_RPSYSTEMS where FK_PARENT_GUID=?", template);
+    this.tPrim = this.all("select * from PRIMITIVES where FK_PARENT_GUID=?", String(this.tRoad.GUID));
+    this.tTop = this.all("select * from TERRAIN_OPERATIONS where FK_PARENT_GUID=?", String(this.tRoad.GUID));
+  }
+
+  private all(q: string, ...a: string[]): Row[] {
+    const s = this.db.prepare(q);
+    s.setReadBigInts(true);
+    return s.all(...a) as Row[];
+  }
+
+  private insert(table: string, tpl: Row, over: Row) {
+    const row: Row = { ...tpl, ...over };
+    delete row.ID;
+    const cols = Object.keys(row);
+    this.db.prepare(`insert into "${table}" (${cols.map((c) => `"${c}"`).join(",")}) values (${cols.map(() => "?").join(",")})`).run(...(cols.map((c) => row[c]) as never[]));
+  }
+
+  exists(name: string): boolean { return this.all("select GUID from ROADS where NAME=?", name).length > 0; }
+
+  /** Delete a road (definition, constraints, body). */
+  remove(name: string) {
+    for (const r of this.all("select GUID, FK_PARENT_GUID from ROADS where NAME=?", name)) {
+      if (r.FK_PARENT_GUID === this.template) throw new Error(`${name} is the template road`);
+      for (const t of ["PRIMITIVES", "TERRAIN_OPERATIONS"]) this.db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(String(r.GUID));
+      for (const t of ["H_CONSTRAINTS", "V_CONSTRAINTS", "CONSTRAINED_DEF_GEOM_LOCATIONS", "CONSTRAINED_DEF_RPSYSTEMS", "ROADS"]) this.db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(String(r.FK_PARENT_GUID));
+      this.db.prepare("delete from CONSTRAINED_DEFINITIONS where GUID=?").run(String(r.FK_PARENT_GUID));
+    }
+  }
+
+  private styleOf(sec: Section | null): Row {
+    if (!sec) return {};
+    const s = JSON.parse(String(this.tRoad.MANUAL_STYLE));
+    s.componentStyle = JSON.stringify(sec.componentStyle);
+    s.lanes = { ...s.lanes, countForward: sec.lanes, countBackward: sec.lanes };
+    return { MANUAL_STYLE: JSON.stringify(s, null, "\t"), MAX_SPEED: sec.speed };
+  }
+
+  /** Is this road the template (converted in InfraWorks, its constraints are kept)? */
+  isTemplate(name: string): boolean { return this.all("select GUID from ROADS where NAME=? and FK_PARENT_GUID=?", name, this.template).length > 0; }
+
+  /**
+   * The template road keeps its definition and constraints (from InfraWorks' own conversion); its
+   * centreline, section, speed and body are refreshed. Other roads are cloned from the template's
+   * rows as read when this writer was made, so the result does not depend on this refresh.
+   */
+  refreshTemplate(plan: RoadPlan, sec: Section | null) {
+    this.db.exec("BEGIN");
+    try {
+      const road = this.tRoad, guid = String(road.GUID), rps = String(this.tRps.GUID);
+      for (const t of ["PRIMITIVES", "TERRAIN_OPERATIONS"]) this.db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(guid);
+      this.insertBody(guid, rps, rps, plan.line, sec);
+      const style = this.styleOf(sec);
+      this.db.prepare("update ROADS set GEOMETRY=? where GUID=?").run(lineBlob(plan.line), guid);
+      if (sec) this.db.prepare("update ROADS set MANUAL_STYLE=?, MAX_SPEED=? where GUID=?").run(String(style.MANUAL_STYLE), Number(style.MAX_SPEED), guid);
+      this.db.prepare("update CONSTRAINED_DEF_RPSYSTEMS set GEOMETRY=? where GUID=?").run(lineBlob(plan.line), rps);
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+
+  /** Write a road (a road of that name is replaced). Unclassified roads (sec null) keep the template section. */
+  write(plan: RoadPlan, sec: Section | null) {
+    const { name, H, pvis, total, line } = plan;
+    if (this.isTemplate(name)) { this.refreshTemplate(plan, sec); return; }
+    this.db.exec("BEGIN");
+    try {
+      if (this.exists(name)) this.remove(name);
+      const style = this.styleOf(sec);
+      const gCD = randomUUID(), gRoad = randomUUID(), gRps = randomUUID();
+      const start = line[0]!, end = line[line.length - 1]!;
+      this.insert("CONSTRAINED_DEFINITIONS", this.tCD, { GUID: gCD, NAME: name, FK_DEFAULT_ASSET_GUID: gRoad, REFERENCE_POINT: pt3Blob(...start) });
+      this.insert("ROADS", this.tRoad, { GUID: gRoad, NAME: name, FK_PARENT_GUID: gCD, GEOMETRY: lineBlob(line), ...style });
+      const nulls = (tpl: Row, keep: string[]) => Object.fromEntries(Object.keys(tpl).filter((k) => !keep.includes(k)).map((k) => [k, null]));
+      const hG = H.map(() => randomUUID());
+      const hBase = nulls(this.tH, ["FK_PARENT_TABLE"]);
+      H.forEach((e, i) => this.insert("H_CONSTRAINTS", hBase, {
+        GUID: hG[i], FK_PARENT_TABLE: this.tH.FK_PARENT_TABLE, FK_PARENT_GUID: gCD,
+        FK_PREV_H_CONSTRAINTS_GUID: hG[i - 1] ?? null, FK_NEXT_H_CONSTRAINTS_GUID: hG[i + 1] ?? null,
+        CONSTRAINT_TYPE: e.kind === "line" ? 3 : 4, CONSTRAINT_TYPE_DEFINITION: e.kind === "line" ? 0 : 2,
+        PASSTHROUGH_PT_1: ptBlob(...e.a), PASSTHROUGH_PT_2: ptBlob(...(e.kind === "line" ? e.b : e.m)), PASSTHROUGH_PT_3: e.kind === "arc" ? ptBlob(...e.b) : null,
+      }));
+      // vertical chain: tangents PVI -> PVI, a curve row (18) at each PVI with L > 0
+      type V = { type: 15; p: { s: number; z: number }; q: { s: number; z: number }; g: string } | { type: 18; curve: number; L: number; g: string };
+      const chain: V[] = [];
+      for (let i = 0; i + 1 < pvis.length; i++) {
+        const p = pvis[i]!, q = pvis[i + 1]!;
+        if (i > 0 && p.L > 0) {
+          const a = pvis[i - 1]!, gin = (p.z - a.z) / (p.s - a.s), gout = (q.z - p.z) / (q.s - p.s);
+          chain.push({ type: 18, curve: gout > gin ? 4096 : 4097, L: p.L, g: randomUUID() });
+        }
+        chain.push({ type: 15, p, q, g: randomUUID() });
+      }
+      const vBase = nulls(this.tV, ["FK_PARENT_TABLE"]);
+      chain.forEach((c, k) => this.insert("V_CONSTRAINTS", vBase, {
+        GUID: c.g, FK_PARENT_TABLE: this.tV.FK_PARENT_TABLE, FK_PARENT_GUID: gCD,
+        FK_PREV_V_CONSTRAINTS_GUID: chain[k - 1]?.g ?? null, FK_NEXT_V_CONSTRAINTS_GUID: chain[k + 1]?.g ?? null,
+        CONSTRAINT_TYPE: c.type, CONSTRAINT_TYPE_DEFINITION: 0,
+        ...(c.type === 15
+          ? { GEOMETRY: lineBlob([[...plan.xy(c.p.s), c.p.z], [...plan.xy(c.q.s), c.q.z]]), PASSTHROUGH_PT_1: ptBlob(c.p.s, c.p.z), PASSTHROUGH_PT_2: ptBlob(c.q.s, c.q.z) }
+          : { CURVE_TYPE: c.curve, PARAM_1: c.L }),
+      }));
+      for (const l of this.tLoc) {
+        const isEnd = Number(l.TYPE) === 3, p = isEnd ? end : start;
+        const g = Buffer.alloc(36);
+        g.writeUInt32LE(2, 0); g.writeUInt32LE(1, 4); g.writeUInt32LE(1, 8); g.writeDoubleLE(p[0], 12); g.writeDoubleLE(p[1], 20); g.writeDoubleLE(0, 28);
+        this.insert("CONSTRAINED_DEF_GEOM_LOCATIONS", l, { GUID: randomUUID(), FK_PARENT_GUID: gCD, GEOMETRY: g, FK_REFERENCE_H_CONSTRAINTS_GUID: isEnd ? hG[hG.length - 1] : hG[0], SUB_ELEMENT: isEnd ? H.length : 1, PARAM: isEnd ? 1 : 0, STATION: isEnd ? total : 0 });
+      }
+      // JSON_RANGE_HASH is InfraWorks' cache key for the body rows: copied as is it says the template's
+      // cached shapes are valid (the new road was not drawn); zeroed, InfraWorks takes the stored rows
+      const staleHash = Buffer.from(Buffer.from(this.tRps.JSON_RANGE_HASH as Uint8Array).toString("utf8").replace(/"Value": "[0-9A-F]{32}"/g, `"Value": "${"0".repeat(32)}"`), "utf8");
+      this.insert("CONSTRAINED_DEF_RPSYSTEMS", this.tRps, { GUID: gRps, FK_PARENT_GUID: gCD, GEOMETRY: lineBlob(line), LENGTH_2D: total, JSON_RANGE_HASH: staleHash });
+      this.insertBody(gRoad, String(this.tRps.GUID), gRps, line, sec);
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+
+  /** The body rows: one strip per component, marking lines, grading ring (keys = corners) and CutOut. */
+  private insertBody(roadGuid: string, rpsOld: string, rpsNew: string, line: XYZ[], sec: Section | null) {
+    const d = bodyRows(this.tPrim, line, sec);
+    for (const p of d.prims) this.insert("PRIMITIVES", p.t, { GUID: randomUUID(), FK_PARENT_GUID: roadGuid, ...(p.part != null ? { PARENT_PART_ID: p.part } : {}), GROUP_URN: String(p.t.GROUP_URN).replace(rpsOld, rpsNew), JSON_DATA: p.json, GEOMETRY: p.geom });
+    const grading = JSON.parse(String(this.tRoad.GRADING_DATA || "{}")).gradingComponent || {};
+    const m = (grading.gradingLimit || 5) + 2;
+    const K = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    const bbox3 = (pts: XYZ[]) => [0, 1, 2].map((k) => Math.min(...pts.map((p) => p[k]!))).concat([0, 1, 2].map((k) => Math.max(...pts.map((p) => p[k]!))));
+    const gradingJson = (coords: XYZ[], comp: unknown) => `{"type": "Grading","footprint": {"type": "LineString","bbox": [ ${bbox3(coords).map(num).join(", ")} ],"coordinates": ${jpts(coords)}},"gradingComponent": ${JSON.stringify(comp)}}`;
+    // template order: start transition, end transition, right edge, left edge, CutOut
+    const [tS, tE, tR, tL, tC] = this.tTop.slice().sort((a, b) => Number(a.ID) - Number(b.ID));
+    if (!tC) throw new Error("template road: expected 5 terrain operations");
+    const compOf = (t: Row) => json(t.TERRAIN_OPERATION).gradingComponent;
+    const rows: [Row, string, XYZ[], string | null, string | null][] = [
+      [tS!, gradingJson(d.startT, compOf(tS!)), d.startT, K[0]!, K[1]!],
+      [tE!, gradingJson(d.endT, compOf(tE!)), d.endT, K[2]!, K[3]!],
+      [tR!, gradingJson(d.rightEdge, compOf(tR!)), d.rightEdge, K[1]!, K[2]!],
+      [tL!, gradingJson(d.leftEdgeRev, compOf(tL!)), d.leftEdgeRev, K[3]!, K[0]!],
+      [tC, `{"type": "CutOut","footprint": {"type": "Polygon","bbox": [ ${bbox3(d.cut).map(num).join(", ")} ],"coordinates": [${jpts(d.cut)}]}}`, d.cut, null, null],
+    ];
+    for (const [t, j, pts, k1, k2] of rows) this.insert("TERRAIN_OPERATIONS", t, { GUID: randomUUID(), FK_PARENT_GUID: roadGuid, GROUP_URN: String(t.GROUP_URN).replace(rpsOld, rpsNew), TERRAIN_OPERATION: Buffer.from(j, "utf8"), GEOMETRY: bboxBlob(pts, t === tC ? 0 : m), START_POINT_KEY: k1, END_POINT_KEY: k2 });
+  }
+}
+
+/** Body geometry of one road (exported for tests): strips, transitions, edges and the CutOut ring. */
+export function bodyRows(tPrim: Row[], line: XYZ[], sec: Section | null) {
+  const n = line.length, p0 = line[0]!, p1 = line[1]!, pn = line[n - 1]!, pm = line[n - 2]!;
+  const path: XYZ[] = [[2 * p0[0] - p1[0], 2 * p0[1] - p1[1], p1[2]], ...line, [2 * pn[0] - pm[0], 2 * pn[1] - pm[1], pm[2]]];
+  // left normal at each vertex (average of the adjacent segment directions)
+  const nrm = line.map((_, i) => { const a = line[Math.max(0, i - 1)]!, b = line[Math.min(n - 1, i + 1)]!; const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy); return [-dy / l, dx / l] as const; });
+  // cross-section offset d > 0 lies right of the direction of travel
+  const off = (d: number, dz = 0): XYZ[] => line.map((p, i) => [p[0] - nrm[i]![0] * d, p[1] - nrm[i]![1] * d, p[2] + dz]);
+  type Prim = { t: Row; part?: bigint; json: Buffer; geom: Buffer };
+  const ring = (right: XYZ[], left: XYZ[]) => [...right, ...left.slice().reverse(), right[0]!];
+  if (sec) {
+    const tStrip = tPrim.find((t) => json(t.JSON_DATA).type === "multiMorphingCrossSection");
+    const tMark = tPrim.find((t) => json(t.JSON_DATA).type === "symbolizedPath");
+    if (!tStrip || !tMark) throw new Error("template road: expected a multiMorphingCrossSection and a symbolizedPath");
+    const strip = json(tStrip.JSON_DATA), mark = json(tMark.JSON_DATA);
+    const part = (id: number) => (3n << 56n) | BigInt(id);
+    const prims: Prim[] = sec.parts.map((p) => {
+      const xs = p.crossSection.map((q) => q[0]);
+      const j = { ...strip, path, vertexIndices: [0, n - 1], crossSections: [p.crossSection, p.crossSection], material: p.material, startCapMaterial: p.material, endCapMaterial: p.material };
+      return { t: tStrip, part: part(p.id), json: Buffer.from(JSON.stringify(j), "utf8"), geom: bboxBlob([...off(Math.min(...xs)), ...off(Math.max(...xs))], 0.5) };
+    });
+    const laneId = sec.parts.find((p) => p.role === "lane")!.id;
+    for (const x of sec.marking) { const ln = off(x); prims.push({ t: tMark, part: part(laneId), json: Buffer.from(JSON.stringify({ ...mark, path: [ln[0], ...ln, ln[n - 1]] }), "utf8"), geom: bboxBlob(ln, 0.5) }); }
+    const B = sec.bound, left = off(B[0]![0], B[0]![1]), right = off(B[B.length - 1]![0], B[B.length - 1]![1]);
+    const startT = B.map(([x, y]) => off(x, y)[0]!), endT = B.slice().reverse().map(([x, y]) => off(x, y)[n - 1]!);
+    return { prims, startT, endT, rightEdge: right, leftEdgeRev: left.slice().reverse(), cut: ring(right, left) };
+  }
+  const prims: Prim[] = tPrim.map((t) => {
+    const j = json(t.JSON_DATA);
+    let geomPts: XYZ[];
+    if (j.type === "multiMorphingCrossSection") {
+      const xs = (j.crossSections as number[][][]).flat().map((q) => q[0]!), lo = Math.min(...xs), hi = Math.max(...xs);
+      j.path = path; j.vertexIndices = [0, n - 1]; geomPts = [...off(lo), ...off(hi)];
+    } else { j.path = [line[0], ...line, line[n - 1]]; geomPts = line; }
+    return { t, json: Buffer.from(JSON.stringify(j), "utf8"), geom: bboxBlob(geomPts, 0.5) };
+  });
+  const allX = tPrim.flatMap((t) => { const j = json(t.JSON_DATA); return j.crossSections ? (j.crossSections as number[][][]).flat().map((q) => q[0]!) : []; });
+  const left = off(Math.min(...allX)), right = off(Math.max(...allX));
+  const xsUp = [...new Set(allX)].sort((a, b) => a - b);
+  return { prims, startT: xsUp.map((x) => off(x)[0]!), endT: xsUp.slice().reverse().map((x) => off(x)[n - 1]!), rightEdge: right, leftEdgeRev: left.slice().reverse(), cut: ring(right, left) };
+}
