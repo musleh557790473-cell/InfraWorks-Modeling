@@ -216,6 +216,16 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
       R.14.G.14 R.8.G.4 R.10.G.1 R.10.G.5 R.10.G.6 R.13.G.7, +1); 9 whose chains do not match the
       profile (RA-3 RA-6 R.0.D.13 R.0.D.5 R.1.E.1 R.12.E.1, and R.3.G.11 R.14.F.3 R.14.G.7
       R.10.G.4 R.13.G.3 a few dm to 2 m off).
+  - PVI review roads (3 Nov 2026, now 219 roads): the label window of a profile also caught the
+    neighbouring profile's labels (R.3.G.6 carried R.2.F.5's PVIs at 294/349/353 m). pvis.cjs now
+    checks labels against the road's own FG line: outside its station range, or a printed level
+    off it by > 5 cm, the label is dropped. Missing PVC/PVT labels: levels read on the FG line;
+    neighbouring anchors that are not the tangent points: grades of the FG line 2 m outside the
+    curve. All 250 roads consistent (max tangent mismatch 3.7 mm); 25 roads changed, 225
+    identical. Old file kept as `aq-road-pvis.before-fg-filter.json`. R.0.C.4 then reversed
+    (junction steps 10.05 -> 0.02 m). 19 roads written; R.2.G.6 R.2.G.22 R.5.G.5 R.7.G.2 rewritten.
+    Left out now: 10 with no profile in ROD-40000, 9 whose chains do not match the profile, and
+    still untyped R.9.G.6, R.9.G.7.
   - Finding a road in InfraWorks: Model Explorer > Roads > Select By Filter, `NAME = 'R.5.G.1'`, F.
 - `roadtin.cjs`: road centreline against the grading surface. Most roads sit 0.5-0.8 m above it
   (pavement). Larger only at junction mouths (R.3.G.3, R.0.D.16, R.3.E.1, R.3.F.1) and on R.3.G.1,
