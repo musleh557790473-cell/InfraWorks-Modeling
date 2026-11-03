@@ -36,19 +36,22 @@ function cross(segs, p, u) {
     if (v < -1e-9 || v > 1 + 1e-9 || Math.abs(t) > 30) continue;
     if (t > 0.5 && (L == null || t < L)) L = t; if (t < -0.5 && (R == null || -t < R)) R = -t;
   }
-  return L != null && R != null ? { L, R, w: L + R } : null;
+  return L != null && R != null ? { L, R, w: L + R } : L != null || R != null ? { L, R, w: null } : null;
 }
 const out = {}, hist = {};
 for (const r of roads) {
-  const ws = [], es = [];
+  const ws = [], ws1 = [], es = [];
   // sample every 2 m away from the ends (junction mouths give stray widths), majority vote of exact type widths
-  for (let s = Math.min(12, r.length / 4); s <= r.length - Math.min(12, r.length / 4); s += 2) { const q = at(r.segs, s); if (!q) continue; const a = cross(ROW, q.p, q.u); if (a) ws.push(a.w); const e = cross(EDGE, q.p, q.u); if (e) es.push(e.w); }
-  const votes = {}; for (const x of ws) { const t = TYPES.find((t) => Math.abs(t[0] - x) < 0.05); if (t) votes[t[1]] = (votes[t[1]] || 0) + 1; }
-  const ranked = Object.entries(votes).sort((a, b) => b[1] - a[1]);
-  const ok = ranked.length && ranked[0][1] >= 5 && (!ranked[1] || ranked[1][1] < 0.25 * ranked[0][1]);
+  for (let s = Math.min(12, r.length / 4); s <= r.length - Math.min(12, r.length / 4); s += 2) { const q = at(r.segs, s); if (!q) continue; const a = cross(ROW, q.p, q.u);
+    if (a && a.w != null) ws.push(a.w); else if (a) ws1.push(2 * (a.L ?? a.R)); const e = cross(EDGE, q.p, q.u); if (e && e.w != null) es.push(e.w); }
+  const vote = (list) => { const v = {}; for (const x of list) { const t = TYPES.find((t) => Math.abs(t[0] - x) < 0.05); if (t) v[t[1]] = (v[t[1]] || 0) + 1; } const rk = Object.entries(v).sort((a, b) => b[1] - a[1]); return { v, rk, ok: rk.length && rk[0][1] >= 5 && (!rk[1] || rk[1][1] < 0.25 * rk[0][1]) }; };
+  // both ROW lines first; when they are not both drawn (road on the site edge or along open space),
+  // the one drawn line doubled (symmetric typical sections), flagged as one-sided
+  let { v: votes, rk: ranked, ok } = vote(ws), oneSided = false;
+  if (!ok) { const o = vote(ws1); if (o.ok) { ({ v: votes, rk: ranked, ok } = o); oneSided = true; } }
   const ev = {}; for (const x of es) { const k = x.toFixed(1); ev[k] = (ev[k] || 0) + 1; }
-  out[r.name] = { type: ok ? ranked[0][0] : null, votes, samples: ws.length, edge: Object.entries(ev).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null };
-  const k = `${ok ? ranked[0][0] : "unclassified"} (edges ${out[r.name].edge})`; hist[k] = (hist[k] || 0) + 1;
+  out[r.name] = { type: ok ? ranked[0][0] : null, ...(oneSided ? { oneSided: true } : {}), votes, samples: ws.length, oneSidedSamples: ws1.length, edge: Object.entries(ev).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null };
+  const k = `${ok ? ranked[0][0] : "unclassified"}${oneSided ? " one-sided" : ""} (edges ${out[r.name].edge})`; hist[k] = (hist[k] || 0) + 1;
 }
 fs.writeFileSync(outPath, JSON.stringify(out, null, 1));
 console.log(JSON.stringify(hist, null, 1));

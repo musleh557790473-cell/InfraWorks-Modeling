@@ -53,17 +53,43 @@ plines.forEach((v) => { const n = nameOf(v); if (!n) return; (byName.get(n) || b
 const prof = JSON.parse(fs.readFileSync(profPath, "utf8"));
 const profOf = (n) => prof.filter((p) => p.name === n && p.pts && p.pts.length).flatMap((p) => p.pts).sort((a, b) => a[0] - b[0]);
 const near = (p, q, tol = 0.05) => Math.hypot(p[0] - q[0], p[1] - q[1]) < tol;
+// Pieces without a name in the roads package (61 of 332 in Al Qairawan) and pieces carrying a
+// neighbour's name made roads too short or too long. Each road is now chained from its 0+000 end
+// through its own pieces and unnamed ones, and a chain is accepted only when its length equals the
+// profile length (1 cm): the profile, not a guess, decides which pieces belong to the road.
+const unnamed = []; plines.forEach((v) => { if (!nameOf(v)) unnamed.push(segsOf(v)); });
+const pieceLen = (s) => s.reduce((a, g) => a + segLen(g), 0);
+const tickDist = (p) => Math.min(...chain0.map((c) => Math.hypot(c[0] - p[0], c[1] - p[1])));
+// a closed piece (start = end, a loop road) opened at its vertex nearest a 0+000 tick
+function openLoop(s) {
+  if (!near(s[0].a, s.at(-1).b)) return s;
+  let k = 0; s.forEach((g, i) => { if (tickDist(g.a) < tickDist(s[k].a)) k = i; });
+  return [...s.slice(k), ...s.slice(0, k)];
+}
+function chainTo(own, plen) {
+  const pool = [...own.map((s) => ({ s: openLoop(s), own: true })), ...unnamed.map((s) => ({ s, own: false }))];
+  const starts = own.flatMap((s) => { const o = openLoop(s); return [o[0].a, o.at(-1).b]; }).sort((p, q) => tickDist(p) - tickDist(q));
+  let best = null;
+  const dfs = (at, used, segs, len, depth) => {
+    if (Math.abs(len - plen) < 0.01) { const nOwn = used.filter((i) => pool[i].own).length; if (!best || nOwn > best.nOwn) best = { segs: segs.slice(), len, nOwn, used: used.slice() }; return; }
+    if (len > plen + 0.01 || depth > 8) return;
+    pool.forEach((p, i) => {
+      if (used.includes(i)) return;
+      let s = p.s; if (near(s[0].a, at)) {} else if (near(s.at(-1).b, at)) s = rev(s); else return;
+      used.push(i); dfs(s.at(-1).b, used, [...segs, ...s], len + pieceLen(s), depth + 1); used.pop();
+    });
+  };
+  for (const st of starts.slice(0, 2)) { dfs(st, [], [], 0, 0); if (best) return best; } // the end nearest a 0+000 tick first
+  return null;
+}
 const roads = [], report = [];
 for (const [name, pieces] of byName) {
   const fg = profOf(name); if (!fg.length) { report.push(`${name}: no profile`); continue; }
-  const ends = pieces.flatMap((s) => [s[0].a, s.at(-1).b]);
-  const free = ends.filter((p) => ends.filter((q) => near(p, q)).length === 1);
-  const start = free.sort((p, q) => Math.min(...chain0.map((c) => Math.hypot(c[0] - p[0], c[1] - p[1]))) - Math.min(...chain0.map((c) => Math.hypot(c[0] - q[0], c[1] - q[1]))))[0];
-  if (!start) { report.push(`${name}: no free end (a loop?)`); continue; }
-  const left = pieces.slice(); let at = start; const segs = [];
-  while (left.length) { const k = left.findIndex((s) => near(s[0].a, at) || near(s.at(-1).b, at)); if (k < 0) break; let s = left.splice(k, 1)[0]; if (!near(s[0].a, at)) s = rev(s); segs.push(...s); at = s.at(-1).b; }
-  const len = segs.reduce((a, g) => a + segLen(g), 0), plen = fg.at(-1)[0];
-  const note = left.length ? `${left.length} piece(s) not connected` : "";
+  const plen = fg.at(-1)[0], c = chainTo(pieces, plen);
+  if (!c) { const own = pieces.reduce((a, s) => a + pieceLen(s), 0); report.push(`${name}: no chain of its pieces (${pieces.length}, ${own.toFixed(3)} m) and unnamed pieces matches the profile ${plen.toFixed(3)} m`); continue; }
+  const segs = c.segs, len = c.len, left = [];
+  const extra = c.used.length - c.nOwn, unusedOwn = pieces.length - c.nOwn;
+  const note = [extra ? `${extra} unnamed piece(s) added` : "", unusedOwn ? `${unusedOwn} own piece(s) left out` : ""].filter(Boolean).join(", ");
   report.push(`${name}: plan ${len.toFixed(3)} profile ${plen.toFixed(3)} diff ${(len - plen).toFixed(3)} ${note}`);
   // vertices with station and PGL
   const zAt = (st) => { for (let i = 1; i < fg.length; i++) if (st <= fg[i][0] + 1e-9) { const a = fg[i - 1], b = fg[i]; return b[0] === a[0] ? b[1] : a[1] + ((b[1] - a[1]) * (st - a[0])) / (b[0] - a[0]); } return fg.at(-1)[1]; };

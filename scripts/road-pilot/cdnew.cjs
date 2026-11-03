@@ -34,6 +34,18 @@ const xy = (s) => {
   if (e.kind === "line") return [e.a[0] + (e.b[0] - e.a[0]) * t, e.a[1] + (e.b[1] - e.a[1]) * t];
   const a = e.a0 + e.th * t; return [e.cx + e.r * Math.cos(a), e.cy + e.r * Math.sin(a)];
 };
+// PVIs past the road end come from the next profile on the same sheet (R.2.G.6, R.5.G.5): drop them
+// when one PVI sits at the end. A first PVI up to 0.30 m after 0 (R.0.C.3 at 0.254): extend the first
+// tangent back to 0 at its own grade.
+if (pvis.some((p) => Math.abs(p.s - total) <= 0.01) && pvis.at(-1).s > total + 0.01) {
+  const n0 = pvis.length; pvis.splice(pvis.findIndex((p) => Math.abs(p.s - total) <= 0.01) + 1);
+  console.log(`${name}: ${n0 - pvis.length} PVI(s) past the end dropped (another road's profile)`);
+}
+if (pvis[0].s > 1e-3 && pvis[0].s <= 0.3 && pvis.length > 1 && !pvis[0].L) {
+  const g = (pvis[1].z - pvis[0].z) / (pvis[1].s - pvis[0].s), z0 = pvis[0].z - g * pvis[0].s;
+  console.log(`${name}: first PVI at ${pvis[0].s} m, tangent extended to 0 (z ${z0.toFixed(3)})`);
+  pvis.unshift({ s: 0, z: z0, L: 0 });
+}
 if (Math.abs(pvis[0].s) > 1e-3 || Math.abs(pvis.at(-1).s - total) > 0.01) throw new Error(`${name}: PVIs ${pvis[0].s}..${pvis.at(-1).s} vs alignment 0..${total.toFixed(3)}`);
 // Profile level with symmetric parabolic vertical curves.
 const zAt = (s) => {

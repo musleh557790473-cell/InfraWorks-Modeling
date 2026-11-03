@@ -35,6 +35,20 @@ function junctionStep(name, segs, pv, L) {
   for (const x of [p[0], p.at(-1)]) for (const [o, q] of lines) { if (o === name) continue; const m = zNear(q, x); if (m && m.d < 1.0) { sum += Math.abs(x[2] - m.z); n++; } }
   return n ? sum : null;
 }
+// Loop roads (start = end): the 0+000 tick nearest a vertex may belong to a neighbour, so try every
+// vertex as the start, both ways, and keep the one whose profile follows the surface (R.2.G.5).
+const closed = (segs) => Math.hypot(segs[0].a[0] - segs.at(-1).b[0], segs[0].a[1] - segs.at(-1).b[1]) < 0.05;
+const rotations = (segs) => { const out = []; for (let k = 0; k < segs.length; k++) { const s = [...segs.slice(k), ...segs.slice(0, k)]; out.push(s, reverseSegs(s)); } return out; };
+const rotated = [];
+for (const r of roads) {
+  const pv = pvis[r.name]; if (!pv || pv.some((p) => p.z == null) || !closed(r.segs)) continue;
+  const now = spread(r.segs, pv, r.length); if (now == null || now <= 0.3) continue;
+  let best = { s: r.segs, v: now };
+  for (const s of rotations(r.segs)) { const v = spread(s, pv, r.length); if (v != null && v < best.v) best = { s, v }; }
+  if (best.v < 0.3 && best.v < now / 3) { rotated.push(`${r.name} (${now.toFixed(2)} -> ${best.v.toFixed(2)} m)`); if (flags.includes("--write")) { r.segs = best.s; lines.set(r.name, poly(r.segs, pv, r.length)); } }
+  else console.log(`${r.name}: loop, no start fits the surface (best ${best.v.toFixed(2)} m)`);
+}
+if (rotated.length) console.log("loops re-started:", rotated.join(", "));
 const flipped = [], report = [];
 for (const r of roads) {
   const pv = pvis[r.name]; if (!pv || pv.some((p) => p.z == null)) continue;
