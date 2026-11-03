@@ -78,13 +78,29 @@ const bboxBlob = (pts, m) => { const xs = pts.map((p) => p[0]), ys = pts.map((p)
   const b = Buffer.alloc(96); [3, 0, 1, 5].forEach((v, i) => b.writeUInt32LE(v, 4 * i)); [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]].forEach((p, i) => { b.writeDoubleLE(p[0], 16 + 16 * i); b.writeDoubleLE(p[1], 24 + 16 * i); }); return b; };
 const num = (v) => (Number.isInteger(v) ? v.toFixed(1) : String(v));
 const jpts = (pts) => "[" + pts.map((p) => `[ ${p.map(num).join(", ")} ]`).join(",") + "]";
-function derivedRows(tPrim, tTop, line, gradingLimit) {
+function derivedRows(tPrim, tTop, line, gradingLimit, sec) {
   const n = line.length, p0 = line[0], p1 = line[1], pn = line[n - 1], pm = line[n - 2];
   const path = [[2 * p0[0] - p1[0], 2 * p0[1] - p1[1], p1[2]], ...line, [2 * pn[0] - pm[0], 2 * pn[1] - pm[1], pm[2]]];
   // left normal at each vertex (average of adjacent segment directions)
   const nrm = line.map((p, i) => { const a = line[Math.max(0, i - 1)], b = line[Math.min(n - 1, i + 1)]; const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy); return [-dy / l, dx / l]; });
   // cross-section offset d > 0 is right of the direction of travel (template: x = +4 lies at -normal)
-  const off = (d) => line.map((p, i) => [p[0] - nrm[i][0] * d, p[1] - nrm[i][1] * d, p[2]]);
+  const off = (d, dz = 0) => line.map((p, i) => [p[0] - nrm[i][0] * d, p[1] - nrm[i][1] * d, p[2] + dz]);
+  if (sec) { // Parsons section: one strip per component, marking lines, edges at the outer top points
+    const tStrip = tPrim.find((t) => JSON.parse(Buffer.from(t.JSON_DATA).toString("utf8")).type === "multiMorphingCrossSection");
+    const tMark = tPrim.find((t) => JSON.parse(Buffer.from(t.JSON_DATA).toString("utf8")).type === "symbolizedPath");
+    const strip = JSON.parse(Buffer.from(tStrip.JSON_DATA).toString("utf8")), mark = JSON.parse(Buffer.from(tMark.JSON_DATA).toString("utf8"));
+    const part = (id) => (3n << 56n) | BigInt(id);
+    const prims = sec.parts.map((p) => {
+      const xs = p.crossSection.map((q) => q[0]);
+      const j = { ...strip, path, vertexIndices: [0, n - 1], crossSections: [p.crossSection, p.crossSection], material: p.material, startCapMaterial: p.material, endCapMaterial: p.material };
+      return { t: tStrip, part: part(p.id), json: Buffer.from(JSON.stringify(j), "utf8"), geom: bboxBlob([...off(Math.min(...xs)), ...off(Math.max(...xs))], 0.5) };
+    });
+    const laneId = sec.parts.find((p) => p.role === "lane").id;
+    for (const x of sec.marking) { const ln = off(x); prims.push({ t: tMark, part: part(laneId), json: Buffer.from(JSON.stringify({ ...mark, path: [ln[0], ...ln, ln[n - 1]] }), "utf8"), geom: bboxBlob(ln, 0.5) }); }
+    const B = sec.bound, left = off(B[0][0], B[0][1]), right = off(B.at(-1)[0], B.at(-1)[1]);
+    const startT = B.map(([x, y]) => off(x, y)[0]), endT = B.slice().reverse().map(([x, y]) => off(x, y)[n - 1]);
+    return { prims, startT, endT, rightEdge: right, leftEdgeRev: left.slice().reverse(), cut: [...right, ...left.slice().reverse(), right[0]], gradingLimit };
+  }
   const prims = tPrim.map((t) => {
     const j = JSON.parse(Buffer.from(t.JSON_DATA).toString("utf8"));
     let geomPts;
@@ -105,10 +121,10 @@ function derivedRows(tPrim, tTop, line, gradingLimit) {
   return { prims, startT, endT, rightEdge: right, leftEdgeRev: left.slice().reverse(), cut: [...right, ...left.slice().reverse(), right[0]], gradingLimit };
 }
 // Rows for one road: PRIMITIVES and TERRAIN_OPERATIONS, ring keys = corners (left-start, right-start, right-end, left-end).
-function insertDerived(tPrim, tTop, roadGuid, rpsOld, rpsNew, line) {
+function insertDerived(tPrim, tTop, roadGuid, rpsOld, rpsNew, line, sec) {
   const grading = JSON.parse(String(tRoad.GRADING_DATA || "{}")).gradingComponent || {};
-  const d = derivedRows(tPrim, tTop, line, grading.gradingLimit || 5);
-  for (const p of d.prims) insert("PRIMITIVES", p.t, { GUID: randomUUID(), FK_PARENT_GUID: roadGuid, GROUP_URN: String(p.t.GROUP_URN).replace(rpsOld, rpsNew), JSON_DATA: p.json, GEOMETRY: p.geom });
+  const d = derivedRows(tPrim, tTop, line, grading.gradingLimit || 5, sec);
+  for (const p of d.prims) insert("PRIMITIVES", p.t, { GUID: randomUUID(), FK_PARENT_GUID: roadGuid, ...(p.part != null ? { PARENT_PART_ID: p.part } : {}), GROUP_URN: String(p.t.GROUP_URN).replace(rpsOld, rpsNew), JSON_DATA: p.json, GEOMETRY: p.geom });
   const K = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
   const bbox3 = (pts) => [Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1])), Math.min(...pts.map((p) => p[2])), Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[2]))];
   const gradingJson = (coords, comp) => `{"type": "Grading","footprint": {"type": "LineString","bbox": [ ${bbox3(coords).map(num).join(", ")} ],"coordinates": ${jpts(coords)}},"gradingComponent": ${JSON.stringify(comp)}}`;
@@ -127,6 +143,13 @@ function insertDerived(tPrim, tTop, roadGuid, rpsOld, rpsNew, line) {
     TERRAIN_OPERATION: Buffer.from(json, "utf8"), GEOMETRY: bboxBlob(pts, t === tC ? 0 : m), START_POINT_KEY: k1, END_POINT_KEY: k2 });
 }
 
+// Parsons section from the ROW classification (--sections aq_road_sections.json); unclassified roads keep the template section.
+const secFile = flags.includes("--sections") ? flags[flags.indexOf("--sections") + 1] : null;
+const secType = secFile ? JSON.parse(fs.readFileSync(secFile, "utf8"))[name]?.type ?? null : null;
+const sec = secType ? require("./sections.cjs").build(secType) : null;
+const style = (() => { if (!sec) return {}; const s = JSON.parse(String(tRoad.MANUAL_STYLE)); s.componentStyle = JSON.stringify(sec.componentStyle);
+  s.lanes = { ...s.lanes, countForward: sec.lanes, countBackward: sec.lanes }; return { MANUAL_STYLE: JSON.stringify(s, null, "\t"), MAX_SPEED: sec.speed }; })();
+console.log(`${name}: section ${secType ?? "template (unclassified)"}${sec ? `, ${sec.width} m, ${sec.speed} km/h` : ""}`);
 const existing = one("select count(*) n from ROADS where NAME=?", name).n > 0n;
 if (existing && !flags.includes("--regen")) throw new Error(`${name} already exists in the model`);
 
@@ -143,15 +166,16 @@ if (existing) { // --regen: recompute only the body of a road already in the mod
   const rps = one("select GUID from CONSTRAINED_DEF_RPSYSTEMS where FK_PARENT_GUID=?", road.FK_PARENT_GUID);
   db.prepare("delete from PRIMITIVES where FK_PARENT_GUID=?").run(road.GUID);
   db.prepare("delete from TERRAIN_OPERATIONS where FK_PARENT_GUID=?").run(road.GUID);
-  insertDerived(tPrim, tTop, road.GUID, tRps.GUID, rps.GUID, line3d);
+  insertDerived(tPrim, tTop, road.GUID, tRps.GUID, rps.GUID, line3d, sec);
   db.prepare("update ROADS set GEOMETRY=? where GUID=?").run(lineBlob(line3d), road.GUID);
+  if (sec) db.prepare("update ROADS set MANUAL_STYLE=?, MAX_SPEED=? where GUID=?").run(style.MANUAL_STYLE, style.MAX_SPEED, road.GUID);
   db.prepare("update CONSTRAINED_DEF_RPSYSTEMS set GEOMETRY=? where GUID=?").run(lineBlob(line3d), rps.GUID);
   db.exec("COMMIT"); console.log(`${name}: body recomputed`); process.exit(0);
 }
 const gCD = randomUUID(), gRoad = randomUUID(), gRps = randomUUID();
 const start = line3d[0], end = line3d.at(-1);
 insert("CONSTRAINED_DEFINITIONS", tCD, { GUID: gCD, NAME: name, FK_DEFAULT_ASSET_GUID: gRoad, REFERENCE_POINT: pt3Blob(...start) });
-insert("ROADS", tRoad, { GUID: gRoad, NAME: name, FK_PARENT_GUID: gCD, GEOMETRY: lineBlob(line3d) });
+insert("ROADS", tRoad, { GUID: gRoad, NAME: name, FK_PARENT_GUID: gCD, GEOMETRY: lineBlob(line3d), ...style });
 // Horizontal chain
 const hG = H.map(() => randomUUID());
 const hBase = { ...nulls(tH, ["FK_PARENT_TABLE"]) };
@@ -188,6 +212,6 @@ for (const l of tLoc) {
 // cached shapes are valid (copy D: the new road was not drawn). Zero the hash values to force a rebuild.
 const staleHash = Buffer.from(Buffer.from(tRps.JSON_RANGE_HASH).toString("utf8").replace(/"Value": "[0-9A-F]{32}"/g, `"Value": "${"0".repeat(32)}"`), "utf8");
 insert("CONSTRAINED_DEF_RPSYSTEMS", tRps, { GUID: gRps, FK_PARENT_GUID: gCD, GEOMETRY: lineBlob(line3d), LENGTH_2D: total, JSON_RANGE_HASH: staleHash });
-insertDerived(tPrim, tTop, gRoad, tRps.GUID, gRps, line3d);
+insertDerived(tPrim, tTop, gRoad, tRps.GUID, gRps, line3d, sec);
 db.exec("COMMIT");
 console.log(`written: definition ${gCD}, road ${gRoad}; ${H.length} H, ${chain.length} V rows, ${tPrim.length} primitives, ${tTop.length} terrain operations computed`);
