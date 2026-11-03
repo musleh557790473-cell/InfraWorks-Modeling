@@ -8,7 +8,8 @@
   "types": "./dist/index.d.ts",
   "bin": {
     "model-gate": "./dist/cli.js",
-    "model-names": "./dist/names-cli.js"
+    "model-names": "./dist/names-cli.js",
+    "model-roads": "./dist/roads-cli.js"
   },
   "exports": {
     ".": {
@@ -22,6 +23,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "gate": "tsx src/cli.ts",
     "names": "tsx src/names-cli.ts",
+    "roads": "tsx src/roads-cli.ts",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {

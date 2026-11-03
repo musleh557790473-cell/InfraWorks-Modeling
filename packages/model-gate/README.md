@@ -66,6 +66,39 @@ source's `CONFIG`, so a Refresh keeps the names. Rows that already have another 
   allowed: InfraWorks' own triggers use them, and better-sqlite3 rejects them. InfraWorks' journal
   triggers log the edits as they do for its own.
 
+## Parsons roads as component roads: `model-roads`
+
+```bash
+pnpm model:roads "C:\IW\<working copy>.sqlite" --template <constrained-definition GUID> \
+  --layout <ROD-DWG-10200>.dxf --profiles <ROD-DWG-40000>.dxf --surface <grading>.xml \
+  [--package <roads package>/shp/road_centerline] [--out-dir <folder>] [--dry]
+```
+
+Writes every road of the Parsons road layout into the model as a component road, with its name,
+Parsons' horizontal elements (straights and arcs), PVIs and vertical curves, typical section (A1-C2)
+and crossfall side, replacing a road of the same name. The template is a road converted in
+InfraWorks itself (its `CONSTRAINED_DEFINITIONS` GUID); its constraints are kept, its body refreshed.
+
+The chain (pure functions in `@infraworks/domain`, `src/roads/`):
+
+1. Profile views from the profiles block (FG line, level grid, station labels), checked against the
+   printed PGL row; PVIs and curves from the labels, each label checked against the road's own FG line
+   (labels of the neighbouring profile on the sheet are dropped; missing PVC/PVT or tangent grades
+   are read on the FG line).
+2. Plan alignments from the layout block: each road chained from its 0+000 end through its own,
+   unnamed and name-labelled pieces; a chain is kept only when its length equals the profile
+   length (1 cm). A confirmed alignment longer than its profile is cut at the profile end.
+3. Direction: each road's profile against the grading surface (steady pavement offset) and the
+   levels at junctions; reversed when they agree, repeated until nothing changes. Loop roads get the
+   start that fits.
+4. Section type from the right-of-way width; crossfall side from the grading surface.
+5. Writing (`src/roads/`): arcs over 90 degrees split (a near-closed arc is undefined in InfraWorks),
+   stations 1 mm apart merged (NaN edges), stray PVIs past the end dropped, and the body rows
+   (strips, grading ring, CutOut) computed per road, since InfraWorks draws them as stored.
+
+Then it checks the model: level problems in each road's rows, and level steps at junctions.
+The model is changed in place (one working copy on a short path, closed in InfraWorks).
+
 ## How it reads the model
 
 An InfraWorks model is a SQLite database (`SCHEMA_VERSION` 17.x on InfraWorks 2025/2026):

@@ -14,6 +14,9 @@ holds how we work and what has been learned the hard way.
   To merge: `git merge --no-ff origin/<branch>` on main with "Merge pull request #N from
   musleh557790473-cell/<branch>", push main, then check `git ls-remote origin refs/heads/main`.
 - Every fix or trick found on real data goes into the code with a test, not just into a reply.
+- Before telling the user how to do something in InfraWorks, look it up in Autodesk's help
+  (https://help.autodesk.com/view/INFMDR/ENU/, topics under `cloudhelp/ENU/InfraWorks-Basics/`;
+  fetch with WebFetch, the built-in browser blocks the site) and cite it. Never guess menu paths.
 
 ## Two laptops, one repository
 
@@ -42,6 +45,7 @@ pnpm package:build "<drawing.dxf | model.stsw.sqlite | model.wtg.sqlite>" [--pro
 #   WaterGEMS: --utility <Water|Irrigation> --cover <m> --cover-source "<where the cover comes from>"
 pnpm gate:model "<model>.sqlite" --package <package.zip>      # Gate G3, on a closed model
 pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"]
+pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profiles <40000.dxf> --surface <grading.xml> [--package <road_centerline>] [--dry]
 ```
 
 ## Inputs from Parsons
@@ -67,6 +71,16 @@ pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"
 ## InfraWorks facts (verified in InfraWorks 2026 models)
 
 - A model is `<name>.sqlite` + `<name>.files`; `<name>.lock` while open. Work on copies only.
+- Keep ONE working copy per task and update it in place; do not make a new copy for each fix
+  (the user asked: too many copies cause confusion). Never write while its `.lock` exists: ask the
+  user to close the model first. Road pilot working copy: `C:\IW\Al Qairawan Roads (Parsons 6 junctions)`.
+- Keep models on a short path outside OneDrive (e.g. `C:\IW`). `.files` is a Git repo that
+  InfraWorks commits on every edit; a LandXML import writes
+  `Resources\LandXML\<guid>\<surface>.aecc.<32 hex>.pnt`, and past 260 characters its Git fails
+  ("Filename too long") and the model no longer opens. Copy such a model with robocopy to a
+  short path and open it there. Copy-Item also fails on OneDrive online-only files.
+- InfraWorks 2026 imports Civil 3D DWG only with Civil 3D 2026 installed; with another release
+  use the LandXML export of the surface (set UTM84-38N by hand: the file carries no CRS).
 - InfraWorks keeps a Shapefile field only when mapped in Configure, and maps nothing by itself
   (not even a field called NAME). Rows keep the Shapefile record number in `EXTERNAL_ID`
   (mapping `EXTERNAL_ID = FeatId`), so `model:names` fills columns on a copy and records each
@@ -81,6 +95,17 @@ pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"
 - `UTILITY_TYPE`, `PART_TYPE` are read-only Int32 codes InfraWorks sets itself
   (`.files/styles/panels/CorePanelSchema.json`): never map them. The utility leads NETWORKNAME.
 - A ring with no area (a 1 mm hole) makes InfraWorks drop the whole polygon.
+- Component-road H arcs are stored by start / mid / end point: split arcs over 90 degrees, or a
+  near-closed arc (a roundabout drawn as one arc) becomes undefined (length 0.0 m).
+- Walls hanging under the terrain at the site edge: only Parsons' Mass Grading (site only) was
+  visible (`TERRAIN_SURFACES.LAYERS` visibility); features past its edge have no ground. Keep a
+  wider terrain visible below it (survey / DEM), Mass Grading on top: Manage > Display > Surface
+  Layers, light bulb = visible, drag to reorder, Apply regenerates (Autodesk help "To add or
+  modify surface layers"). Check with `scripts/road-pilot/extent.cjs <model>`.
+- Find a feature by name (Autodesk help "To select features in the model"): Model Explorer >
+  right-click the class (Surface Layers > Roads) > Select By Filter, expression `NAME = 'R.5.G.1'`
+  (single quotes, `=`), OK; then F (Zoom to Selection). The class must be unlocked (padlock).
+  Model Explorer lists classes and subsets only, not single features.
 
 ## OpenFlows (SewerGEMS / WaterGEMS) databases
 
