@@ -196,6 +196,26 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   - 3 Nov 2026: trial copies deleted at the user's request. C:\IW keeps `Al Qairawan Test`
     (base with samples), `Al Qairawan Roads (Parsons 2)` (rebuild base) and the one working copy
     `Al Qairawan Roads (Parsons 6 junctions)`, updated in place from now on.
+  - More roads (3 Nov 2026, working copy updated in place, now 200 roads):
+    - alignments.cjs: 61 of 332 centreline pieces had no name in the roads package (names come
+      from it by start vertex) and some carried a neighbour's name. Each road is chained from its
+      0+000 end through its own and unnamed pieces; a chain is kept only if its length equals the
+      profile length (1 cm). 219 alignments (was 188; the 188 unchanged; no piece used twice).
+      Loop roads (no free end) are opened at a vertex.
+    - orient.cjs: loops re-started at the vertex whose profile follows the surface (R.1.G.23,
+      R.2.G.5, R.2.G.24), ties broken by junction levels; a reversal is also taken when junction
+      levels alone are clear (R.4.G.6, R.13.G.1: both then fall right like the other local roads).
+      Reversed: R.6.G.14 R.0.D.15 R.1.F.2 R.4.G.6 R.5.G.1 R.9.G.5 R.13.G.1.
+    - cdnew.cjs: PVIs past the road end (next profile on the sheet) dropped when a PVI sits at the
+      end; a first PVI up to 0.30 m after 0 has its tangent extended to 0 at its own grade.
+    - rowclass.cjs: when only one ROW line is drawn, that side doubled (flagged `oneSided`):
+      17 more roads typed. Still untyped: R.9.G.6, R.9.G.7 (kerb-to-kerb 6.7 / 9.8 m).
+    - `addnew.cjs` writes the roads missing from a model. Checks: zscan clean; one junction step
+      >= 0.3 m: R.1.G.24 start on loop R.1.G.23 (0.53 m), to look at.
+    - Still out: 19 PVI-review roads; 10 with no profile in ROD-40000 (R.3.G.4 R.14.G.9 R.14.G.13
+      R.14.G.14 R.8.G.4 R.10.G.1 R.10.G.5 R.10.G.6 R.13.G.7, +1); 9 whose chains do not match the
+      profile (RA-3 RA-6 R.0.D.13 R.0.D.5 R.1.E.1 R.12.E.1, and R.3.G.11 R.14.F.3 R.14.G.7
+      R.10.G.4 R.13.G.3 a few dm to 2 m off).
   - Finding a road in InfraWorks: Model Explorer > Roads > Select By Filter, `NAME = 'R.5.G.1'`, F.
 - `roadtin.cjs`: road centreline against the grading surface. Most roads sit 0.5-0.8 m above it
   (pavement). Larger only at junction mouths (R.3.G.3, R.0.D.16, R.3.E.1, R.3.F.1) and on R.3.G.1,

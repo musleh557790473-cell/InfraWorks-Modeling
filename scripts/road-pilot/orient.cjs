@@ -44,7 +44,13 @@ for (const r of roads) {
   const pv = pvis[r.name]; if (!pv || pv.some((p) => p.z == null) || !closed(r.segs)) continue;
   const now = spread(r.segs, pv, r.length); if (now == null || now <= 0.3) continue;
   let best = { s: r.segs, v: now };
-  for (const s of rotations(r.segs)) { const v = spread(s, pv, r.length); if (v != null && v < best.v) best = { s, v }; }
+  const cands = rotations(r.segs).map((s) => ({ s, v: spread(s, pv, r.length) })).filter((c) => c.v != null);
+  for (const c of cands) if (c.v < best.v) best = c;
+  // several starts can fit the surface about as well (R.1.G.23): among them, the one whose level
+  // matches the roads ending on the loop (other roads' ends against this loop's profile)
+  const step = (s) => { const q = poly(s, pv, r.length); let sum = 0; for (const [o, l] of lines) { if (o === r.name) continue; for (const x of [l[0], l.at(-1)]) { const m = zNear(q, x); if (m && m.d < 1.0) sum += Math.abs(x[2] - m.z); } } return sum; };
+  const near = cands.filter((c) => c.v < best.v + 0.05);
+  if (near.length > 1) { near.forEach((c) => (c.j = step(c.s))); const bj = near.sort((a, b) => a.j - b.j)[0]; if (bj.j < step(best.s) - 0.05) best = bj; }
   if (best.v < 0.3 && best.v < now / 3) { rotated.push(`${r.name} (${now.toFixed(2)} -> ${best.v.toFixed(2)} m)`); if (flags.includes("--write")) { r.segs = best.s; lines.set(r.name, poly(r.segs, pv, r.length)); } }
   else console.log(`${r.name}: loop, no start fits the surface (best ${best.v.toFixed(2)} m)`);
 }
@@ -56,7 +62,9 @@ for (const r of roads) {
   if (fwd == null || rev == null) continue;
   const jf = junctionStep(r.name, r.segs, pv, r.length), jr = junctionStep(r.name, reverseSegs(r.segs), pv, r.length);
   const surfaceSays = fwd > 0.3 && rev < fwd / 3, junctionsAgree = jf == null || jr <= jf + 0.05;
-  const flip = surfaceSays && junctionsAgree;
+  // junctions alone decide when they are clear on both counts (R.4.G.6: levels at its two ends swapped)
+  const junctionsSay = jf != null && jr != null && jf > 0.3 && jr < 0.05;
+  const flip = (surfaceSays && junctionsAgree) || junctionsSay;
   report.push(`${r.name}\t${fwd.toFixed(3)}\t${rev.toFixed(3)}\tjunctions ${jf == null ? "-" : jf.toFixed(2)} / ${jr == null ? "-" : jr.toFixed(2)}${flip ? "\tREVERSED" : surfaceSays ? "\tKEPT (junctions)" : fwd > 0.3 ? "\tCHECK" : ""}`);
   if (flip) { flipped.push(r.name); if (flags.includes("--write")) r.segs = reverseSegs(r.segs); }
 }
