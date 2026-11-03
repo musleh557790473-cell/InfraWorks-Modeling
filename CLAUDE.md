@@ -123,10 +123,20 @@ pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profi
   carry the bore: an inside diameter within 1.5 mm of a standard size x 9/11 is that SDR 11
   nominal size (130.8 mm is 160), per the PWT notes "HDPE PE100-SDR11".
 
-## Where things stand (2 Nov 2026)
+## Where things stand (3 Nov 2026)
 
-main after PR #18 (`d8bd0e7`). Al Qairawan, all in UTM 38N, checked by Gate G3 and seen in
+main after PR #20 (`aac7e3d`). Al Qairawan, all in UTM 38N, checked by Gate G3 and seen in
 InfraWorks unless noted:
+
+- Component roads (PR #20, `pnpm model:roads`): all 250 Parsons roads with name, plan elements,
+  PVIs and vertical curves, typical section A1-C2 and crossfall side, written into the working
+  copy `C:\IW\Al Qairawan Roads (Parsons 6 junctions)` (base for rebuilds: `... (Parsons 2)`,
+  template road R.6.E.1, GUID `f501f75e-d927-4312-b06b-93cc4b55e402`). Checks: no level problems,
+  one junction step >= 0.3 m (R.1.G.24 on R.1.G.23, 0.53 m). Untyped, template section: RA-1..RA-7
+  (roundabouts), R.9.G.6, R.9.G.7. Junctions not modelled (approach roads run through the
+  roundabout centres). Inputs: `DATA_DIR\inputs\road-pilot` (10200 and 40000 DXF), the grading
+  LandXML `C:\IW\data\LDIP-RCRC-LAI-LDIP-01-CIV-DWG-00002-01.xml`; history in
+  `scripts/road-pilot/HANDOVER.md`.
 
 - Roads (332 centrelines, 280 named), plots (6,555, 5,944 numbered), road reserve, blocks,
   asphalt. Al Narjis: one sheet window only (11 centrelines).
@@ -145,3 +155,7 @@ InfraWorks unless noted:
 Open points: confirm the irrigation cover with Parsons; depths of telecom, security and
 street-lighting ducts (not in the Parsons documents, drawn on the terrain); the full Al Narjis road layout
 (`Xref Road Layout Al Narjis.dwg`) from Parsons; Al Narjis and other districts through the same path.
+Roads: junctions and roundabouts as InfraWorks intersections; the roundabout circulatory width;
+a band InfraWorks draws away from RA-1 when it is selected (not in its stored rows; test: change
+its Grading Limit and undo); R.3.G.1 stands 5 m above Parsons' grading surface over its first 100 m
+(to raise with Parsons).
