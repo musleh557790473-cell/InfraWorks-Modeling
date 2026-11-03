@@ -226,6 +226,15 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
     (junction steps 10.05 -> 0.02 m). 19 roads written; R.2.G.6 R.2.G.22 R.5.G.5 R.7.G.2 rewritten.
     Left out now: 10 with no profile in ROD-40000, 9 whose chains do not match the profile, and
     still untyped R.9.G.6, R.9.G.7.
+  - Length mismatches (3 Nov 2026, now 228 roads): alignments.cjs pass 2 chains roads still left
+    over all pieces no accepted road uses, starting on a piece that carries the road's name label
+    ("0-Alignment Name"; the package had named R.0.D.13's 354.020 m piece RA-6): RA-3 RA-6
+    R.0.D.13 R.1.E.1. Pass 3: a single piece longer than the profile by <= 2.5 m is cut at the
+    profile end (R.3.G.11 2.000, R.14.G.7 1.560, R.13.G.3 0.600, R.14.F.3 0.328, R.10.G.4 0.058 m).
+    R.0.D.13 reversed. rowclass: a local road whose sidewalk changes along it takes the majority
+    type, flagged `mixed` (R.1.E.1: A3). Untyped, template width: RA-3 RA-6 R.9.G.6 R.9.G.7.
+    Checks now include RA roads (`NAME like 'R%'`). Left out: R.0.D.5 (375 m), R.12.E.1 (401 m),
+    and 10 roads with no profile in ROD-40000.
   - Finding a road in InfraWorks: Model Explorer > Roads > Select By Filter, `NAME = 'R.5.G.1'`, F.
 - `roadtin.cjs`: road centreline against the grading surface. Most roads sit 0.5-0.8 m above it
   (pavement). Larger only at junction mouths (R.3.G.3, R.0.D.16, R.3.E.1, R.3.F.1) and on R.3.G.1,

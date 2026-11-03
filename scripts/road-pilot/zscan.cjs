@@ -1,11 +1,11 @@
-﻿// Find road rows with levels far from the road's own range (spikes, curtains, floating bodies).
+// Find road rows with levels far from the road's own range (spikes, curtains, floating bodies).
 // Usage: node zscan.cjs <model.sqlite>
 const { DatabaseSync } = require("node:sqlite");
 const db = new DatabaseSync(process.argv[2], { readOnly: true });
 db.setReadBigInts?.(true);
 const lineZ = (blob) => { const b = Buffer.from(blob); const n = b.readUInt32LE(8); const z = []; for (let i = 0; i < n; i++) z.push(b.readDoubleLE(12 + i * 24 + 16)); return z; };
 const zsOf = (v, out = []) => { if (Array.isArray(v)) { if (v.length === 3 && v.every((x) => typeof x === "number")) out.push(v[2]); else v.forEach((x) => zsOf(x, out)); } else if (v && typeof v === "object") Object.values(v).forEach((x) => zsOf(x, out)); return out; };
-const roads = db.prepare("select GUID, NAME, GEOMETRY from ROADS where NAME like 'R.%'").all();
+const roads = db.prepare("select GUID, NAME, GEOMETRY from ROADS where NAME like 'R%'").all();
 const bad = [];
 for (const r of roads) {
   const z = lineZ(r.GEOMETRY), lo = Math.min(...z), hi = Math.max(...z);

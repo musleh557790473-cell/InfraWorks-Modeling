@@ -5,7 +5,7 @@ const { DatabaseSync } = require("node:sqlite");
 const args = process.argv.slice(2), model = args[0], minStep = +(args[1] && !args[1].startsWith("--") ? args[1] : 0.3);
 const only = args.includes("--road") ? args[args.indexOf("--road") + 1] : null;
 const db = new DatabaseSync(model, { readOnly: true });
-const roads = db.prepare("select NAME, GEOMETRY from ROADS where NAME like 'R.%'").all().map((r) => {
+const roads = db.prepare("select NAME, GEOMETRY from ROADS where NAME like 'R%'").all().map((r) => {
   const g = Buffer.from(r.GEOMETRY), n = g.readUInt32LE(8), p = [];
   for (let i = 0; i < n; i++) p.push([g.readDoubleLE(12 + 24 * i), g.readDoubleLE(20 + 24 * i), g.readDoubleLE(28 + 24 * i)]);
   return { name: r.NAME, p };

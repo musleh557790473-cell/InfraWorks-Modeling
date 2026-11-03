@@ -1,4 +1,4 @@
-﻿// Road centreline level against Parsons' grading surface: roads standing far above or below it
+// Road centreline level against Parsons' grading surface: roads standing far above or below it
 // (floating bodies, deep cut walls) and roads off the surface.
 // Usage: node roadtin.cjs <model.sqlite> <surface.xml> [surface name] [road names to print point by point]
 const fs = require("fs");
@@ -23,7 +23,7 @@ function zAt(x, y) {
 }
 const db = new DatabaseSync(model, { readOnly: true }); const detail = process.argv.slice(5);
 const rows = [];
-for (const r of db.prepare("select NAME, GEOMETRY from ROADS where NAME like 'R.%'").all()) {
+for (const r of db.prepare("select NAME, GEOMETRY from ROADS where NAME like 'R%'").all()) {
   const g = Buffer.from(r.GEOMETRY), n = g.readUInt32LE(8); let off = 0, max = 0, cnt = 0;
   for (let i = 0; i < n; i++) { const x = g.readDoubleLE(12 + 24 * i), y = g.readDoubleLE(20 + 24 * i), z = g.readDoubleLE(28 + 24 * i);
     const t = zAt(x, y); if (detail.includes(r.NAME)) console.log(r.NAME, i, z.toFixed(2), t == null ? "-" : t.toFixed(2), t == null ? "" : (z - t).toFixed(2)); if (t == null) { off++; continue; } cnt++; if (Math.abs(z - t) > Math.abs(max)) max = z - t; }
