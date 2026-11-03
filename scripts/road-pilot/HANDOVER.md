@@ -115,7 +115,19 @@ R.6.E.1 has no VC: PVIs 0+000 692.783, 0+000.600 692.783, 0+007.900 692.637, 0+1
 
 **First write** (`cdwrite.cjs`): road 1 (= R.6.E.1 converted, two-grade fit) given Parsons' PVIs
 and `NAME = R.6.E.1`, in two copies: `C:\IW\Al Qairawan Test (R.6.E.1 A)` (V chain + name) and
-`(R.6.E.1 B)` (also deletes that road's PRIMITIVES / TERRAIN_OPERATIONS). Awaiting the user's test.
+`(R.6.E.1 B)` (also deletes that road's PRIMITIVES / TERRAIN_OPERATIONS).
+- **A works**: profile as Parsons (elevation range 692.637–694.207, PVIs 0+000.600, 0+007.900,
+  grades 0–2.00%), graded to the terrain. InfraWorks rebuilt the shape in memory from the V chain;
+  the stored PRIMITIVES / TERRAIN_OPERATIONS rows stayed as they were (a cache).
+- **B fails**: the road is gone. InfraWorks does not recreate deleted derived rows, so keep them.
+- The name did not show with `ROADS.NAME` only ("Enter a name"): copy `(R.6.E.1 C)` also sets
+  `CONSTRAINED_DEFINITIONS.NAME` (to test).
+
+**Plan for all roads** (from A/B): the user imports the centrelines as planning roads and runs
+"Convert to Component Road" on all of them at once (InfraWorks creates every table, including the
+derived rows); then a tool, like `model:names`, matches each component road to its Parsons road by
+geometry and writes the name and Parsons' PVIs / VCs into a copy. Check per road that the
+converted horizontal length equals Parsons' alignment length (stations depend on it).
 
 User guide `Documents\04 Development\Infraworks\Roads IN infraworks.docx` (LinkedIn Learning
 transcript): useful for cross-sections, "Road assembly > Add to library" saves a custom

@@ -48,6 +48,8 @@ chain.forEach((c, k) => {
 });
 const road = db.prepare("select GUID from ROADS where FK_PARENT_GUID=?").get(G).GUID;
 db.prepare("update ROADS set NAME=? where GUID=?").run(name, road);
+// ROADS.NAME alone does not show in the properties panel (copy A): name the definition too.
+db.prepare("update CONSTRAINED_DEFINITIONS set NAME=? where GUID=?").run(name, G);
 if (flags.includes("--drop-derived")) {
   for (const t of ["PRIMITIVES", "TERRAIN_OPERATIONS"]) console.log("deleted", t, db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(road).changes);
 }
