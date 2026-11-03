@@ -6,8 +6,10 @@ const { DatabaseSync } = require("node:sqlite");
 const { spawnSync } = require("child_process");
 const [model, alignPath, pviPath, secPath, xfPath, ...flags] = process.argv.slice(2);
 const TPL = "f501f75e-d927-4312-b06b-93cc4b55e402";
-// PVI labels that do not agree with each other (pvis.cjs): left out until reviewed
-const REVIEW = "R.6.G.11 R.0.C.1 R.0.C.4 R.0.D.4 R.1.G.3 R.1.G.12 R.2.F.5 R.3.G.6 R.3.G.8 R.14.E.2 R.14.F.3 R.14.G.11 R.14.G.15 R.4.G.9 R.5.G.8 R.7.G.8 R.9.E.1 R.10.G.4 R.12.G.4 R.13.E.2 R.11.G.6".split(" ");
+// Roads to leave out until reviewed. Empty since pvis.cjs filters the neighbouring profile's labels
+// with the road's own FG line (all 250 roads consistent, 3 Nov 2026); a PVI without a level still
+// stops cdnew.cjs.
+const REVIEW = (process.env.REVIEW || "").split(/[ ,]+/).filter(Boolean);
 const db = new DatabaseSync(model, { readOnly: true });
 const have = new Set(db.prepare("select NAME from ROADS").all().map((r) => r.NAME)); db.close();
 const todo = JSON.parse(fs.readFileSync(alignPath, "utf8")).map((r) => r.name).filter((n) => !have.has(n));

@@ -19,7 +19,7 @@ for(const n of names){
   const key=n.t; (out[key]=out[key]||[]).push({fixed,curves});
 }
 // assemble PVI list per road: points (s,z) + curve lengths; PVI elevation from PVC/PVT tangents
-const roads={};
+const roads={},dropped={};
 for(const [name,views] of Object.entries(out)){
   const pts=[];
   for(const v of views){ v.fixed.forEach(f=>pts.push({s:f.s,z:f.z,L:0}));
@@ -28,9 +28,21 @@ for(const [name,views] of Object.entries(out)){
       pts.push({s:c.s,L:c.L,K:c.K,pvc:[c.pvc.s,c.pvc.z],pvt:[c.pvt.s,c.pvt.z]}); }); }
   pts.sort((a,b)=>a.s-b.s);
   // dedupe same station
-  const u=[]; for(const p of pts){ const q=u.find(o=>Math.abs(o.s-p.s)<0.001); if(!q)u.push(p); else if(p.L&&!q.L)Object.assign(q,p)}
+  let u=[]; for(const p of pts){ const q=u.find(o=>Math.abs(o.s-p.s)<0.001); if(!q)u.push(p); else if(p.L&&!q.L)Object.assign(q,p)}
   // anchors: fixed points, PVC, PVT (printed levels); a curve's PVI lies where the tangents through them meet
   const fg=prof.filter(p=>p.name===name).flatMap(v=>v.pts).sort((a,b)=>a[0]-b[0]);
+  // Labels of the neighbouring profile on the same sheet fall inside this road's label window
+  // (R.3.G.6 carried R.2.F.5's PVIs at 294/349/353 m). The road's own FG line decides: drop labels
+  // outside its station range, and printed levels (fixed points, PVC, PVT) that disagree with it.
+  const zfg=s=>{for(let i=1;i<fg.length;i++)if(fg[i-1][0]<=s+1e-6&&fg[i][0]>=s-1e-6)return fg[i-1][1]+(fg[i][1]-fg[i-1][1])*(s-fg[i-1][0])/((fg[i][0]-fg[i-1][0])||1);return null};
+  // a curve without printed PVC / PVT labels (R.14.G.11, R.7.G.8): their levels read on the FG line
+  for(const p of u) if(p.L&&p.err==='no PVC/PVT'&&fg.length){ const a=zfg(p.s-p.L/2),b=zfg(p.s+p.L/2); if(a!=null&&b!=null){ p.pvc=[+(p.s-p.L/2).toFixed(3),+a.toFixed(3)]; p.pvt=[+(p.s+p.L/2).toFixed(3),+b.toFixed(3)]; p.pvcFromFG=true; delete p.err; delete p.z; } }
+  if(fg.length){
+    const ok=(s,z)=>{const f=zfg(s);return f==null||Math.abs(f-z)<=0.05};
+    const lo=fg[0][0]-0.01,hi=fg.at(-1)[0]+0.01,n0=u.length;
+    u=u.filter(p=>p.s>=lo&&p.s<=hi&&(p.L?(!p.pvc||ok(p.pvc[0],p.pvc[1]))&&(!p.pvt||ok(p.pvt[0],p.pvt[1])):p.z==null||ok(p.s,p.z)));
+    if(u.length<n0)(dropped[name]=dropped[name]||[]).push(n0-u.length);
+  }
   if(fg.length&&!u.some(p=>Math.abs(p.s-fg[0][0])<0.01&&p.z!=null)) u.unshift({s:+fg[0][0].toFixed(3),z:+fg[0][1].toFixed(3),L:0,fromFG:true});
   if(fg.length&&!u.some(p=>Math.abs(p.s-fg.at(-1)[0])<0.01&&p.z!=null)) u.push({s:+fg.at(-1)[0].toFixed(3),z:+fg.at(-1)[1].toFixed(3),L:0,fromFG:true});
   u.sort((a,b)=>a.s-b.s);
@@ -38,7 +50,12 @@ for(const [name,views] of Object.entries(out)){
   const anchorsAfter=(i)=>{for(let k=i+1;k<u.length;k++){const q=u[k]; if(q.pvc)return [q.pvc[0],q.pvc[1]]; if(q.z!=null&&!q.L)return [q.s,q.z]} return null};
   for(let i=0;i<u.length;i++){ const p=u[i]; if(!p.pvc)continue; const a=anchorsBefore(i), b=anchorsAfter(i); if(!a||!b){p.err='no anchor';continue}
     const gin=(p.pvc[1]-a[1])/(p.pvc[0]-a[0]), gout=(b[1]-p.pvt[1])/(b[0]-p.pvt[0]);
-    const z1=p.pvc[1]+gin*(p.s-p.pvc[0]), z2=p.pvt[1]+gout*(p.s-p.pvt[0]); p.z=+((z1+z2)/2).toFixed(4); p.mis=Math.abs(z1-z2); p.gin=gin; p.gout=gout; }
+    let z1=p.pvc[1]+gin*(p.s-p.pvc[0]), z2=p.pvt[1]+gout*(p.s-p.pvt[0]); p.z=+((z1+z2)/2).toFixed(4); p.mis=Math.abs(z1-z2); p.gin=gin; p.gout=gout;
+    // neighbouring anchors are not always the tangent points (a grade break without a label between,
+    // R.0.C.1): take the grades of the FG line just outside the curve (2 m) and keep them if they agree better
+    if(p.mis>0.005&&fg.length){ const a=zfg(p.pvc[0]-2),b=zfg(p.pvt[0]+2),c=zfg(p.pvc[0]),d=zfg(p.pvt[0]);
+      if(a!=null&&b!=null&&c!=null&&d!=null){ const gi=(c-a)/2,go=(b-d)/2, y1=p.pvc[1]+gi*(p.s-p.pvc[0]), y2=p.pvt[1]+go*(p.s-p.pvt[0]);
+        if(Math.abs(y1-y2)<p.mis){ p.z=+((y1+y2)/2).toFixed(4); p.mis=Math.abs(y1-y2); p.gin=gi; p.gout=go; p.gradesFromFG=true; } } } }
   roads[name]=u;
 }fs.writeFileSync(process.argv[4],JSON.stringify(roads));
 // verify against FG polyline: z at each PVT computed from PVI->next tangent vs printed PVT, and fixed points vs FG
@@ -51,6 +68,7 @@ mis.sort((a,b)=>a-b); const maxd=mis.at(-1)||0;
 console.log('curve PVI tangent mismatch: median',(mis[mis.length>>1]||0).toFixed(4),'p95',(mis[Math.floor(mis.length*0.95)]||0).toFixed(4));console.log('roads',Object.keys(roads).length,'PVIs',Object.values(roads).reduce((a,u)=>a+u.length,0),'with VC',Object.values(roads).reduce((a,u)=>a+u.filter(p=>p.L).length,0));
 console.log('fixed points checked vs FG',n,'curves',nc,'max tangent mismatch',maxd.toFixed(4));
 console.log('issues',bad.length); bad.slice(0,15).forEach(b=>console.log('  ',b)); const bn=[...new Set(bad.map(b=>b.split(' ')[0]))]; console.log('roads with issues',bn.length,bn.join(' '));
-for(const r of ['R.6.E.1','R.6.F.1']) console.log(r, JSON.stringify(roads[r]));
+console.log('roads with labels dropped (neighbouring profile)',Object.keys(dropped).length,Object.entries(dropped).map(([n,v])=>n+':'+v[0]).join(' '));
+bad.forEach(b=>console.log('ISSUE',b));
 
 
