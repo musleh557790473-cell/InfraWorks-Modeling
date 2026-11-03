@@ -193,6 +193,9 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
     R.5.G.1 (5.88 -> 0). `junctions.cjs <model>` lists level steps at junctions in a model.
   - `Al Qairawan Roads (Parsons 6 junctions)` (from Parsons 2; those three with `--rewrite`):
     zscan clean; one junction step >= 0.3 m (R.4.G.6 end on R.4.G.4, 0.38 m). To test.
+  - 3 Nov 2026: trial copies deleted at the user's request. C:\IW keeps `Al Qairawan Test`
+    (base with samples), `Al Qairawan Roads (Parsons 2)` (rebuild base) and the one working copy
+    `Al Qairawan Roads (Parsons 6 junctions)`, updated in place from now on.
   - Finding a road in InfraWorks: Model Explorer > Roads > Select By Filter, `NAME = 'R.5.G.1'`, F.
 - `roadtin.cjs`: road centreline against the grading surface. Most roads sit 0.5-0.8 m above it
   (pavement). Larger only at junction mouths (R.3.G.3, R.0.D.16, R.3.E.1, R.3.F.1) and on R.3.G.1,
