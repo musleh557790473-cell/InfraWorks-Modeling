@@ -102,6 +102,16 @@ pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profi
   wider terrain visible below it (survey / DEM), Mass Grading on top: Manage > Display > Surface
   Layers, light bulb = visible, drag to reorder, Apply regenerates (Autodesk help "To add or
   modify surface layers"). Check with `scripts/road-pilot/extent.cjs <model>`.
+- Scripting Console in InfraWorks 2026: **Ctrl+2** (Utilities "Scripts"; the gear opens Application
+  Options, Ctrl+9). Read from AIM_Toolbar.dll; the help's "Utilities > Glyph > Scripts" path is gone.
+  The output pane cannot be copied: return short lines and read them on screen. API seen
+  (`scripts/road-pilot/iw-probe.js`): `app.ActiveModel.RoadModel` (readRoadModel, regenModel,
+  invalidateModel, saveUpdates, getRoadID, addPVI, createRoad...), `app.ActiveModel.Intersections`
+  (updateIntersections, findIntersectionById), `app.ActiveModelDb` (Table, BeginTransaction,
+  ExecuteSqlCommand), `app.Regenerate`. Autodesk calls this API unofficial.
+- InfraWorks rebuilds a component road (body, and the intersections where it meets other roads)
+  only on a single-road edit. Rebuilding RA-1 split it into 4 pieces between its arms and created
+  9 intersections; the one-piece closed ring model:roads writes draws a stray band until then.
 - Find a feature by name (Autodesk help "To select features in the model"): Model Explorer >
   right-click the class (Surface Layers > Roads) > Select By Filter, expression `NAME = 'R.5.G.1'`
   (single quotes, `=`), OK; then F (Zoom to Selection). The class must be unlocked (padlock).
