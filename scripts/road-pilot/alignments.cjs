@@ -8,7 +8,7 @@ const BLOCK = "Xref Road Layout Al Qairawan";
 // --- read centrelines (with bulges) and chainage labels from the layout block
 const L = fs.readFileSync(dxf, "latin1").split(/\r?\n/).map((x) => x.trim());
 const s0 = L.indexOf("BLOCKS"), e0 = L.indexOf("ENTITIES");
-let blk = null; const plines = [], chain0 = [];
+let blk = null; const plines = [], chain0 = [], nameLabels = [];
 for (let i = s0 + 1; i < e0; i += 2) {
   if (L[i] !== "0") continue; const t = L[i + 1];
   if (t === "BLOCK") { let j = i + 2; while (L[j] !== "0") { if (L[j] === "2") { blk = L[j + 1]; break; } j += 2; } continue; }
@@ -24,6 +24,7 @@ for (let i = s0 + 1; i < e0; i += 2) {
     j += 2; }
   if (t === "LWPOLYLINE" && layer.endsWith("RD_PR_CNRL")) plines.push(v);
   if (t === "MTEXT" && layer.endsWith("RD_C_CHAIN_TEXT") && /(^|;)0\+000(\.0+)?\}?$/.test(txt.replace(/\{|\}/g, ""))) chain0.push([x, y]);
+  if ((t === "MTEXT" || t === "TEXT") && layer.endsWith("0-Alignment Name")) nameLabels.push({ x, y, t: txt.replace(/\\[A-Za-z][^;]*;|[{}]/g, "").trim() });
 }
 
 // --- names from the roads package (same vertices, NAME field)
@@ -66,12 +67,14 @@ function openLoop(s) {
   let k = 0; s.forEach((g, i) => { if (tickDist(g.a) < tickDist(s[k].a)) k = i; });
   return [...s.slice(k), ...s.slice(0, k)];
 }
-function chainTo(own, plen) {
-  const pool = [...own.map((s) => ({ s: openLoop(s), own: true })), ...unnamed.map((s) => ({ s, own: false }))];
+// a piece's identity, the same whichever way it is walked
+const pk = (s) => [s[0].a, s.at(-1).b].map((p) => p.map((v) => v.toFixed(3)).join(",")).sort().join("|") + ":" + s.length;
+function chainTo(own, plen, others = unnamed, nStarts = 2) {
+  const pool = [...own.map((s) => ({ s: openLoop(s), own: true, k: pk(s) })), ...others.map((s) => ({ s, own: false, k: pk(s) }))];
   const starts = own.flatMap((s) => { const o = openLoop(s); return [o[0].a, o.at(-1).b]; }).sort((p, q) => tickDist(p) - tickDist(q));
   let best = null;
   const dfs = (at, used, segs, len, depth) => {
-    if (Math.abs(len - plen) < 0.01) { const nOwn = used.filter((i) => pool[i].own).length; if (!best || nOwn > best.nOwn) best = { segs: segs.slice(), len, nOwn, used: used.slice() }; return; }
+    if (Math.abs(len - plen) < 0.01) { const nOwn = used.filter((i) => pool[i].own).length; if (!best || nOwn > best.nOwn) best = { segs: segs.slice(), len, nOwn, used: used.slice(), keys: used.map((i) => pool[i].k) }; return; }
     if (len > plen + 0.01 || depth > 8) return;
     pool.forEach((p, i) => {
       if (used.includes(i)) return;
@@ -79,17 +82,55 @@ function chainTo(own, plen) {
       used.push(i); dfs(s.at(-1).b, used, [...segs, ...s], len + pieceLen(s), depth + 1); used.pop();
     });
   };
-  for (const st of starts.slice(0, 2)) { dfs(st, [], [], 0, 0); if (best) return best; } // the end nearest a 0+000 tick first
+  for (const st of starts.slice(0, nStarts)) { dfs(st, [], [], 0, 0); if (best) return best; } // the end nearest a 0+000 tick first
   return null;
 }
+// a road's profile may stop short of its centreline piece (R.3.G.11: 2.000 m, R.10.G.4: 0.059 m):
+// end the road where Parsons' profile ends (stations run from the 0+000 end, so the far end is cut)
+function trimTo(segs, plen) {
+  const out = []; let acc = 0;
+  for (const g of segs) {
+    const l = segLen(g);
+    if (acc + l <= plen + 1e-9) { out.push(g); acc += l; continue; }
+    const f = (plen - acc) / l; if (f <= 1e-9) break;
+    if (!g.bulge) out.push({ a: g.a, b: [g.a[0] + (g.b[0] - g.a[0]) * f, g.a[1] + (g.b[1] - g.a[1]) * f], bulge: 0 });
+    else { const th = 4 * Math.atan(g.bulge), c = Math.hypot(g.b[0] - g.a[0], g.b[1] - g.a[1]), r = c / (2 * Math.sin(Math.abs(th) / 2));
+      const ux = (g.b[0] - g.a[0]) / c, uy = (g.b[1] - g.a[1]) / c, h = r * Math.cos(Math.abs(th) / 2) * Math.sign(g.bulge);
+      const cx = (g.a[0] + g.b[0]) / 2 - uy * h, cy = (g.a[1] + g.b[1]) / 2 + ux * h, a0 = Math.atan2(g.a[1] - cy, g.a[0] - cx), a1 = a0 + th * f;
+      out.push({ a: g.a, b: [cx + r * Math.cos(a1), cy + r * Math.sin(a1)], bulge: Math.tan((th * f) / 4) }); }
+    break;
+  }
+  return out;
+}
+const labelsOf = (n) => nameLabels.filter((o) => o.t === n);
+const pieceDist = (o, s) => Math.min(...s.map((g) => { const dx = g.b[0] - g.a[0], dy = g.b[1] - g.a[1], l2 = dx * dx + dy * dy; const t = l2 ? Math.max(0, Math.min(1, ((o.x - g.a[0]) * dx + (o.y - g.a[1]) * dy) / l2)) : 0; return Math.hypot(o.x - g.a[0] - dx * t, o.y - g.a[1] - dy * t); }));
 const roads = [], report = [];
+// pass 1: own and unnamed pieces; pass 2 (roads still left): any piece no accepted road uses, the road
+// starting on a piece that carries its name label ("0-Alignment Name"; the package gave R.0.D.13's
+// piece the name RA-6); pass 3: own piece longer than the profile by <= 2.5 m, cut at the profile end
+const chained = new Map(), usedKeys = new Set(), allPieces = plines.map(segsOf);
+for (const [name, pieces] of byName) {
+  const fg = profOf(name); if (!fg.length) continue;
+  const c = chainTo(pieces, fg.at(-1)[0]); if (c) { chained.set(name, { c, how: "" }); c.keys.forEach((k) => usedKeys.add(k)); }
+}
+for (const [name, pieces] of byName) {
+  const fg = profOf(name); if (!fg.length || chained.has(name)) continue;
+  const plen = fg.at(-1)[0], free = allPieces.filter((s) => !usedKeys.has(pk(s)));
+  const labelled = free.filter((s) => labelsOf(name).some((o) => pieceDist(o, s) < 6));
+  const starts = [...labelled, ...pieces.filter((s) => !usedKeys.has(pk(s)) && !labelled.includes(s))];
+  const c = starts.length ? chainTo(starts, plen, free.filter((s) => !starts.includes(s)), 4) : null;
+  if (c) { chained.set(name, { c, how: "matched by profile length over all free pieces" }); c.keys.forEach((k) => usedKeys.add(k)); continue; }
+  if (pieces.length === 1) { const s = openLoop(pieces[0]), L = pieceLen(s);
+    const o = tickDist(s[0].a) <= tickDist(s.at(-1).b) ? s : rev(s);
+    if (L > plen && L - plen <= 2.5) { const t = trimTo(o, plen); chained.set(name, { c: { segs: t, len: pieceLen(t), used: [0], nOwn: 1, keys: [pk(pieces[0])] }, how: `piece ${L.toFixed(3)} m cut to the profile end (${(L - plen).toFixed(3)} m)` }); } }
+}
 for (const [name, pieces] of byName) {
   const fg = profOf(name); if (!fg.length) { report.push(`${name}: no profile`); continue; }
-  const plen = fg.at(-1)[0], c = chainTo(pieces, plen);
-  if (!c) { const own = pieces.reduce((a, s) => a + pieceLen(s), 0); report.push(`${name}: no chain of its pieces (${pieces.length}, ${own.toFixed(3)} m) and unnamed pieces matches the profile ${plen.toFixed(3)} m`); continue; }
-  const segs = c.segs, len = c.len, left = [];
+  const plen = fg.at(-1)[0], got = chained.get(name);
+  if (!got) { const own = pieces.reduce((a, s) => a + pieceLen(s), 0); report.push(`${name}: no chain of its pieces (${pieces.length}, ${own.toFixed(3)} m) and free pieces matches the profile ${plen.toFixed(3)} m`); continue; }
+  const c = got.c, segs = c.segs, len = c.len, left = [];
   const extra = c.used.length - c.nOwn, unusedOwn = pieces.length - c.nOwn;
-  const note = [extra ? `${extra} unnamed piece(s) added` : "", unusedOwn ? `${unusedOwn} own piece(s) left out` : ""].filter(Boolean).join(", ");
+  const note = [got.how, !got.how && extra ? `${extra} unnamed piece(s) added` : "", !got.how && unusedOwn ? `${unusedOwn} own piece(s) left out` : ""].filter(Boolean).join(", ");
   report.push(`${name}: plan ${len.toFixed(3)} profile ${plen.toFixed(3)} diff ${(len - plen).toFixed(3)} ${note}`);
   // vertices with station and PGL
   const zAt = (st) => { for (let i = 1; i < fg.length; i++) if (st <= fg[i][0] + 1e-9) { const a = fg[i - 1], b = fg[i]; return b[0] === a[0] ? b[1] : a[1] + ((b[1] - a[1]) * (st - a[0])) / (b[0] - a[0]); } return fg.at(-1)[1]; };
