@@ -146,7 +146,9 @@ function insertDerived(tPrim, tTop, roadGuid, rpsOld, rpsNew, line, sec) {
 // Parsons section from the ROW classification (--sections aq_road_sections.json); unclassified roads keep the template section.
 const secFile = flags.includes("--sections") ? flags[flags.indexOf("--sections") + 1] : null;
 const secType = secFile ? JSON.parse(fs.readFileSync(secFile, "utf8"))[name]?.type ?? null : null;
-const sec = secType ? require("./sections.cjs").build(secType) : null;
+const xfFile = flags.includes("--xfall") ? flags[flags.indexOf("--xfall") + 1] : null; // per-road crossfall side (xfall.cjs)
+const fall = xfFile ? JSON.parse(fs.readFileSync(xfFile, "utf8"))[name]?.fall ?? undefined : undefined;
+const sec = secType ? require("./sections.cjs").build(secType, { fall }) : null;
 const style = (() => { if (!sec) return {}; const s = JSON.parse(String(tRoad.MANUAL_STYLE)); s.componentStyle = JSON.stringify(sec.componentStyle);
   s.lanes = { ...s.lanes, countForward: sec.lanes, countBackward: sec.lanes }; return { MANUAL_STYLE: JSON.stringify(s, null, "\t"), MAX_SPEED: sec.speed }; })();
 console.log(`${name}: section ${secType ?? "template (unclassified)"}${sec ? `, ${sec.width} m, ${sec.speed} km/h` : ""}`);

@@ -155,6 +155,25 @@ User guide `Documents\04 Development\Infraworks\Roads IN infraworks.docx` (Linke
 transcript): useful for cross-sections, "Road assembly > Add to library" saves a custom
 assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to roads.
 
+## Session 3b (3 Nov 2026): typical sections, raised median, crossfall side
+
+- `sections.cjs` builds A1–C2 from ROD-DWG-30000-001 (lanes 3.30, kerb 0.30, upstand 150 mm,
+  crossfall 2 %, sidewalk 2 % to the road); `rowclass.cjs` picks the type from the ROW width.
+  `Parsons 3 sections` was checked in InfraWorks (B1, C2, A1 roads).
+- Median (B1/C1/C2): AICC confirmed from the C1 detail that P.G.L. is the asphalt edge at the
+  median kerb. Lanes start at the profile level; the median is a flat base plus, on each edge, an
+  upstand kerb facing the lanes (width 0.30, as the road kerb) and a fill 150 mm above the lanes.
+- Crossfall side of local roads (one-way, "LOW POINT" at one kerb): the typical section does not
+  say which side. The STO plan has no inlets (note 3: contractor verifies the low point). Parsons'
+  grading surface `Al_Qairawan_Mass Grading` (LandXML) carries the crossfall at exactly 2 %:
+  `xfall.cjs` samples it 3 m each side every 5 m -> `C:\IW\data\alignments\aq_road_xfall.json`.
+  Local roads: 146 fall right of the chainage, 7 left (R.6.F.3 R.1.F.2 R.4.G.6 R.5.G.1 R.13.G.1
+  R.13.G.15 R.13.G.5), 4 unclear, kept right (R.6.G.22 R.3.G.2 R.4.G.13 R.11.G.4).
+  Collectors show a crown (fall outward), as modelled. Some local roads change side along
+  their length ("mixed"): one side per road is taken (the median sample).
+- `cdnew.cjs --xfall <aq_road_xfall.json>`; `Al Qairawan Roads (Parsons 4 median xfall)`: built
+  from Parsons 2 with `--regen --sections --xfall` on all 162 roads. To test.
+
 ## Next steps
 
 1. Inputs: `DATA_DIR\inputs\road-pilot` is online-only in OneDrive and would not download on

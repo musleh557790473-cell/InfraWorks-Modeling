@@ -4,9 +4,11 @@
 // Sources: lane 3.30, kerb 0.30 (ROD-30000-001); kerb upstand 150 mm, carriageway crossfall 2.0 %,
 // sidewalk 2.0 % (design report LDIP-RCRC-SAP-01-AQ-DES-RPT-00001, criteria table); design speed
 // 20 km/h local, 40 km/h collector (same table).
-// Not modelled yet: the raised median (drawn flat, at the profile level) and which side a local
-// road's one-way crossfall falls to (taken as the right of the chainage direction, as the typical
-// section is drawn).
+// Median (B1/C1/C2): P.G.L. is the asphalt edge at the median kerb (confirmed by AICC from the C1
+// detail), so the lanes start at the profile level and the median is raised by the 150 mm upstand
+// kerbs; median kerb width taken as the 0.30 road kerb of the same drawing.
+// Local roads: the one-way crossfall side comes per road from the grading surface (xfall.cjs); roads
+// where it is unclear keep the right of the chainage direction, as the typical section is drawn.
 
 const TYPES = {
   A1: { kind: "local", sidewalk: 3.9 }, A2: { kind: "local", sidewalk: 5.4 }, A3: { kind: "local", sidewalk: 6.4 },
@@ -26,8 +28,11 @@ const DEF = {
 const TOP = { Lane: [0, 1], Sidewalk: [0, 1], Curb: [2, 3], "Sloped Median": [0, 1, 2] }; // top surface points (for edges / transitions)
 
 let nextId = 300000000 + Math.floor(Math.random() * 100000000);
-function build(type) {
+// fall: side a local road's one-way crossfall falls to, looking up-chainage ("right" default, or "left"),
+// read per road from Parsons' grading surface by xfall.cjs.
+function build(type, { fall = "right" } = {}) {
   const T = TYPES[type]; if (!T) throw new Error(`unknown section ${type}`);
+  const f = fall === "left" ? -1 : 1;
   const comps = []; // {def, params, attach: {point, ex_comp, ex_point} | null, role}
   const add = (def, params, attach, role) => { comps.push({ def, params: { ...params, COMPONENT_ID: nextId++ }, attach, role }); return comps.length - 1; };
   const ORIGIN = 4294967295;
@@ -35,11 +40,16 @@ function build(type) {
     const L = side < 0 ? { LeftSideFactor: -1 } : {};
     let last;
     if (T.kind === "local") {
-      // one-way crossfall: rises to the left, falls to the right of the chainage direction
-      last = add("Lane", { ...L, Width: LANE, Slope: side < 0 ? XFALL : -XFALL, Depth: 0.2 }, { point: 0, ex_comp: ORIGIN, ex_point: ORIGIN }, "lane");
+      // one-way crossfall across both lanes (falls to the right of the chainage direction when f = 1)
+      last = add("Lane", { ...L, Width: LANE, Slope: (side < 0 ? XFALL : -XFALL) * f, Depth: 0.2 }, { point: 0, ex_comp: ORIGIN, ex_point: ORIGIN }, "lane");
     } else {
+      // median: flat base at the profile level (P.G.L. = asphalt edge at the median kerb), then on each
+      // edge an upstand kerb facing the lanes and a raised fill to the centre, top 150 mm above the lanes
       if (side < 0) add("Sloped Median", { Width: T.median, Slope: 0, Depth: 0.2 }, null, "median");
-      last = add("Lane", { ...L, Width: SHY, Slope: -XFALL, Depth: 0.2 }, { point: 0, ex_comp: 0, ex_point: side < 0 ? 0 : 2 }, "shy");
+      const inward = side < 0 ? {} : { LeftSideFactor: -1 }, edgePt = side < 0 ? 0 : 2;
+      const mk = add("Curb", { ...inward, Width: KERB_W }, { point: 1, ex_comp: 0, ex_point: edgePt }, "kerb");
+      add("Sidewalk", { ...inward, Width: T.median / 2 - KERB_W, Slope: 0, Depth: 0.15 }, { point: 0, ex_comp: mk, ex_point: 4 }, "median");
+      last = add("Lane", { ...L, Width: SHY, Slope: -XFALL, Depth: 0.2 }, { point: 0, ex_comp: 0, ex_point: edgePt }, "shy");
       last = add("Lane", { ...L, Width: LANE, Slope: -XFALL, Depth: 0.2 }, { point: 0, ex_comp: last, ex_point: 1 }, "lane");
       last = add("Lane", { ...L, Width: LANE, Slope: -XFALL, Depth: 0.2 }, { point: 0, ex_comp: last, ex_point: 1 }, "lane");
     }
@@ -67,7 +77,8 @@ function build(type) {
   const parts = placed.map((c) => ({ role: c.role, id: c.params.COMPONENT_ID, material: MAT[c.role], crossSection: ring(c.pts) }));
   // top boundary points across the section, for the edges and the end transitions
   const tops = []; placed.forEach((c) => TOP[c.def].forEach((k) => tops.push(c.pts[k])));
-  const bound = [...new Map(tops.sort((a, b) => a[0] - b[0]).map((p) => [p[0].toFixed(4), p])).values()];
+  const hi = new Map(); for (const p of tops) { const k = p[0].toFixed(4); if (!hi.has(k) || p[1] > hi.get(k)[1]) hi.set(k, p); } // highest top at each offset
+  const bound = [...hi.values()].sort((a, b) => a[0] - b[0]);
   // component style JSON, as InfraWorks writes it
   const references = placed.map((c) => ({
     def: `ComponentDefinition/${c.def}`, material: MAT[c.role], description: c.role, classification: c.role === "sidewalk" ? "Sidewalk" : c.role === "kerb" ? "Curb" : c.role === "median" ? "Greenspace" : "Roadway",
