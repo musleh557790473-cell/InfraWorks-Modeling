@@ -27,6 +27,14 @@ const H = al.segs.map((g) => {
   const m = [cx + r * Math.cos(a0 + th / 2), cy + r * Math.sin(a0 + th / 2)];
   return { kind: "arc", a: g.a, b: g.b, m, cx, cy, r, a0, th, len: r * Math.abs(th) };
 });
+// An arc over 90 degrees is split into equal arcs of at most 90: a roundabout drawn as one arc whose
+// start and end are ~1 cm apart left InfraWorks' three-point arc undefined (RA-2: length 0.0 m).
+for (let i = H.length - 1; i >= 0; i--) {
+  const e = H[i]; if (e.kind !== "arc" || Math.abs(e.th) <= Math.PI / 2 + 1e-9) continue;
+  const n = Math.ceil(Math.abs(e.th) / (Math.PI / 2)), dt = e.th / n, P = (t) => [e.cx + e.r * Math.cos(t), e.cy + e.r * Math.sin(t)];
+  const parts = []; for (let k = 0; k < n; k++) { const t0 = e.a0 + dt * k; parts.push({ kind: "arc", a: k ? P(t0) : e.a, b: k === n - 1 ? e.b : P(t0 + dt), m: P(t0 + dt / 2), cx: e.cx, cy: e.cy, r: e.r, a0: t0, th: dt, len: e.r * Math.abs(dt) }); }
+  H.splice(i, 1, ...parts);
+}
 let acc = 0; for (const e of H) { e.s0 = acc; acc += e.len; }
 const total = acc;
 const xy = (s) => {
