@@ -92,6 +92,35 @@ How InfraWorks stores the converted R.6.E.1 (`cdscan.cjs`; GUIDs link the rows):
   `model:names` edits survive). To verify: whether InfraWorks rebuilds PRIMITIVES /
   TERRAIN_OPERATIONS for rows we write without them.
 
+## Session 3 (3 Nov 2026, AYNLAP1201): Parsons PVIs, V curve and H arc storage, first write
+
+**Parsons prints the full vertical geometry** on `RD_C_PROF_LABL` (block `Xref Al Qairawan
+Profiles`): `PVI <sta>`, `PVC <sta> | ELEV <z>`, `PVT <sta> | ELEV <z>`, `VC <L>, K <k>`,
+`g=<grade>%`, and `STA <sta> | ELEV <z>` for a PVI without curve (sometimes split into two
+MTEXTs side by side: pair by same y). A curve's PVI level = where the tangents through the
+printed PVC / PVT (and neighbouring anchors) meet. `pvis.cjs`: 250 roads, 1,488 PVIs, 465 VCs;
+229 roads consistent (tangents meet within 5 mm, median 0.5 mm; labels = FG line). 21 to
+review: R.6.G.11 R.0.C.1 R.0.C.4 R.0.D.4 R.1.G.3 R.1.G.12 R.2.F.5 R.3.G.6 R.3.G.8 R.14.E.2
+R.14.F.3 R.14.G.11 R.14.G.15 R.4.G.9 R.5.G.8 R.7.G.8 R.9.E.1 R.10.G.4 R.12.G.4 R.13.E.2 R.11.G.6.
+R.6.E.1 has no VC: PVIs 0+000 692.783, 0+000.600 692.783, 0+007.900 692.637, 0+128.163 694.207.
+
+**InfraWorks storage** (samples drawn in `C:\IW\Al Qairawan Test.sqlite`, roads 2 and 3):
+- Point blobs (32 B): uint32 1, uint32 1, x, y (doubles). In V constraints x = station, y = level.
+- V chain: tangent (15) PVI→PVI; between two tangents a curve row (18) with no points,
+  `CURVE_TYPE` 4096 = sag / 4097 = crest, `PARAM_1` = curve length (10 m ↔ K 0.858 shown).
+  Tangents may follow each other without a curve row (no VC at that PVI).
+- V tangent GEOMETRY (60 B): uint32 2, 1, 2, then two XYZ points (world XY on the alignment, Z level).
+- H arc: CONSTRAINT_TYPE 4, CONSTRAINT_TYPE_DEFINITION 2, PASSTHROUGH_PT_1/2/3 = start, mid, end.
+- Derived per road (FK_PARENT_TABLE `ROADS`): PRIMITIVES (5), TERRAIN_OPERATIONS (5).
+
+**First write** (`cdwrite.cjs`): road 1 (= R.6.E.1 converted, two-grade fit) given Parsons' PVIs
+and `NAME = R.6.E.1`, in two copies: `C:\IW\Al Qairawan Test (R.6.E.1 A)` (V chain + name) and
+`(R.6.E.1 B)` (also deletes that road's PRIMITIVES / TERRAIN_OPERATIONS). Awaiting the user's test.
+
+User guide `Documents\04 Development\Infraworks\Roads IN infraworks.docx` (LinkedIn Learning
+transcript): useful for cross-sections, "Road assembly > Add to library" saves a custom
+assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to roads.
+
 ## Next steps
 
 1. Inputs: `DATA_DIR\inputs\road-pilot` is online-only in OneDrive and would not download on
