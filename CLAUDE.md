@@ -94,6 +94,11 @@ pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"
 - `UTILITY_TYPE`, `PART_TYPE` are read-only Int32 codes InfraWorks sets itself
   (`.files/styles/panels/CorePanelSchema.json`): never map them. The utility leads NETWORKNAME.
 - A ring with no area (a 1 mm hole) makes InfraWorks drop the whole polygon.
+- Walls hanging under the terrain at the site edge: only Parsons' Mass Grading (site only) was
+  visible (`TERRAIN_SURFACES.LAYERS` visibility); features past its edge have no ground. Keep a
+  wider terrain visible below it (survey / DEM), Mass Grading on top: Manage > Display > Surface
+  Layers, light bulb = visible, drag to reorder, Apply regenerates (Autodesk help "To add or
+  modify surface layers"). Check with `scripts/road-pilot/extent.cjs <model>`.
 - Find a feature by name (Autodesk help "To select features in the model"): Model Explorer >
   right-click the class (Surface Layers > Roads) > Select By Filter, expression `NAME = 'R.5.G.1'`
   (single quotes, `=`), OK; then F (Zoom to Selection). The class must be unlocked (padlock).
