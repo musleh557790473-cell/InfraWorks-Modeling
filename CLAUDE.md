@@ -14,6 +14,9 @@ holds how we work and what has been learned the hard way.
   To merge: `git merge --no-ff origin/<branch>` on main with "Merge pull request #N from
   musleh557790473-cell/<branch>", push main, then check `git ls-remote origin refs/heads/main`.
 - Every fix or trick found on real data goes into the code with a test, not just into a reply.
+- Before telling the user how to do something in InfraWorks, look it up in Autodesk's help
+  (https://help.autodesk.com/view/INFMDR/ENU/, topics under `cloudhelp/ENU/InfraWorks-Basics/`;
+  fetch with WebFetch, the built-in browser blocks the site) and cite it. Never guess menu paths.
 
 ## Two laptops, one repository
 
@@ -88,6 +91,10 @@ pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"
 - `UTILITY_TYPE`, `PART_TYPE` are read-only Int32 codes InfraWorks sets itself
   (`.files/styles/panels/CorePanelSchema.json`): never map them. The utility leads NETWORKNAME.
 - A ring with no area (a 1 mm hole) makes InfraWorks drop the whole polygon.
+- Find a feature by name (Autodesk help "To select features in the model"): Model Explorer >
+  right-click the class (Surface Layers > Roads) > Select By Filter, expression `NAME = 'R.5.G.1'`
+  (single quotes, `=`), OK; then F (Zoom to Selection). The class must be unlocked (padlock).
+  Model Explorer lists classes and subsets only, not single features.
 
 ## OpenFlows (SewerGEMS / WaterGEMS) databases
 
