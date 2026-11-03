@@ -43,9 +43,11 @@ const TOP: Record<string, number[]> = { Lane: [0, 1], Sidewalk: [0, 1], Curb: [2
 
 export interface SectionPart { role: string; id: number; material: string; crossSection: [number, number, number?][] }
 export interface Section {
-  type: SectionType;
-  kind: "local" | "collector";
-  speed: number;
+  /** typical section, or "RA" for a roundabout ring */
+  type: SectionType | "RA";
+  kind: "local" | "collector" | "roundabout";
+  /** design speed (km/h); null keeps the template road's speed (none documented) */
+  speed: number | null;
   lanes: number;
   parts: SectionPart[];
   /** top boundary points across the section (offset right of the chainage, level) */
@@ -62,12 +64,17 @@ let nextId = 300000000 + Math.floor(Math.random() * 100000000);
  * fall: side a local road's one-way crossfall falls to, looking up-chainage ("right" as the typical
  * section is drawn, or "left"), read per road from the grading surface by crossfallSides().
  */
+type Comp = { def: string; params: Params; attach: { point: number; ex_comp: number; ex_point: number } | null; role: string };
+const builder = () => {
+  const comps: Comp[] = [];
+  const add = (def: string, params: Params, attach: Comp["attach"], role: string) => { comps.push({ def, params: { ...params, COMPONENT_ID: nextId++ }, attach, role }); return comps.length - 1; };
+  return { comps, add };
+};
+
 export function buildSection(type: SectionType, opts: { fall?: "right" | "left" } = {}): Section {
   const T = SECTION_TYPES[type];
   const f = opts.fall === "left" ? -1 : 1;
-  type Comp = { def: string; params: Params; attach: { point: number; ex_comp: number; ex_point: number } | null; role: string };
-  const comps: Comp[] = [];
-  const add = (def: string, params: Params, attach: Comp["attach"], role: string) => { comps.push({ def, params: { ...params, COMPONENT_ID: nextId++ }, attach, role }); return comps.length - 1; };
+  const { comps, add } = builder();
   for (const side of [-1, 1]) {
     const L: Params = side < 0 ? { LeftSideFactor: -1 } : {};
     let lastC: number;
@@ -88,6 +95,29 @@ export function buildSection(type: SectionType, opts: { fall?: "right" | "left" 
     const kerb = add("Curb", { ...L, Width: KERB_W }, { point: 1, ex_comp: lastC, ex_point: 1 }, "kerb");
     add("Sidewalk", { ...L, Width: T.sidewalk, Slope: SW_FALL, Depth: 0.1 }, { point: 0, ex_comp: kerb, ex_point: 4 }, "sidewalk");
   }
+  const lanes = T.kind === "local" ? 1 : 2;
+  return assemble(comps, { type, kind: T.kind, speed: T.kind === "local" ? 20 : 40, lanes, marking: T.kind === "local" ? [0] : [] });
+}
+
+/**
+ * Roundabout ring (RA-1..RA-7). Parsons draws the RA alignment on the outer carriageway edge
+ * (10200: outer edge arcs at the alignment radius 20.2 m, central island CIRCLE r 12.0 on
+ * -RD_Edges), so the whole carriageway lies on the island side of the alignment. Width from
+ * measureRoundabouts(). Kerbs as in the typical section (ROD-30000-001: 0.30 m, 150 mm upstand) on
+ * both edges. Crossfall 0 % (the ring follows its profile): Parsons gives none and the grading
+ * surface is a tilted plane across the ring; AICC decision 3 Nov 2026, pending Parsons.
+ */
+export function buildRoundaboutSection(width: number, island: "left" | "right"): Section {
+  if (!(width > 0)) throw new Error(`roundabout width must be positive (got ${width})`);
+  const { comps, add } = builder();
+  const inS: Params = island === "left" ? { LeftSideFactor: -1 } : {}, outS: Params = island === "left" ? {} : { LeftSideFactor: -1 };
+  const lane = add("Lane", { ...inS, Width: width, Slope: 0, Depth: 0.2 }, { point: 0, ex_comp: ORIGIN, ex_point: ORIGIN }, "lane");
+  add("Curb", { ...inS, Width: KERB_W }, { point: 1, ex_comp: lane, ex_point: 1 }, "kerb");
+  add("Curb", { ...outS, Width: KERB_W }, { point: 1, ex_comp: lane, ex_point: 0 }, "kerb");
+  return assemble(comps, { type: "RA", kind: "roundabout", speed: null, lanes: 1, marking: [] });
+}
+
+function assemble(comps: Comp[], o: { type: Section["type"]; kind: Section["kind"]; speed: number | null; lanes: number; marking: number[] }): Section {
   // place every component (attachments always point to earlier components)
   const placed: (Comp & { pts: XY[] })[] = [];
   comps.forEach((c, i) => {
@@ -120,9 +150,67 @@ export function buildSection(type: SectionType, opts: { fall?: "right" | "left" 
     ...(c.attach ? { attachment: c.attach } : {}),
     paramOverrides: Object.entries(c.params).map(([name, value]) => ({ name, value })),
   }));
-  const lanes = T.kind === "local" ? 1 : 2;
+  const lanes = o.lanes;
   const componentStyle = { styleType: "Component", showMarking: true, revision: 1, references, migrationInfo: { MANUAL_STYLE: "", LANES_FORWARD: lanes, LANES_BACKWARD: lanes } };
-  return { type, kind: T.kind, speed: T.kind === "local" ? 20 : 40, lanes, parts, bound, componentStyle, marking: T.kind === "local" ? [0] : [], width: bound[bound.length - 1]![0] - bound[0]![0] };
+  return { type: o.type, kind: o.kind, speed: o.speed, lanes, parts, bound, componentStyle, marking: o.marking, width: bound[bound.length - 1]![0] - bound[0]![0] };
+}
+
+export interface Roundabout {
+  name: string;
+  centre: P2;
+  /** radius of the RA alignment */
+  radius: number;
+  /** central island CIRCLE on -RD_Edges */
+  island: number;
+  /** concentric outer edge arcs on -RD_Edges (radius carrying the most arc angle) */
+  outer: number;
+  /** arc angle (degrees) of the outer edge drawn between the arms */
+  outerDeg: number;
+  width: number;
+  /** side of the island looking along the chainage */
+  side: "left" | "right";
+}
+
+/**
+ * Circulatory width of each roundabout from the road edges Parsons draws around it (AICC decision,
+ * 3 Nov 2026: no roundabout detail in the drawings, take it from the drawn edges). A roundabout is a
+ * road whose alignment is one closed arc; its island is the concentric CIRCLE on -RD_Edges, its outer
+ * edge the concentric arcs (LWPOLYLINE bulges or ARCs) on -RD_Edges between the arms. Al Qairawan:
+ * RA-1..RA-7 island 12.0, outer edge 20.2 = alignment radius, width 8.2 m.
+ */
+export function measureRoundabouts(layout: DxfEnt[], roads: Alignment[], tol = 0.05): { roundabouts: Roundabout[]; problems: string[] } {
+  const arcOfBulge = (a: P2, b: P2, bulge: number) => {
+    const th = 4 * Math.atan(bulge), c = Math.hypot(b[0] - a[0], b[1] - a[1]), r = c / (2 * Math.sin(th / 2));
+    const h = r * Math.cos(th / 2), ux = (b[0] - a[0]) / c, uy = (b[1] - a[1]) / c;
+    return { cx: (a[0] + b[0]) / 2 - uy * h, cy: (a[1] + b[1]) / 2 + ux * h, r: Math.abs(r), deg: (Math.abs(th) * 180) / Math.PI };
+  };
+  const edges = layout.filter((e) => e.layer.endsWith("RD_Edges"));
+  const out: Roundabout[] = [], problems: string[] = [];
+  for (const rd of roads) {
+    const segs = rd.segs as Seg[];
+    if (segs.length !== 1 || !segs[0]!.bulge) continue;
+    const s = segs[0]!, a = arcOfBulge(s.a, s.b, s.bulge);
+    if (a.deg < 359) continue; // not a closed ring
+    const near = (x: number, y: number) => Math.hypot(x - a.cx, y - a.cy) < tol;
+    const islands = edges.filter((e) => e.type === "CIRCLE" && e.r != null && near(e.x[0]!, e.y[0]!)).map((e) => e.r!);
+    const arcs = new Map<string, number>();
+    const addArc = (r: number, deg: number) => { if (Math.abs(r - a.r) > 3) return; const k = r.toFixed(3); arcs.set(k, (arcs.get(k) ?? 0) + deg); };
+    for (const e of edges) {
+      if (e.type === "ARC" && e.r != null && near(e.x[0]!, e.y[0]!)) addArc(e.r, 0); // angle not read: counts only when no bulge arcs
+      if (e.type !== "LWPOLYLINE") continue;
+      for (let i = 0; i + 1 < e.x.length; i++) {
+        if (!e.bulge[i]) continue;
+        const q = arcOfBulge([e.x[i]!, e.y[i]!], [e.x[i + 1]!, e.y[i + 1]!], e.bulge[i]!);
+        if (near(q.cx, q.cy)) addArc(q.r, q.deg);
+      }
+    }
+    const best = [...arcs.entries()].sort((x, y) => y[1] - x[1])[0];
+    if (islands.length !== 1 || !best) { problems.push(`${rd.name}: island circles ${islands.length}, outer edge arcs ${arcs.size}`); continue; }
+    const outer = +best[0], island = islands[0]!;
+    out.push({ name: rd.name, centre: [a.cx, a.cy], radius: a.r, island, outer, outerDeg: best[1], width: +(outer - island).toFixed(3), side: s.bulge > 0 ? "left" : "right" });
+    if (Math.abs(outer - a.r) > tol) problems.push(`${rd.name}: outer edge ${outer} is not on the alignment (R ${a.r.toFixed(3)})`);
+  }
+  return { roundabouts: out, problems };
 }
 
 export interface SectionClass {

@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import {
-  assemblePvis, buildAlignments, buildSection, classifySections, crossfallSides, loadLandXmlSurface, orientRoads, readDxfBlock, readProfileViews,
-  type NamedStart,
+  assemblePvis, buildAlignments, buildRoundaboutSection, buildSection, classifySections, crossfallSides, loadLandXmlSurface, measureRoundabouts, orientRoads,
+  readDxfBlock, readProfileViews, type NamedStart, type Section,
 } from "@infraworks/domain";
 
 import { junctionSteps, levelProblems, roadRows } from "./roads/checks.js";
@@ -73,12 +73,24 @@ function main(argv: string[]): number {
     say(`direction: ${or.reversed.length} reversed (${or.reversed.join(" ")}); loops re-started: ${or.restarted.map((r) => r.name).join(" ") || "none"}`);
     const sections = classifySections(layout, al.roads);
     const xfall = crossfallSides(al.roads, sections, surface);
-    say(`sections: ${Object.values(sections).filter((s) => s.type).length} typed, ${Object.values(sections).filter((s) => !s.type).length} on the template section`);
+    const ra = measureRoundabouts(layout, al.roads);
+    const raOf = new Map(ra.roundabouts.map((r) => [r.name, r]));
+    const untyped = Object.entries(sections).filter(([n, s]) => !s.type && !raOf.has(n)).map(([n]) => n);
+    say(`sections: ${Object.values(sections).filter((s) => s.type).length} typed, ${ra.roundabouts.length} roundabouts, ${untyped.length} on the template section${untyped.length ? ` (${untyped.join(" ")})` : ""}`);
+    for (const r of ra.roundabouts) say(`  ${r.name}: island r ${r.island}, outer edge r ${r.outer} (${r.outerDeg.toFixed(0)} deg drawn), width ${r.width} m, island ${r.side} of the chainage`);
+    for (const p of ra.problems) say(`  roundabout: ${p}`);
+    const sectionOf = (name: string): Section | null => {
+      const t = sections[name]?.type;
+      if (t) return buildSection(t, { fall: xfall[name]?.fall ?? undefined });
+      const r = raOf.get(name);
+      return r ? buildRoundaboutSection(r.width, r.side) : null;
+    };
     const outDir = flag("--out-dir");
     if (outDir) {
       mkdirSync(outDir, { recursive: true });
       const w = (f: string, v: unknown) => writeFileSync(join(outDir, f), typeof v === "string" ? v : JSON.stringify(v, null, 1));
       w("road-profiles.json", views); w("road-pvis.json", pv.roads); w("road-alignments.json", al.roads); w("road-sections.json", sections); w("road-xfall.json", xfall);
+      w("road-roundabouts.json", ra);
       w("road-report.txt", [...al.report, "", ...pv.issues.map((i) => `PVI ${i}`), "", ...or.report].join("\n") + "\n");
       say(`results: ${outDir}`);
     }
@@ -93,8 +105,7 @@ function main(argv: string[]): number {
       if (only && !only.includes(a.name)) continue;
       try {
         const plan = planRoad(a, pv.roads[a.name] ?? []);
-        const type = sections[a.name]?.type ?? null, fall = xfall[a.name]?.fall ?? undefined;
-        writer.write(plan, type ? buildSection(type, { fall }) : null);
+        writer.write(plan, sectionOf(a.name));
         written++;
       } catch (e) { failed.push(`${a.name}: ${e instanceof Error ? e.message : String(e)}`); }
     }
