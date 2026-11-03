@@ -112,11 +112,14 @@ for (const l of tLoc) {
   insert("CONSTRAINED_DEF_GEOM_LOCATIONS", l, { GUID: randomUUID(), FK_PARENT_GUID: gCD, GEOMETRY: g,
     FK_REFERENCE_H_CONSTRAINTS_GUID: isEnd ? hG.at(-1) : hG[0], SUB_ELEMENT: isEnd ? H.length : 1, PARAM: isEnd ? 1 : 0, STATION: isEnd ? total : 0 });
 }
-insert("CONSTRAINED_DEF_RPSYSTEMS", tRps, { GUID: gRps, FK_PARENT_GUID: gCD, GEOMETRY: lineBlob(line3d), LENGTH_2D: total });
+// JSON_RANGE_HASH is InfraWorks' cache key for the derived rows: copied as is, it says the template's
+// cached shapes are valid (copy D: the new road was not drawn). Zero the hash values to force a rebuild.
+const staleHash = Buffer.from(Buffer.from(tRps.JSON_RANGE_HASH).toString("utf8").replace(/"Value": "[0-9A-F]{32}"/g, `"Value": "${"0".repeat(32)}"`), "utf8");
+insert("CONSTRAINED_DEF_RPSYSTEMS", tRps, { GUID: gRps, FK_PARENT_GUID: gCD, GEOMETRY: lineBlob(line3d), LENGTH_2D: total, JSON_RANGE_HASH: staleHash });
 // Derived rows, copied (keys remapped consistently)
 const keyMap = new Map(); const remap = (k) => (k == null ? k : keyMap.get(k) || keyMap.set(k, randomUUID()).get(k));
 const urn = (u) => (u == null ? u : String(u).replace(tRps.GUID, gRps));
-tPrim.forEach((p) => insert("PRIMITIVES", p, { GUID: randomUUID(), FK_PARENT_GUID: gRoad, GROUP_URN: urn(p.GROUP_URN) }));
-tTop.forEach((t) => insert("TERRAIN_OPERATIONS", t, { GUID: randomUUID(), FK_PARENT_GUID: gRoad, GROUP_URN: urn(t.GROUP_URN), START_POINT_KEY: remap(t.START_POINT_KEY), END_POINT_KEY: remap(t.END_POINT_KEY) }));
+if (!flags.includes("--no-derived")) tPrim.forEach((p) => insert("PRIMITIVES", p, { GUID: randomUUID(), FK_PARENT_GUID: gRoad, GROUP_URN: urn(p.GROUP_URN) }));
+if (!flags.includes("--no-derived")) tTop.forEach((t) => insert("TERRAIN_OPERATIONS", t, { GUID: randomUUID(), FK_PARENT_GUID: gRoad, GROUP_URN: urn(t.GROUP_URN), START_POINT_KEY: remap(t.START_POINT_KEY), END_POINT_KEY: remap(t.END_POINT_KEY) }));
 db.exec("COMMIT");
 console.log(`written: definition ${gCD}, road ${gRoad}; ${H.length} H, ${chain.length} V rows, ${tPrim.length} primitives, ${tTop.length} terrain operations copied`);
