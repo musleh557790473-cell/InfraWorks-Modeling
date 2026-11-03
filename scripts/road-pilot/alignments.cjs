@@ -70,7 +70,7 @@ for (const [name, pieces] of byName) {
   const pts = [[...segs[0].a, zAt(0)]]; let st = 0;
   for (const g of segs) { const ps = densify(g, 2); let prev = pts.at(-1); for (const p of ps) { st += Math.hypot(p[0] - prev[0], p[1] - prev[1]); pts.push([p[0], p[1], zAt(st)]); prev = p; } }
   // Only roads that chain fully and whose plan length equals the profile length (1 cm): stations are exact.
-  if (!left.length && Math.abs(len - plen) < 0.01) roads.push({ name, pts, len, plen, connected: true });
+  if (!left.length && Math.abs(len - plen) < 0.01) roads.push({ name, pts, len, plen, connected: true, segs });
 }
 
 // --- PolyLineZ shapefile (one part per road) + DBF (NAME, LEN_PLAN, LEN_PROF)
@@ -96,5 +96,7 @@ roads.forEach((r, k) => { let q = hlen + k * rlen + 1; const vals = [r.name.padE
 dbf[dbf.length - 1] = 0x1a; fs.writeFileSync(path.join(outDir, "aq_road_alignments.dbf"), dbf);
 fs.copyFileSync(pkgBase + ".prj", path.join(outDir, "aq_road_alignments.prj"));
 fs.writeFileSync(path.join(outDir, "aq_road_alignments_report.txt"), report.join("\n") + "\n");
+// Exact horizontal elements (straights and bulge arcs, from station 0) for the component-road writer.
+fs.writeFileSync(path.join(outDir, "aq_road_alignments.json"), JSON.stringify(roads.map((r) => ({ name: r.name, length: r.len, segs: r.segs }))));
 const diffs = roads.map((r) => Math.abs(r.len - r.plen));
 console.log(`written ${roads.length} roads (max length diff ${Math.max(...diffs).toFixed(4)} m); left out ${report.length - roads.length}: see aq_road_alignments_report.txt`);
