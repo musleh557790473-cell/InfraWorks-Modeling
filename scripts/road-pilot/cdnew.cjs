@@ -42,8 +42,9 @@ const zAt = (s) => {
   for (let i = 1; i < pvis.length; i++) if (s <= pvis[i].s + 1e-9) { const a = pvis[i - 1], b = pvis[i]; return a.z + ((b.z - a.z) * (s - a.s)) / (b.s - a.s); }
   return pvis.at(-1).z;
 };
-// 3D centreline: every 5 m, element ends, VC ends.
+// 3D centreline: every 5 m (2 m on arcs), element ends, VC ends.
 const st = new Set([0, total]); for (let s = 5; s < total; s += 5) st.add(s); H.forEach((e) => st.add(e.s0));
+H.filter((e) => e.kind === "arc").forEach((e) => { for (let s = e.s0 + 2; s < e.s0 + e.len; s += 2) st.add(s); });
 pvis.forEach((p) => { if (p.L) { st.add(p.s - p.L / 2); st.add(p.s + p.L / 2); } });
 const line3d = [...st].filter((s) => s >= 0 && s <= total).sort((a, b) => a - b).map((s) => [...xy(s), zAt(s)]);
 console.log(`${name}: ${H.filter((e) => e.kind === "line").length} straights, ${H.filter((e) => e.kind === "arc").length} arcs (R ${H.filter((e) => e.kind === "arc").map((e) => e.r.toFixed(1)).join(", ")}), ${total.toFixed(3)} m; ${pvis.length} PVIs, ${pvis.filter((p) => p.L).length} VCs; z ${line3d[0][2].toFixed(3)} -> ${line3d.at(-1)[2].toFixed(3)}`);
@@ -66,7 +67,68 @@ const tLoc = all("select * from CONSTRAINED_DEF_GEOM_LOCATIONS where FK_PARENT_G
 const tRps = one("select * from CONSTRAINED_DEF_RPSYSTEMS where FK_PARENT_GUID=?", TPL);
 const tPrim = all("select * from PRIMITIVES where FK_PARENT_GUID=?", tRoad.GUID);
 const tTop = all("select * from TERRAIN_OPERATIONS where FK_PARENT_GUID=?", tRoad.GUID);
-if (one("select count(*) n from ROADS where NAME=?", name).n > 0n) throw new Error(`${name} already exists in the model`);
+// ---------- derived rows (the road body InfraWorks draws), computed from this road's own geometry.
+// InfraWorks draws PRIMITIVES / TERRAIN_OPERATIONS as stored and rebuilds them only when the road
+// is edited, so copying the template's rows drew every new road at the template's place.
+// Layout follows the template: one multiMorphingCrossSection per strip (same cross-sections, path =
+// centreline with a mirrored ghost point at each end, vertexIndices [0, n-1]), a symbolizedPath for
+// the marking, and grading as a ring: start transition, right edge, end transition, left edge (keys
+// are the four corners), plus a CutOut polygon.
+const bboxBlob = (pts, m) => { const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]); const x0 = Math.min(...xs) - m, x1 = Math.max(...xs) + m, y0 = Math.min(...ys) - m, y1 = Math.max(...ys) + m;
+  const b = Buffer.alloc(96); [3, 0, 1, 5].forEach((v, i) => b.writeUInt32LE(v, 4 * i)); [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]].forEach((p, i) => { b.writeDoubleLE(p[0], 16 + 16 * i); b.writeDoubleLE(p[1], 24 + 16 * i); }); return b; };
+const num = (v) => (Number.isInteger(v) ? v.toFixed(1) : String(v));
+const jpts = (pts) => "[" + pts.map((p) => `[ ${p.map(num).join(", ")} ]`).join(",") + "]";
+function derivedRows(tPrim, tTop, line, gradingLimit) {
+  const n = line.length, p0 = line[0], p1 = line[1], pn = line[n - 1], pm = line[n - 2];
+  const path = [[2 * p0[0] - p1[0], 2 * p0[1] - p1[1], p1[2]], ...line, [2 * pn[0] - pm[0], 2 * pn[1] - pm[1], pm[2]]];
+  // left normal at each vertex (average of adjacent segment directions)
+  const nrm = line.map((p, i) => { const a = line[Math.max(0, i - 1)], b = line[Math.min(n - 1, i + 1)]; const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy); return [-dy / l, dx / l]; });
+  // cross-section offset d > 0 is right of the direction of travel (template: x = +4 lies at -normal)
+  const off = (d) => line.map((p, i) => [p[0] - nrm[i][0] * d, p[1] - nrm[i][1] * d, p[2]]);
+  const prims = tPrim.map((t) => {
+    const j = JSON.parse(Buffer.from(t.JSON_DATA).toString("utf8"));
+    let geomPts;
+    if (j.type === "multiMorphingCrossSection") {
+      const xs = j.crossSections.flat().map((q) => q[0]); const lo = Math.min(...xs), hi = Math.max(...xs);
+      j.path = path; j.vertexIndices = [0, n - 1]; geomPts = [...off(lo), ...off(hi)];
+    } else { j.path = [line[0], ...line, line[n - 1]]; geomPts = line; }
+    return { t, json: Buffer.from(JSON.stringify(j), "utf8"), geom: bboxBlob(geomPts, 0.5) };
+  });
+  // edge offsets from the template's outermost cross-section points
+  const allX = tPrim.flatMap((t) => { const j = JSON.parse(Buffer.from(t.JSON_DATA).toString("utf8")); return j.crossSections ? j.crossSections.flat().map((q) => q[0]) : []; });
+  const L = Math.min(...allX), R = Math.max(...allX);
+  const left = off(L), right = off(R);
+  // Transitions run across the road ends through every strip boundary (template: 5 points, left to right at the start).
+  const xsUp = [...new Set(allX)].sort((a, b) => a - b);
+  const startT = xsUp.map((x) => off(x)[0]);
+  const endT = xsUp.slice().reverse().map((x) => off(x)[n - 1]);
+  return { prims, startT, endT, rightEdge: right, leftEdgeRev: left.slice().reverse(), cut: [...right, ...left.slice().reverse(), right[0]], gradingLimit };
+}
+// Rows for one road: PRIMITIVES and TERRAIN_OPERATIONS, ring keys = corners (left-start, right-start, right-end, left-end).
+function insertDerived(tPrim, tTop, roadGuid, rpsOld, rpsNew, line) {
+  const grading = JSON.parse(String(tRoad.GRADING_DATA || "{}")).gradingComponent || {};
+  const d = derivedRows(tPrim, tTop, line, grading.gradingLimit || 5);
+  for (const p of d.prims) insert("PRIMITIVES", p.t, { GUID: randomUUID(), FK_PARENT_GUID: roadGuid, GROUP_URN: String(p.t.GROUP_URN).replace(rpsOld, rpsNew), JSON_DATA: p.json, GEOMETRY: p.geom });
+  const K = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  const bbox3 = (pts) => [Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1])), Math.min(...pts.map((p) => p[2])), Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[2]))];
+  const gradingJson = (coords, comp) => `{"type": "Grading","footprint": {"type": "LineString","bbox": [ ${bbox3(coords).map(num).join(", ")} ],"coordinates": ${jpts(coords)}},"gradingComponent": ${JSON.stringify(comp)}}`;
+  const tByOrder = tTop.slice().sort((a, b) => Number(a.ID) - Number(b.ID)); // template order: start T, end T, right edge, left edge, CutOut
+  const [tS, tE, tR, tL, tC] = tByOrder;
+  const compOf = (t) => JSON.parse(Buffer.from(t.TERRAIN_OPERATION).toString("utf8")).gradingComponent;
+  const m = d.gradingLimit + 2;
+  const rows = [
+    [tS, gradingJson(d.startT, compOf(tS)), d.startT, K[0], K[1]],
+    [tE, gradingJson(d.endT, compOf(tE)), d.endT, K[2], K[3]],
+    [tR, gradingJson(d.rightEdge, compOf(tR)), d.rightEdge, K[1], K[2]],
+    [tL, gradingJson(d.leftEdgeRev, compOf(tL)), d.leftEdgeRev, K[3], K[0]],
+    [tC, `{"type": "CutOut","footprint": {"type": "Polygon","bbox": [ ${bbox3(d.cut).map(num).join(", ")} ],"coordinates": [${jpts(d.cut)}]}}`, d.cut, null, null],
+  ];
+  for (const [t, json, pts, k1, k2] of rows) insert("TERRAIN_OPERATIONS", t, { GUID: randomUUID(), FK_PARENT_GUID: roadGuid, GROUP_URN: String(t.GROUP_URN).replace(rpsOld, rpsNew),
+    TERRAIN_OPERATION: Buffer.from(json, "utf8"), GEOMETRY: bboxBlob(pts, t === tC ? 0 : m), START_POINT_KEY: k1, END_POINT_KEY: k2 });
+}
+
+const existing = one("select count(*) n from ROADS where NAME=?", name).n > 0n;
+if (existing && !flags.includes("--regen")) throw new Error(`${name} already exists in the model`);
 
 const insert = (table, tpl, over) => {
   const row = { ...tpl, ...over }; delete row.ID;
@@ -76,6 +138,16 @@ const insert = (table, tpl, over) => {
 const nulls = (tpl, keep) => Object.fromEntries(Object.keys(tpl).filter((k) => !keep.includes(k)).map((k) => [k, null]));
 
 db.exec("BEGIN");
+if (existing) { // --regen: recompute only the body of a road already in the model
+  const road = one("select GUID, FK_PARENT_GUID from ROADS where NAME=?", name);
+  const rps = one("select GUID from CONSTRAINED_DEF_RPSYSTEMS where FK_PARENT_GUID=?", road.FK_PARENT_GUID);
+  db.prepare("delete from PRIMITIVES where FK_PARENT_GUID=?").run(road.GUID);
+  db.prepare("delete from TERRAIN_OPERATIONS where FK_PARENT_GUID=?").run(road.GUID);
+  insertDerived(tPrim, tTop, road.GUID, tRps.GUID, rps.GUID, line3d);
+  db.prepare("update ROADS set GEOMETRY=? where GUID=?").run(lineBlob(line3d), road.GUID);
+  db.prepare("update CONSTRAINED_DEF_RPSYSTEMS set GEOMETRY=? where GUID=?").run(lineBlob(line3d), rps.GUID);
+  db.exec("COMMIT"); console.log(`${name}: body recomputed`); process.exit(0);
+}
 const gCD = randomUUID(), gRoad = randomUUID(), gRps = randomUUID();
 const start = line3d[0], end = line3d.at(-1);
 insert("CONSTRAINED_DEFINITIONS", tCD, { GUID: gCD, NAME: name, FK_DEFAULT_ASSET_GUID: gRoad, REFERENCE_POINT: pt3Blob(...start) });
@@ -116,10 +188,6 @@ for (const l of tLoc) {
 // cached shapes are valid (copy D: the new road was not drawn). Zero the hash values to force a rebuild.
 const staleHash = Buffer.from(Buffer.from(tRps.JSON_RANGE_HASH).toString("utf8").replace(/"Value": "[0-9A-F]{32}"/g, `"Value": "${"0".repeat(32)}"`), "utf8");
 insert("CONSTRAINED_DEF_RPSYSTEMS", tRps, { GUID: gRps, FK_PARENT_GUID: gCD, GEOMETRY: lineBlob(line3d), LENGTH_2D: total, JSON_RANGE_HASH: staleHash });
-// Derived rows, copied (keys remapped consistently)
-const keyMap = new Map(); const remap = (k) => (k == null ? k : keyMap.get(k) || keyMap.set(k, randomUUID()).get(k));
-const urn = (u) => (u == null ? u : String(u).replace(tRps.GUID, gRps));
-if (!flags.includes("--no-derived")) tPrim.forEach((p) => insert("PRIMITIVES", p, { GUID: randomUUID(), FK_PARENT_GUID: gRoad, GROUP_URN: urn(p.GROUP_URN) }));
-if (!flags.includes("--no-derived")) tTop.forEach((t) => insert("TERRAIN_OPERATIONS", t, { GUID: randomUUID(), FK_PARENT_GUID: gRoad, GROUP_URN: urn(t.GROUP_URN), START_POINT_KEY: remap(t.START_POINT_KEY), END_POINT_KEY: remap(t.END_POINT_KEY) }));
+insertDerived(tPrim, tTop, gRoad, tRps.GUID, gRps, line3d);
 db.exec("COMMIT");
-console.log(`written: definition ${gCD}, road ${gRoad}; ${H.length} H, ${chain.length} V rows, ${tPrim.length} primitives, ${tTop.length} terrain operations copied`);
+console.log(`written: definition ${gCD}, road ${gRoad}; ${H.length} H, ${chain.length} V rows, ${tPrim.length} primitives, ${tTop.length} terrain operations computed`);
