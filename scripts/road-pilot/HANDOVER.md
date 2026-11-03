@@ -123,7 +123,20 @@ and `NAME = R.6.E.1`, in two copies: `C:\IW\Al Qairawan Test (R.6.E.1 A)` (V cha
 - The name did not show with `ROADS.NAME` only ("Enter a name"): copy `(R.6.E.1 C)` also sets
   `CONSTRAINED_DEFINITIONS.NAME` (to test).
 
-**Plan for all roads** (from A/B): the user imports the centrelines as planning roads and runs
+**New roads written from scratch work** (`cdnew.cjs`, template = R.6.E.1 in copy C):
+- "Convert to Component Road" has no multi-select; the Traffic Study Area bulk conversion needs a
+  Java runtime (not installed), so the tool writes the roads itself.
+- D (template rows + template JSON_RANGE_HASH): rows reach InfraWorks' mirror, road not drawn.
+- F (no derived rows): nothing shown, empty profile. Derived rows must exist.
+- E (derived rows copied, hash zeroed): R.6.F.1 read correctly (BC/EC, PVIs, K 18.7/50.0/17.6/17.5)
+  but its body stayed the template's cached one at R.6.E.1. **Changing a property (Speed 40→41)
+  rebuilt it**: 321.208 m, EC/BC 0+057.189 (= Parsons L=57.189 R=400), EC 0+179.996, elevation
+  693.908–697.239, grades 0.50–2.21%. So InfraWorks rebuilds a road's body only on an edit.
+- Batch: `Al Qairawan Roads (Parsons)` = copy C + 161 roads (162 with R.6.E.1); 21 PVI-review roads
+  and 8 whose PVIs do not reach the alignment end (R.2.G.6 R.2.G.22 R.3.D.1 R.5.G.5 R.5.G.11
+  R.7.G.2 R.9.G.2 R.13.G.15) left out. The user then selects all roads and edits Speed once.
+
+**Earlier plan for all roads** (from A/B, superseded): the user imports the centrelines as planning roads and runs
 "Convert to Component Road" on all of them at once (InfraWorks creates every table, including the
 derived rows); then a tool, like `model:names`, matches each component road to its Parsons road by
 geometry and writes the name and Parsons' PVIs / VCs into a copy. Check per road that the
