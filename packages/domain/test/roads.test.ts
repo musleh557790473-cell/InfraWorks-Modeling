@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  assemblePvis, buildAlignments, buildSection, crossfallSides, orientRoads, pieceLen, readDxfBlock, readProfileViews, trimTo,
+  assemblePvis, buildAlignments, buildRoundaboutSection, buildSection, crossfallSides, measureRoundabouts, orientRoads, pieceLen, readDxfBlock, readProfileViews, trimTo,
   type Alignment, type DxfEnt, type ProfileView, type Seg,
 } from "../src/index.js";
 
@@ -156,4 +156,63 @@ test("crossfall: the side comes from the grading surface (falls right of the cha
   const out = crossfallSides([r], { "R.A": { type: "A1", votes: {}, samples: 0, oneSidedSamples: 0, edge: null } }, surface);
   assert.equal(out["R.A"]!.fall, "right");
   assert.equal(out["R.A"]!.xfall, 0.02);
+});
+
+// ---------- roundabouts (AICC 3 Nov 2026: width from the edges Parsons draws around each RA)
+// RA alignment: one arc from (cx+R, cy) almost all the way round; bulge = tan(theta/4)
+const ring = (name: string, cx: number, cy: number, R: number, ccw = true): Alignment => {
+  const th = 2 * Math.PI - 1e-4, b: [number, number] = [cx + R * Math.cos(ccw ? th : -th), cy + R * Math.sin(ccw ? th : -th)];
+  return { name, length: R * th, segs: [{ a: [cx + R, cy], b, bulge: (ccw ? 1 : -1) * Math.tan(th / 4) }] };
+};
+const circle = (layer: string, x: number, y: number, r: number): DxfEnt => ({ type: "CIRCLE", layer, x: [x], y: [y], bulge: [0], txt: "", r });
+// an edge polyline whose middle vertex pair is a 40 degree arc of radius r about (cx, cy)
+const edgeArc = (cx: number, cy: number, r: number, a0: number, deg = 40): DxfEnt => {
+  const t0 = (a0 * Math.PI) / 180, t1 = ((a0 + deg) * Math.PI) / 180;
+  const p0: [number, number] = [cx + r * Math.cos(t0), cy + r * Math.sin(t0)], p1: [number, number] = [cx + r * Math.cos(t1), cy + r * Math.sin(t1)];
+  return pline("-RD_Edges", [[p0[0] + 5 * Math.cos(t0), p0[1] + 5 * Math.sin(t0)], p0, p1, [p1[0] + 5 * Math.cos(t1), p1[1] + 5 * Math.sin(t1)]], [0, Math.tan((deg * Math.PI) / 180 / 4), 0, 0]);
+};
+
+test("DXF block reader keeps the radius of a CIRCLE (the roundabout island)", () => {
+  const dxf = ["0", "SECTION", "2", "BLOCKS", "0", "BLOCK", "2", "L", "0", "CIRCLE", "8", "L$0$-RD_Edges", "10", "100", "20", "200", "40", "12.0",
+    "0", "ENDBLK", "0", "ENDSEC", "0", "SECTION", "2", "ENTITIES", "0", "ENDSEC", "0", "EOF"].join("\n");
+  const [e] = readDxfBlock(dxf, "L");
+  assert.equal(e!.r, 12);
+  assert.deepEqual([e!.x[0], e!.y[0]], [100, 200]);
+});
+
+test("roundabouts: width = outer edge arcs minus the island circle (RA-1: 20.2 - 12.0 = 8.2 m)", () => {
+  const layout = [circle("-RD_Edges", 1000, 2000, 12), edgeArc(1000, 2000, 20.2, 10), edgeArc(1000, 2000, 20.2, 100), edgeArc(1000, 2000, 20.3, 200, 10),
+    circle("-RD_Edges", 1100, 2000, 3), pline("RD_ROW", [[1024.7, 2000], [1030, 2000]])];
+  const { roundabouts, problems } = measureRoundabouts(layout, [ring("RA-1", 1000, 2000, 20.2), straight("R.1.G.1", 50), ring("RA-2", 1000, 2000, 20.2, false)]);
+  assert.deepEqual(problems, []);
+  assert.equal(roundabouts.length, 2, "straight roads are not roundabouts");
+  const [a, b] = roundabouts;
+  assert.equal(a!.island, 12); assert.equal(a!.outer, 20.2); assert.equal(a!.width, 8.2);
+  assert.ok(Math.abs(a!.outerDeg - 80) < 1e-6, "the larger outer radius by drawn angle wins over a short 20.3 piece");
+  assert.equal(a!.side, "left", "anticlockwise chainage: island on the left");
+  assert.equal(b!.side, "right", "clockwise chainage: island on the right");
+});
+
+test("roundabouts: no island circle or an outer edge off the alignment is reported, not guessed", () => {
+  const r1 = measureRoundabouts([edgeArc(0, 0, 20.2, 10)], [ring("RA-1", 0, 0, 20.2)]);
+  assert.equal(r1.roundabouts.length, 0);
+  assert.match(r1.problems[0]!, /RA-1: island circles 0/);
+  const r2 = measureRoundabouts([circle("-RD_Edges", 0, 0, 12), edgeArc(0, 0, 21, 10)], [ring("RA-1", 0, 0, 20.2)]);
+  assert.match(r2.problems[0]!, /not on the alignment/);
+});
+
+test("roundabout section: 8.2 m carriageway on the island side at 0 %, kerbs on both edges", () => {
+  const s = buildRoundaboutSection(8.2, "left");
+  assert.equal(s.type, "RA");
+  assert.equal(s.speed, null, "no documented design speed: the template's is kept");
+  const lane = s.parts.find((p) => p.role === "lane")!.crossSection;
+  const xs = lane.map((q) => q[0]), top = lane.filter((q) => q[2] === 2 || q[2] === 3);
+  assert.ok(Math.abs(Math.min(...xs) + 8.2) < 1e-9 && Math.abs(Math.max(...xs)) < 1e-9, "lane from the alignment (outer edge) to 8.2 m left");
+  assert.ok(top.every((q) => Math.abs(q[1]!) < 1e-9), "flat: 0 % crossfall at the profile level");
+  const kerbs = s.parts.filter((p) => p.role === "kerb").map((p) => [Math.min(...p.crossSection.map((q) => q[0])), Math.max(...p.crossSection.map((q) => q[0]))]);
+  assert.deepEqual(kerbs.map(([a, b]) => [+a!.toFixed(3), +b!.toFixed(3)]), [[-8.5, -8.2], [0, 0.3]]);
+  assert.ok(Math.abs(s.width - 8.8) < 1e-9);
+  const right = buildRoundaboutSection(8.2, "right").parts.find((p) => p.role === "lane")!.crossSection.map((q) => q[0]);
+  assert.ok(Math.abs(Math.max(...right) - 8.2) < 1e-9, "island on the right: lane to the right");
+  assert.throws(() => buildRoundaboutSection(0, "left"));
 });

@@ -13,6 +13,8 @@ export interface DxfEnt {
   txt: string;
   /** block name of an INSERT */
   name?: string;
+  /** radius of a CIRCLE or ARC (group 40); x/y hold its centre */
+  r?: number;
 }
 
 export function readDxfBlock(text: string, block: string): DxfEnt[] {
@@ -41,6 +43,7 @@ export function readDxfBlock(text: string, block: string): DxfEnt[] {
       else if (c === "42" && o.bulge.length) o.bulge[o.bulge.length - 1] = +v;
       else if (c === "1" || c === "3") o.txt += v;
       else if (c === "2" && t === "INSERT") o.name = v;
+      else if (c === "40" && (t === "CIRCLE" || t === "ARC")) o.r = +v;
       j += 2;
     }
     out.push(o);

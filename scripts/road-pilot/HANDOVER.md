@@ -288,3 +288,18 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
 3. Write R.6.E.1 as a component road into a fresh copy (name, Parsons PVIs), user tests.
 4. Productise in `packages/domain` with tests (profile reader with the PGL-label check,
    PolyLineZ writer, section type from ROW width, component-road writer); then all 250 roads.
+
+## Session 4 (3 Nov 2026, evening): roundabout width, RA-1 band, Scripting Console
+
+- Roundabout width from the edges in 10200 (AICC decision): RA-1..RA-7 island CIRCLE r 12.0 and
+  outer edge arcs r 20.2 on `-RD_Edges`, width 8.2 m; the RA alignment is the OUTER edge.
+  `measureRoundabouts()` + `buildRoundaboutSection()` (8.2 m on the island side, 0 % crossfall
+  pending Parsons, kerbs 0.30 both edges), branch `feat/roundabout-sections`. Not yet written to
+  the working model. The grading surface has no fixed crossfall across the rings (tilted plane).
+- RA-1 band: our stored rows all lie within 31 m of its centre; after a Grading Limit edit
+  InfraWorks rebuilt RA-1 as 4 pieces between its arms and created 9 intersections (3 -> 12,
+  arms 9 -> 41, regions 6 -> 34). The band comes from the one-piece closed ring we write.
+- Scripting Console = Ctrl+2 (InfraWorks 2026). API: RoadModel (regenModel, saveUpdates,
+  invalidateModel, readRoadModel, getRoadID...), Intersections.updateIntersections, app.Regenerate.
+  Next (user to approve): try a script rebuild on RA-2, then the closed roads, then all roads
+  and updateIntersections, instead of writing junction rows ourselves.

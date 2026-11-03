@@ -87,7 +87,7 @@ export class RoadWriter {
     const s = JSON.parse(String(this.tRoad.MANUAL_STYLE));
     s.componentStyle = JSON.stringify(sec.componentStyle);
     s.lanes = { ...s.lanes, countForward: sec.lanes, countBackward: sec.lanes };
-    return { MANUAL_STYLE: JSON.stringify(s, null, "\t"), MAX_SPEED: sec.speed };
+    return { MANUAL_STYLE: JSON.stringify(s, null, "\t"), MAX_SPEED: sec.speed ?? Number(this.tRoad.MAX_SPEED) };
   }
 
   /** Is this road the template (converted in InfraWorks, its constraints are kept)? */
