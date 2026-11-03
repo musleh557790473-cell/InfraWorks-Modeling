@@ -55,7 +55,11 @@ for (const r of roads) {
   else console.log(`${r.name}: loop, no start fits the surface (best ${best.v.toFixed(2)} m)`);
 }
 if (rotated.length) console.log("loops re-started:", rotated.join(", "));
-const flipped = [], report = [];
+// A reversal changes the junction evidence of the roads that meet the reversed one (R.10.G.2 was
+// kept while R.0.D.1 was still backwards, then clearly reversed): repeat until nothing changes.
+const flipped = []; let report = [];
+for (let pass = 0; pass < 6; pass++) {
+  report = []; const before = flipped.length;
 for (const r of roads) {
   const pv = pvis[r.name]; if (!pv || pv.some((p) => p.z == null)) continue;
   const fwd = spread(r.segs, pv, r.length), rev = spread(reverseSegs(r.segs), pv, r.length);
@@ -66,7 +70,9 @@ for (const r of roads) {
   const junctionsSay = jf != null && jr != null && jf > 0.3 && jr < 0.05;
   const flip = (surfaceSays && junctionsAgree) || junctionsSay;
   report.push(`${r.name}\t${fwd.toFixed(3)}\t${rev.toFixed(3)}\tjunctions ${jf == null ? "-" : jf.toFixed(2)} / ${jr == null ? "-" : jr.toFixed(2)}${flip ? "\tREVERSED" : surfaceSays ? "\tKEPT (junctions)" : fwd > 0.3 ? "\tCHECK" : ""}`);
-  if (flip) { flipped.push(r.name); if (flags.includes("--write")) r.segs = reverseSegs(r.segs); }
+  if (flip) { flipped.push(r.name); r.segs = reverseSegs(r.segs); lines.set(r.name, poly(r.segs, pv, r.length)); }
+}
+  if (flipped.length === before) break;
 }
 console.log("road\tspread as chained\tspread reversed (m)\tjunction steps as chained / reversed (m)"); report.filter((l) => /REVERSED|CHECK|KEPT/.test(l)).forEach((l) => console.log(l));
 console.log(report.length, "roads checked;", flipped.length, "chained from the wrong end:", flipped.join(" "));

@@ -244,6 +244,16 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
     (R.14.G.14 and R.3.G.8 have one label 0.55 m off the line). Plan lengths of all 9 equal their
     profile lengths. R.8.G.4 reversed (junctions 4.60 -> 0). Files kept:
     `aq-road-profiles.before-window-fix.json`. Left out: R.0.D.5 (375 m), R.12.E.1 (401 m).
+  - All 250 roads (3 Nov 2026): 11 roads had a profile but no piece named in the roads package
+    and were never tried (R.6.G.8 R.0.D.1 R.0.D.8 R.0.D.11 RA-1 RA-2 RA-4 RA-5 RA-7 R.10.G.2
+    R.11.G.1); every profile name is now tried, pass 2 starts them on their name-labelled pieces.
+    RA-1..RA-7 are roundabout circles (one closed piece, ~126.9 m, each label ~4 m from its own
+    circle), left untyped (template width; circulatory width not in the drawings read so far).
+    Pass 3b: walk the free pieces from the labelled start while the way on is unique; if the
+    plan's end-station label equals the walk's length, or the walk is <= 2.5 m longer, cut at the
+    profile end: R.0.D.5 (plan 0+416.889, profile 375.000), R.12.E.1 (401.308 -> 401.213).
+    orient.cjs repeats until no road flips (R.10.G.2 only clear once R.0.D.1 was reversed); 13
+    reversed in all. Checks: zscan clean; one junction step >= 0.3 m (R.1.G.24 on R.1.G.23).
   - Finding a road in InfraWorks: Model Explorer > Roads > Select By Filter, `NAME = 'R.5.G.1'`, F.
 - `roadtin.cjs`: road centreline against the grading surface. Most roads sit 0.5-0.8 m above it
   (pavement). Larger only at junction mouths (R.3.G.3, R.0.D.16, R.3.E.1, R.3.F.1) and on R.3.G.1,

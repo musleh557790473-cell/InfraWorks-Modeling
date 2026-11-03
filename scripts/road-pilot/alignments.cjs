@@ -8,7 +8,7 @@ const BLOCK = "Xref Road Layout Al Qairawan";
 // --- read centrelines (with bulges) and chainage labels from the layout block
 const L = fs.readFileSync(dxf, "latin1").split(/\r?\n/).map((x) => x.trim());
 const s0 = L.indexOf("BLOCKS"), e0 = L.indexOf("ENTITIES");
-let blk = null; const plines = [], chain0 = [], nameLabels = [];
+let blk = null; const plines = [], chain0 = [], nameLabels = [], chainLabels = [];
 for (let i = s0 + 1; i < e0; i += 2) {
   if (L[i] !== "0") continue; const t = L[i + 1];
   if (t === "BLOCK") { let j = i + 2; while (L[j] !== "0") { if (L[j] === "2") { blk = L[j + 1]; break; } j += 2; } continue; }
@@ -24,6 +24,7 @@ for (let i = s0 + 1; i < e0; i += 2) {
     j += 2; }
   if (t === "LWPOLYLINE" && layer.endsWith("RD_PR_CNRL")) plines.push(v);
   if (t === "MTEXT" && layer.endsWith("RD_C_CHAIN_TEXT") && /(^|;)0\+000(\.0+)?\}?$/.test(txt.replace(/\{|\}/g, ""))) chain0.push([x, y]);
+  if (t === "MTEXT" && layer.endsWith("RD_C_CHAIN_TEXT")) { const m = txt.replace(/\\[A-Za-z][^;]*;|[{}]/g, "").match(/(\d+)\+(\d+\.\d+)$/); if (m) chainLabels.push({ x, y, s: +m[1] * 1000 + +m[2] }); }
   if ((t === "MTEXT" || t === "TEXT") && layer.endsWith("0-Alignment Name")) nameLabels.push({ x, y, t: txt.replace(/\\[A-Za-z][^;]*;|[{}]/g, "").trim() });
 }
 
@@ -109,6 +110,9 @@ const roads = [], report = [];
 // starting on a piece that carries its name label ("0-Alignment Name"; the package gave R.0.D.13's
 // piece the name RA-6); pass 3: own piece longer than the profile by <= 2.5 m, cut at the profile end
 const chained = new Map(), usedKeys = new Set(), allPieces = plines.map(segsOf);
+// roads with a profile but no piece named in the package (R.0.D.1, RA-1 ... 11 in Al Qairawan) were
+// never tried: give them an empty piece list, pass 2 starts them on their name-labelled pieces
+for (const n of new Set(prof.map((p) => p.name))) if (!byName.has(n)) byName.set(n, []);
 for (const [name, pieces] of byName) {
   const fg = profOf(name); if (!fg.length) continue;
   const c = chainTo(pieces, fg.at(-1)[0]); if (c) { chained.set(name, { c, how: "" }); c.keys.forEach((k) => usedKeys.add(k)); }
@@ -122,7 +126,17 @@ for (const [name, pieces] of byName) {
   if (c) { chained.set(name, { c, how: "matched by profile length over all free pieces" }); c.keys.forEach((k) => usedKeys.add(k)); continue; }
   if (pieces.length === 1) { const s = openLoop(pieces[0]), L = pieceLen(s);
     const o = tickDist(s[0].a) <= tickDist(s.at(-1).b) ? s : rev(s);
-    if (L > plen && L - plen <= 2.5) { const t = trimTo(o, plen); chained.set(name, { c: { segs: t, len: pieceLen(t), used: [0], nOwn: 1, keys: [pk(pieces[0])] }, how: `piece ${L.toFixed(3)} m cut to the profile end (${(L - plen).toFixed(3)} m)` }); } }
+    if (L > plen && L - plen <= 2.5) { const t = trimTo(o, plen); chained.set(name, { c: { segs: t, len: pieceLen(t), used: [0], nOwn: 1, keys: [pk(pieces[0])] }, how: `piece ${L.toFixed(3)} m cut to the profile end (${(L - plen).toFixed(3)} m)` }); continue; } }
+  // pass 3b: walk the free pieces from the labelled start while the way on is unique; when the plan's
+  // own end-station label equals that walk's length (the alignment is confirmed) and the profile stops
+  // before it (R.0.D.5: plan 0+416.889, profile 0+375.000), the road ends where the profile ends
+  if (starts.length) {
+    const st0 = starts[0], o0 = tickDist(st0[0].a) <= tickDist(st0.at(-1).b) ? openLoop(st0) : rev(openLoop(st0));
+    const walk = [...o0], keys = [pk(st0)]; let at = walk.at(-1).b;
+    for (;;) { const nx = free.filter((s) => !keys.includes(pk(s)) && (near(s[0].a, at) || near(s.at(-1).b, at))); if (nx.length !== 1) break; const s = near(nx[0][0].a, at) ? nx[0] : rev(nx[0]); walk.push(...s); keys.push(pk(nx[0])); at = s.at(-1).b; }
+    const L = pieceLen(walk), endLabel = chainLabels.find((c) => Math.hypot(c.x - at[0], c.y - at[1]) < 8 && Math.abs(c.s - L) < 0.01);
+    if (L > plen + 0.01 && (endLabel || L - plen <= 2.5)) { const t = trimTo(walk, plen); chained.set(name, { c: { segs: t, len: pieceLen(t), used: keys, nOwn: 0, keys }, how: `${keys.length} piece(s), ${L.toFixed(3)} m${endLabel ? ` (end label 0+${endLabel.s.toFixed(3)})` : ""}, cut to the profile end ${plen.toFixed(3)} m` }); keys.forEach((k) => usedKeys.add(k)); }
+  }
 }
 for (const [name, pieces] of byName) {
   const fg = profOf(name); if (!fg.length) { report.push(`${name}: no profile`); continue; }
