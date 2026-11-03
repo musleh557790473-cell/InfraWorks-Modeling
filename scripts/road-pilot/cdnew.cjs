@@ -46,7 +46,11 @@ const zAt = (s) => {
 const st = new Set([0, total]); for (let s = 5; s < total; s += 5) st.add(s); H.forEach((e) => st.add(e.s0));
 H.filter((e) => e.kind === "arc").forEach((e) => { for (let s = e.s0 + 2; s < e.s0 + e.len; s += 2) st.add(s); });
 pvis.forEach((p) => { if (p.L) { st.add(p.s - p.L / 2); st.add(p.s + p.L / 2); } });
-const line3d = [...st].filter((s) => s >= 0 && s <= total).sort((a, b) => a - b).map((s) => [...xy(s), zAt(s)]);
+// stations closer than 1 mm (an element end next to a 5 m tick) give a zero-length segment, an undefined
+// direction and NaN edge points (R.1.G.8 drew walls down to nowhere): keep one of them
+const sts = [...st].filter((s) => s >= 0 && s <= total).sort((a, b) => a - b).filter((s, i, a) => i === 0 || s - a[i - 1] > 1e-3);
+sts[sts.length - 1] = total; // the road still ends exactly at the alignment end
+const line3d = sts.map((s) => [...xy(s), zAt(s)]);
 console.log(`${name}: ${H.filter((e) => e.kind === "line").length} straights, ${H.filter((e) => e.kind === "arc").length} arcs (R ${H.filter((e) => e.kind === "arc").map((e) => e.r.toFixed(1)).join(", ")}), ${total.toFixed(3)} m; ${pvis.length} PVIs, ${pvis.filter((p) => p.L).length} VCs; z ${line3d[0][2].toFixed(3)} -> ${line3d.at(-1)[2].toFixed(3)}`);
 if (dry) process.exit(0);
 
@@ -152,8 +156,19 @@ const sec = secType ? require("./sections.cjs").build(secType, { fall }) : null;
 const style = (() => { if (!sec) return {}; const s = JSON.parse(String(tRoad.MANUAL_STYLE)); s.componentStyle = JSON.stringify(sec.componentStyle);
   s.lanes = { ...s.lanes, countForward: sec.lanes, countBackward: sec.lanes }; return { MANUAL_STYLE: JSON.stringify(s, null, "\t"), MAX_SPEED: sec.speed }; })();
 console.log(`${name}: section ${secType ?? "template (unclassified)"}${sec ? `, ${sec.width} m, ${sec.speed} km/h` : ""}`);
-const existing = one("select count(*) n from ROADS where NAME=?", name).n > 0n;
-if (existing && !flags.includes("--regen")) throw new Error(`${name} already exists in the model`);
+let existing = one("select count(*) n from ROADS where NAME=?", name).n > 0n;
+const rewrite = flags.includes("--rewrite"); // delete the road (definition, constraints, body) and write it again
+if (existing && !flags.includes("--regen") && !rewrite) throw new Error(`${name} already exists in the model`);
+if (existing && rewrite) {
+  db.exec("BEGIN");
+  for (const r of all("select GUID, FK_PARENT_GUID from ROADS where NAME=?", name)) {
+    if (r.FK_PARENT_GUID === TPL) throw new Error(`${name} is the template road`);
+    for (const t of ["PRIMITIVES", "TERRAIN_OPERATIONS"]) db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(r.GUID);
+    for (const t of ["H_CONSTRAINTS", "V_CONSTRAINTS", "CONSTRAINED_DEF_GEOM_LOCATIONS", "CONSTRAINED_DEF_RPSYSTEMS", "ROADS"]) db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(r.FK_PARENT_GUID);
+    db.prepare("delete from CONSTRAINED_DEFINITIONS where GUID=?").run(r.FK_PARENT_GUID);
+  }
+  db.exec("COMMIT"); existing = false; console.log(`${name}: old road deleted`);
+}
 
 const insert = (table, tpl, over) => {
   const row = { ...tpl, ...over }; delete row.ID;

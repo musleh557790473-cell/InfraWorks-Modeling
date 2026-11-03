@@ -172,7 +172,26 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   Collectors show a crown (fall outward), as modelled. Some local roads change side along
   their length ("mixed"): one side per road is taken (the median sample).
 - `cdnew.cjs --xfall <aq_road_xfall.json>`; `Al Qairawan Roads (Parsons 4 median xfall)`: built
-  from Parsons 2 with `--regen --sections --xfall` on all 162 roads. To test.
+  from Parsons 2 with `--regen --sections --xfall` on all 162 roads. Seen in InfraWorks: median
+  raised with kerbs; but walls hanging below the terrain and bodies far from it.
+- Fixes (`Al Qairawan Roads (Parsons 5 direction)`, from Parsons 2, to test):
+  - R.1.G.8: a 5 m tick 1 mm from an element end gave a zero-length segment, NaN edge points and
+    walls down to nowhere. cdnew now drops stations closer than 1 mm. `zscan.cjs` checks a model
+    for NaN / out-of-range levels in roads, PRIMITIVES and TERRAIN_OPERATIONS.
+  - Four roads were chained from the wrong end (road rising 6 m where the surface falls 6 m):
+    R.0.D.15 R.1.F.2 R.5.G.1 R.13.G.5. `orient.cjs` compares the profile with the grading surface
+    both ways and reverses the alignment when the other end fits (2-7 cm instead of 1.7-3.4 m).
+    Run `orient.cjs ... --write` after `alignments.cjs`, then `xfall.cjs`.
+    (`aq_road_alignments.as-chained.json` keeps the file before the reversal.)
+  - `cdnew.cjs --rewrite` deletes a road (definition, constraints, body) and writes it again,
+    needed when the plan changes; `--regen` changes only the body.
+  - After the reversal, local roads falling left: R.6.F.3 R.4.G.6 R.13.G.1 R.13.G.15.
+- `roadtin.cjs`: road centreline against the grading surface. Most roads sit 0.5-0.8 m above it
+  (pavement). Larger only at junction mouths (R.3.G.3, R.0.D.16, R.3.E.1, R.3.F.1) and on R.3.G.1,
+  whose first 100 m stand 5 m above the surface (surface dips to 683.6, Parsons' profile labels stay
+  at 689): Parsons' data, to raise with them.
+- `tin.cjs`: shared surface lookup and station helpers (orient.cjs; xfall.cjs and roadtin.cjs
+  still carry their own copy).
 
 ## Next steps
 
