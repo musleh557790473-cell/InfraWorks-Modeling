@@ -235,6 +235,15 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
     type, flagged `mixed` (R.1.E.1: A3). Untyped, template width: RA-3 RA-6 R.9.G.6 R.9.G.7.
     Checks now include RA roads (`NAME like 'R%'`). Left out: R.0.D.5 (375 m), R.12.E.1 (401 m),
     and 10 roads with no profile in ROD-40000.
+  - "No profile" roads (3 Nov 2026, now 237 roads): ROD-40000 holds 266 profile views for 250
+    roads (as many as the layout's name labels), 85 sheet numbers; the export dropped nothing.
+    profread.cjs had (a) dropped FG lines ending within 20 m of the next view's title (R.14.G.9,
+    R.8.G.4 + 5 more) and (b) taken a title of the next zone column as the top of the last view in
+    a row, leaving a 6 m window with no grid (R.3.G.4, R.10.G.1); pvis.cjs had the same window bug.
+    Fixed in both: 266 views, 257 byte-identical, new ones match the PGL row labels within ~1 mm
+    (R.14.G.14 and R.3.G.8 have one label 0.55 m off the line). Plan lengths of all 9 equal their
+    profile lengths. R.8.G.4 reversed (junctions 4.60 -> 0). Files kept:
+    `aq-road-profiles.before-window-fix.json`. Left out: R.0.D.5 (375 m), R.12.E.1 (401 m).
   - Finding a road in InfraWorks: Model Explorer > Roads > Select By Filter, `NAME = 'R.5.G.1'`, F.
 - `roadtin.cjs`: road centreline against the grading surface. Most roads sit 0.5-0.8 m above it
   (pavement). Larger only at junction mouths (R.3.G.3, R.0.D.16, R.3.E.1, R.3.F.1) and on R.3.G.1,

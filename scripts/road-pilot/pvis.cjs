@@ -6,7 +6,10 @@ const names=ents.filter(o=>o.layer==='RD_C_PROF_TITL'&&o.txt).map(o=>({t:clean(o
 const out={};
 for(const n of names){
   const next=names.filter(o=>Math.abs(o.y-n.y)<1&&o.x>n.x+1).sort((a,b)=>a.x-b.x)[0]; const xmax=next?next.x:n.x+3000;
-  const rowY=n.y-16; const above=names.filter(o=>o.x<xmax-20&&o.x>n.x-200&&o.y>n.y+1).sort((a,b)=>a.y-b.y)[0]; const top=above?above.y-20:rowY+500;
+  const rowY=n.y-16; let above=names.filter(o=>o.x<xmax-20&&o.x>n.x-200&&o.y>n.y+1).sort((a,b)=>a.y-b.y)[0];
+  // as in profread.cjs: a top taken from the next zone column leaves no window (R.3.G.4, R.10.G.1)
+  if(above&&above.y-20<rowY+50) above=names.filter(o=>Math.abs(o.x-n.x)<100&&o.y>n.y+1).sort((a,b)=>a.y-b.y)[0];
+  const top=above?above.y-20:rowY+500;
   const L=lab.filter(o=>o.x>n.x&&o.x<xmax&&o.y>rowY&&o.y<top);
   const fixed=L.filter(o=>/^STA .*\| ELEV/.test(o.t)).map(o=>({s:sta(o.t),z:+o.t.split('ELEV')[1]}));
   const lone=L.filter(o=>/^STA [\d+.]+$/.test(o.t)), elev=L.filter(o=>/^ELEV [\d.]+$/.test(o.t));

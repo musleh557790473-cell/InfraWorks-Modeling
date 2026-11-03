@@ -15,7 +15,10 @@ for(const n of names){
   const datum=d?+d.t.replace(/[^\d.]/g,''):NaN;
   const next=names.filter(o=>Math.abs(o.y-n.y)<1&&o.x>n.x+1).sort((a,b)=>a.x-b.x)[0];
   const rowY=n.y-16;
-  const above=names.filter(o=>o.x<(next?next.x:n.x+2000)-20&&o.x>n.x-200&&o.y>n.y+1).sort((a,b)=>a.y-b.y)[0];
+  let above=names.filter(o=>o.x<(next?next.x:n.x+2000)-20&&o.x>n.x-200&&o.y>n.y+1).sort((a,b)=>a.y-b.y)[0];
+  // the last view of a row searched 2 km sideways and could take a title of the next zone column as
+  // its top, leaving a window too short for the level grid (R.3.G.4, R.10.G.1): then look straight up
+  if(above&&above.y-20<rowY+50) above=names.filter(o=>Math.abs(o.x-n.x)<100&&o.y>n.y+1).sort((a,b)=>a.y-b.y)[0];
   const top=above?above.y-20:rowY+500;
   const xmax=next?next.x:Infinity;
   const st=stn.filter(o=>Math.abs(o.y-rowY)<1&&o.x>n.x&&o.x<xmax).sort((a,b)=>a.x-b.x);
@@ -30,7 +33,9 @@ for(const n of names){
   const gg=col[1].sort((a,b)=>a.y-b.y);
   const ve=(gg.at(-1).y-gg[0].y)/(gg.at(-1).v-gg[0].v);
   const xEnd=st.at(-1).x;
-  const f=fg.filter(o=>o.x.every(x=>x>=x0-s0/k-0.5&&x<=xEnd+25&&x<xmax-20)&&o.y.every(y=>y>rowY&&y<top)&&o.x[0]<xmax);
+  // the FG line only has to stay left of the next view's title (its own line starts ~54 m right of
+  // that title); a 20 m margin cut off lines ending close to it (R.14.G.9, R.8.G.4)
+  const f=fg.filter(o=>o.x.every(x=>x>=x0-s0/k-0.5&&x<=xEnd+25&&x<xmax)&&o.y.every(y=>y>rowY&&y<top)&&o.x[0]<xmax);
   const viaGrid=Math.abs(ve-10)<0.01; const zf=y=>viaGrid?gg[0].v+(y-gg[0].y)/ve:datum+(y-(rowY+5))/10;
   const pts=f.flatMap(o=>o.x.map((x,i)=>[s0+(x-x0)*k, zf(o.y[i])])).sort((a,b)=>a[0]-b[0]);
   // PGL row check
