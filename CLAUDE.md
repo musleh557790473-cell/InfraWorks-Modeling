@@ -70,6 +70,9 @@ pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"
 ## InfraWorks facts (verified in InfraWorks 2026 models)
 
 - A model is `<name>.sqlite` + `<name>.files`; `<name>.lock` while open. Work on copies only.
+- Keep ONE working copy per task and update it in place; do not make a new copy for each fix
+  (the user asked: too many copies cause confusion). Never write while its `.lock` exists: ask the
+  user to close the model first. Road pilot working copy: `C:\IW\Al Qairawan Roads (Parsons 6 junctions)`.
 - Keep models on a short path outside OneDrive (e.g. `C:\IW`). `.files` is a Git repo that
   InfraWorks commits on every edit; a LandXML import writes
   `Resources\LandXML\<guid>\<surface>.aecc.<32 hex>.pnt`, and past 260 characters its Git fails
