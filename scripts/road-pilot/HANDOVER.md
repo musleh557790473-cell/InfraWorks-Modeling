@@ -186,6 +186,14 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   - `cdnew.cjs --rewrite` deletes a road (definition, constraints, body) and writes it again,
     needed when the plan changes; `--regen` changes only the body.
   - After the reversal, local roads falling left: R.6.F.3 R.4.G.6 R.13.G.1 R.13.G.15.
+  - Correction: R.13.G.5 (128 m) was reversed on the surface fit alone, but its end met R.13.G.6
+    at exactly the same level (686.002) and the reversal broke that junction (1.00 m step).
+    `orient.cjs` now also compares junction levels (a road end on another centreline) and
+    reverses only when the junctions agree: R.0.D.15 (11.87 -> 0.00 m), R.1.F.2 (5.70 -> 0),
+    R.5.G.1 (5.88 -> 0). `junctions.cjs <model>` lists level steps at junctions in a model.
+  - `Al Qairawan Roads (Parsons 6 junctions)` (from Parsons 2; those three with `--rewrite`):
+    zscan clean; one junction step >= 0.3 m (R.4.G.6 end on R.4.G.4, 0.38 m). To test.
+  - Finding a road in InfraWorks: Model Explorer > Roads > Select By Filter, `NAME = 'R.5.G.1'`, F.
 - `roadtin.cjs`: road centreline against the grading surface. Most roads sit 0.5-0.8 m above it
   (pavement). Larger only at junction mouths (R.3.G.3, R.0.D.16, R.3.E.1, R.3.F.1) and on R.3.G.1,
   whose first 100 m stand 5 m above the surface (surface dips to 683.6, Parsons' profile labels stay
