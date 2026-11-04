@@ -322,3 +322,11 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   flagged `decided`). Crossfall from the surface: both fall right at 2 %. The A1 section stays
   centred on the drawn centreline: up to ~1.8 m off the drawn edges on R.9.G.6, no widening on
   R.9.G.7. Not yet written to the working model (waiting for road-model-2026-11-03b.zip).
+- Junction inventory from Parsons' layout (`junction-inventory.cjs <10200.dxf> <dry-run dir> <out>`,
+  for step c, before comparing with InfraWorks' INTERSECTIONS): 361 junctions, 310 T, 20 three-way,
+  5 four-way, 26 roundabout arm groups; 322 meet at 85-90 degrees, 20 under 45. Kerb return arcs on
+  -RD_Edges within 25 m: 10.0 m most (461), then 12.0 (165), 20.0 (76, roundabout entries), 0.5
+  (106, chamfers). Local T junctions mostly 10 m (12 m too); roundabout entries 20 m and 15 m.
+  Arcs are not yet assigned to single corners (a nearby bend or the next corner can be counted).
+- `parsons-questions.md`: the open questions for Parsons (levels, sections, crossfall sides,
+  utilities, Al Narjis), each with what AICC modelled meanwhile.
