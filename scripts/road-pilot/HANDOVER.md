@@ -321,7 +321,15 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   with `model:roads --section R.9.G.6=A1,R.9.G.7=A1` (`applySectionDecisions`: only untyped roads,
   flagged `decided`). Crossfall from the surface: both fall right at 2 %. The A1 section stays
   centred on the drawn centreline: up to ~1.8 m off the drawn edges on R.9.G.6, no widening on
-  R.9.G.7. Not yet written to the working model (waiting for road-model-2026-11-03b.zip).
+  R.9.G.7. Written to the working model (unpacked from road-model-2026-11-03b.zip) with
+  `--only R.9.G.6,R.9.G.7`: A1, 20 km/h.
+- Intersections link to roads by the road's CONSTRAINED_DEFINITIONS GUID (all 385 links of the 49
+  intersections, 44 roads). The writer used to give a replaced road new GUIDs, which would have
+  left those links pointing at nothing (it never happened: the model with intersections came from
+  InfraWorks after the last full write). RoadWriter.write now keeps the road's and its definition's
+  GUIDs, and refuses a road InfraWorks split into pieces when a later piece carries intersections
+  (test: test/roads-write.test.ts, an in-memory model). After writing R.9.G.6/R.9.G.7: 385 links
+  resolve, 0 dangling; 250 roads, one row each.
 - Junction inventory from Parsons' layout (`junction-inventory.cjs <10200.dxf> <dry-run dir> <out>`,
   for step c, before comparing with InfraWorks' INTERSECTIONS): 361 junctions, 310 T, 20 three-way,
   5 four-way, 26 roundabout arm groups; 322 meet at 85-90 degrees, 20 under 45. Kerb return arcs on

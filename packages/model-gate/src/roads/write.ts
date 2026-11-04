@@ -115,15 +115,38 @@ export class RoadWriter {
     }
   }
 
-  /** Write a road (a road of that name is replaced). Unclassified roads (sec null) keep the template section. */
+  /**
+   * Intersection rows that point at a road (InfraWorks' INTERSECTION_ARMS / INTERSECTION_REGIONS).
+   * They hold the road's CONSTRAINED_DEFINITIONS GUID (all 385 links in Al Qairawan), not ROADS.GUID.
+   */
+  intersectionLinks(definitionGuid: string): number {
+    let n = 0;
+    for (const [t, cols] of [["INTERSECTION_ARMS", ["FK_ASSET_GUID"]], ["INTERSECTION_REGIONS", ["FK_INCOMING_ASSET_GUID", "FK_OUTGOING_ASSET_GUID"]]] as const) {
+      try { n += Number((this.db.prepare(`select count(*) n from ${t} where ${cols.map((c) => `${c}=?`).join(" or ")}`).get(...cols.map(() => definitionGuid)) as { n: number | bigint }).n); }
+      catch { /* a model without that table */ }
+    }
+    return n;
+  }
+
+  /**
+   * Write a road (a road of that name is replaced). Unclassified roads (sec null) keep the template section.
+   * A replaced road keeps its ROADS and CONSTRAINED_DEFINITIONS GUIDs: InfraWorks' intersections point
+   * at a road's definition GUID (INTERSECTION_ARMS.FK_ASSET_GUID, INTERSECTION_REGIONS incoming /
+   * outgoing; 44 roads in Al Qairawan), and a new GUID would leave them pointing at nothing. A road
+   * InfraWorks split into pieces (RA-1 after a rebuild) is refused when a piece other than the first
+   * carries intersections.
+   */
   write(plan: RoadPlan, sec: Section | null) {
     const { name, H, pvis, total, line } = plan;
     if (this.isTemplate(name)) { this.refreshTemplate(plan, sec); return; }
+    const old = this.all("select GUID, FK_PARENT_GUID from ROADS where NAME=? order by ID", name);
+    const linked = old.slice(1).filter((r) => this.intersectionLinks(String(r.FK_PARENT_GUID)) > 0);
+    if (linked.length) throw new Error(`${name}: ${old.length} rows, and ${linked.length} piece(s) besides the first carry intersections; not replaced`);
     this.db.exec("BEGIN");
     try {
-      if (this.exists(name)) this.remove(name);
+      if (old.length) this.remove(name);
       const style = this.styleOf(sec);
-      const gCD = randomUUID(), gRoad = randomUUID(), gRps = randomUUID();
+      const gCD = old[0] ? String(old[0].FK_PARENT_GUID) : randomUUID(), gRoad = old[0] ? String(old[0].GUID) : randomUUID(), gRps = randomUUID();
       const start = line[0]!, end = line[line.length - 1]!;
       this.insert("CONSTRAINED_DEFINITIONS", this.tCD, { GUID: gCD, NAME: name, FK_DEFAULT_ASSET_GUID: gRoad, REFERENCE_POINT: pt3Blob(...start) });
       this.insert("ROADS", this.tRoad, { GUID: gRoad, NAME: name, FK_PARENT_GUID: gCD, GEOMETRY: lineBlob(line), ...style });

@@ -110,6 +110,9 @@ pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profi
   invalidateModel, saveUpdates, getRoadID, addPVI, createRoad...), `app.ActiveModel.Intersections`
   (updateIntersections, findIntersectionById), `app.ActiveModelDb` (Table, BeginTransaction,
   ExecuteSqlCommand), `app.Regenerate`. Autodesk calls this API unofficial.
+- InfraWorks' intersections point at roads by the road's CONSTRAINED_DEFINITIONS GUID
+  (INTERSECTION_ARMS.FK_ASSET_GUID, INTERSECTION_REGIONS.FK_INCOMING/OUTGOING_ASSET_GUID), not
+  ROADS.GUID. model:roads keeps both GUIDs when it replaces a road, so they stay valid.
 - InfraWorks rebuilds a component road (body, and the intersections where it meets other roads)
   only on a single-road edit. Rebuilding RA-1 split it into 4 pieces between its arms and created
   9 intersections; the one-piece closed ring model:roads writes draws a stray band until then.
