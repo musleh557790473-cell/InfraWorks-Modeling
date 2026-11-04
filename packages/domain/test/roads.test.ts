@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  applySectionDecisions, parseSectionDecisions, type SectionClass,
   assemblePvis, buildAlignments, buildRoundaboutSection, buildSection, crossfallSides, measureRoundabouts, orientRoads, pieceLen, readDxfBlock, readProfileViews, trimTo,
   type Alignment, type DxfEnt, type ProfileView, type Seg,
 } from "../src/index.js";
@@ -215,4 +216,17 @@ test("roundabout section: 8.2 m carriageway on the island side at 0 %, kerbs on 
   const right = buildRoundaboutSection(8.2, "right").parts.find((p) => p.role === "lane")!.crossSection.map((q) => q[0]);
   assert.ok(Math.abs(Math.max(...right) - 8.2) < 1e-9, "island on the right: lane to the right");
   assert.throws(() => buildRoundaboutSection(0, "left"));
+});
+
+test("section decisions: an untyped road takes the AICC type; a road the drawing types is not overridden", () => {
+  // R.9.G.6 / R.9.G.7: A1 at their ends (ROW 15 m) but no exact width over enough samples
+  const cls = (type: SectionClass["type"]): SectionClass => ({ type, votes: {}, samples: 0, oneSidedSamples: 0, edge: null });
+  const sections: Record<string, SectionClass> = { "R.9.G.6": cls(null), "R.9.G.7": cls(null), "R.0.D.6": cls("B1") };
+  const d = applySectionDecisions(sections, parseSectionDecisions("R.9.G.6=A1, R.9.G.7=A1,R.0.D.6=A1,R.X=A2"));
+  assert.deepEqual(d.applied, ["R.9.G.6=A1", "R.9.G.7=A1"]);
+  assert.deepEqual(d.refused, ["R.0.D.6: the drawing types it B1", "R.X: not a road of the layout"]);
+  assert.equal(sections["R.9.G.6"]!.type, "A1");
+  assert.equal(sections["R.9.G.6"]!.decided, true);
+  assert.equal(sections["R.0.D.6"]!.type, "B1");
+  assert.throws(() => parseSectionDecisions("R.9.G.6=D9"), /expected <road>=/);
 });

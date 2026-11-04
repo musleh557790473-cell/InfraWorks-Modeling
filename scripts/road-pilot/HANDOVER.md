@@ -303,3 +303,22 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   invalidateModel, readRoadModel, getRoadID...), Intersections.updateIntersections, app.Regenerate.
   Next (user to approve): try a script rebuild on RA-2, then the closed roads, then all roads
   and updateIntersections, instead of writing junction rows ourselves.
+
+## Session 5 (4 Nov 2026, AYNLAP1201): checks that need no model
+
+- R.1.G.24 start on loop R.1.G.23, 0.535 m step: Parsons' data. Both profile views match their
+  printed PGL rows (within 1 mm); R.1.G.24's other end meets R.1.F.1 at 1.7 cm, so its direction and
+  profile are right. R.1.G.24 starts at 679.807 where R.1.G.23's profile gives 680.342 (the loop
+  stands a steady 0.73 m over the grading surface, R.1.G.24 only 0.02-0.36 m). No start of the loop
+  removes the step and still fits the surface (best fit 0.03 m leaves 0.53-0.61 m; the starts that
+  remove it fit at 0.33-0.37 m). To raise with Parsons, with R.3.G.1.
+- R.9.G.6 (107.5 m) and R.9.G.7 (136.4 m), still on the template section: both are one arc
+  (bulge -0.07) between E 658718-658848, N 2747930-2748029, ending on the road at E 658848.4.
+  R.9.G.6: ROW ~15 m, carriageway ~7 m (A1), but the drawn centreline is off the middle by up to
+  ~1.8 m (edges at -5.28 / +1.56 m at mid-length). R.9.G.7: A1 at both ends (ROW 15.1, carriageway
+  7.25 m), widening on one side to ~9.8 m (ROW 17.4 m) over its middle, a lay-by or parking bay.
+  rowclass finds no exact type width over enough samples. AICC decision (4 Nov 2026): A1, given
+  with `model:roads --section R.9.G.6=A1,R.9.G.7=A1` (`applySectionDecisions`: only untyped roads,
+  flagged `decided`). Crossfall from the surface: both fall right at 2 %. The A1 section stays
+  centred on the drawn centreline: up to ~1.8 m off the drawn edges on R.9.G.6, no widening on
+  R.9.G.7. Not yet written to the working model (waiting for road-model-2026-11-03b.zip).

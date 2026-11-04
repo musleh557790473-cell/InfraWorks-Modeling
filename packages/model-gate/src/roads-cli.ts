@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import {
-  assemblePvis, buildAlignments, buildRoundaboutSection, buildSection, classifySections, crossfallSides, loadLandXmlSurface, measureRoundabouts, orientRoads,
+  applySectionDecisions, assemblePvis, buildAlignments, buildRoundaboutSection, parseSectionDecisions, buildSection, classifySections, crossfallSides, loadLandXmlSurface, measureRoundabouts, orientRoads,
   readDxfBlock, readProfileViews, type NamedStart, type Section,
 } from "@infraworks/domain";
 
@@ -20,6 +20,7 @@ model-roads - Parsons roads as InfraWorks component roads, written into a model 
       [--package <roads package road_centerline (no extension)>] [--out-dir <folder for the JSON results>]
       [--layout-block "Xref Road Layout Al Qairawan"] [--profiles-block "Xref Al Qairawan Profiles"]
       [--surface-name "Al_Qairawan_Mass Grading"] [--only R.6.E.1,R.6.F.1] [--dry]
+      [--section R.9.G.6=A1,R.9.G.7=A1]   (AICC decisions for roads the drawing does not type)
 
 Reads the profiles (FG line, PVI and curve labels), chains each road's centreline (its length must
 equal its profile length), checks every road's direction against the grading surface and the levels at
@@ -72,6 +73,12 @@ function main(argv: string[]): number {
     const or = orientRoads(al.roads, pv.roads, surface);
     say(`direction: ${or.reversed.length} reversed (${or.reversed.join(" ")}); loops re-started: ${or.restarted.map((r) => r.name).join(" ") || "none"}`);
     const sections = classifySections(layout, al.roads);
+    const decisions = flag("--section");
+    if (decisions) {
+      const d = applySectionDecisions(sections, parseSectionDecisions(decisions));
+      say(`section decisions: ${d.applied.join(" ") || "none applied"}${d.refused.length ? `; refused: ${d.refused.join("; ")}` : ""}`);
+      if (d.refused.length) throw new Error("a --section decision was refused (see above)");
+    }
     const xfall = crossfallSides(al.roads, sections, surface);
     const ra = measureRoundabouts(layout, al.roads);
     const raOf = new Map(ra.roundabouts.map((r) => [r.name, r]));

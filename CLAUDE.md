@@ -46,6 +46,7 @@ pnpm package:build "<drawing.dxf | model.stsw.sqlite | model.wtg.sqlite>" [--pro
 pnpm gate:model "<model>.sqlite" --package <package.zip>      # Gate G3, on a closed model
 pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"]
 pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profiles <40000.dxf> --surface <grading.xml> [--package <road_centerline>] [--dry]
+#   Al Qairawan: add --section R.9.G.6=A1,R.9.G.7=A1 (AICC decision for the two roads the drawing does not type)
 ```
 
 ## Inputs from Parsons
@@ -167,5 +168,5 @@ street-lighting ducts (not in the Parsons documents, drawn on the terrain); the 
 (`Xref Road Layout Al Narjis.dwg`) from Parsons; Al Narjis and other districts through the same path.
 Roads: junctions and roundabouts as InfraWorks intersections; the roundabout circulatory width;
 a band InfraWorks draws away from RA-1 when it is selected (not in its stored rows; test: change
-its Grading Limit and undo); R.3.G.1 stands 5 m above Parsons' grading surface over its first 100 m
-(to raise with Parsons).
+its Grading Limit and undo); to raise with Parsons: R.3.G.1 stands 5 m above their grading surface
+over its first 100 m, and R.1.G.24 starts 0.535 m below loop R.1.G.23 (both profiles as printed).

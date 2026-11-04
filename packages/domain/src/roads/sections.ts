@@ -217,10 +217,42 @@ export interface SectionClass {
   type: SectionType | null;
   oneSided?: true;
   mixed?: true;
+  /** type set by an AICC decision (applySectionDecisions), not read from the drawing */
+  decided?: true;
   votes: Record<string, number>;
   samples: number;
   oneSidedSamples: number;
   edge: string | null;
+}
+
+/**
+ * "R.9.G.6=A1,R.9.G.7=A1" as a road -> type map. Only Parsons' typical section types are accepted.
+ */
+export function parseSectionDecisions(text: string): Record<string, SectionType> {
+  const out: Record<string, SectionType> = {};
+  for (const item of text.split(",").map((s) => s.trim()).filter(Boolean)) {
+    const m = item.match(/^(.+)=([A-Z]\d)$/);
+    if (!m || !(m[2]! in SECTION_TYPES)) throw new Error(`section decision "${item}": expected <road>=<${Object.keys(SECTION_TYPES).join("|")}>`);
+    out[m[1]!.trim()] = m[2] as SectionType;
+  }
+  return out;
+}
+
+/**
+ * Section types set by decision for roads the drawing does not type (R.9.G.6: centreline off the
+ * middle of its edges by up to 1.8 m; R.9.G.7: a widening on one side; both A1 at their ends, ROW
+ * 15 m; AICC chose A1 on 4 Nov 2026). A road the drawing already types is not overridden.
+ * Returns the decisions applied and those refused.
+ */
+export function applySectionDecisions(sections: Record<string, SectionClass>, decisions: Record<string, SectionType>): { applied: string[]; refused: string[] } {
+  const applied: string[] = [], refused: string[] = [];
+  for (const [name, type] of Object.entries(decisions)) {
+    const s = sections[name];
+    if (!s) { refused.push(`${name}: not a road of the layout`); continue; }
+    if (s.type && s.type !== type) { refused.push(`${name}: the drawing types it ${s.type}`); continue; }
+    if (!s.type) { s.type = type; s.decided = true; applied.push(`${name}=${type}`); }
+  }
+  return { applied, refused };
 }
 
 /**
