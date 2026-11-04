@@ -20,6 +20,21 @@ import type { RoadPlan, XYZ } from "./plan.js";
 
 type Row = Record<string, unknown>;
 
+/**
+ * Deletes a road by name: its definition, constraints, start/end locations, reference system and
+ * body. These are the only rows that point at a road (checked on Al Qairawan's 7 rings), besides
+ * intersection links: clear those after with pruneDanglingIntersections. Returns the rows removed.
+ */
+export function removeRoad(db: DatabaseSync, name: string): number {
+  let n = 0;
+  for (const r of db.prepare("select GUID, FK_PARENT_GUID from ROADS where NAME=?").all(name) as Row[]) {
+    for (const t of ["PRIMITIVES", "TERRAIN_OPERATIONS"]) n += Number(db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(String(r.GUID)).changes);
+    for (const t of ["H_CONSTRAINTS", "V_CONSTRAINTS", "CONSTRAINED_DEF_GEOM_LOCATIONS", "CONSTRAINED_DEF_RPSYSTEMS", "ROADS"]) n += Number(db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(String(r.FK_PARENT_GUID)).changes);
+    n += Number(db.prepare("delete from CONSTRAINED_DEFINITIONS where GUID=?").run(String(r.FK_PARENT_GUID)).changes);
+  }
+  return n;
+}
+
 const ptBlob = (x: number, y: number) => { const b = Buffer.alloc(32); b.writeUInt32LE(1, 0); b.writeUInt32LE(1, 4); b.writeDoubleLE(x, 8); b.writeDoubleLE(y, 16); return b; };
 const pt3Blob = (x: number, y: number, z: number) => { const b = ptBlob(x, y); b.writeDoubleLE(z, 24); return b; };
 export const lineBlob = (pts: readonly (readonly number[])[]) => {
@@ -74,12 +89,8 @@ export class RoadWriter {
 
   /** Delete a road (definition, constraints, body). */
   remove(name: string) {
-    for (const r of this.all("select GUID, FK_PARENT_GUID from ROADS where NAME=?", name)) {
-      if (r.FK_PARENT_GUID === this.template) throw new Error(`${name} is the template road`);
-      for (const t of ["PRIMITIVES", "TERRAIN_OPERATIONS"]) this.db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(String(r.GUID));
-      for (const t of ["H_CONSTRAINTS", "V_CONSTRAINTS", "CONSTRAINED_DEF_GEOM_LOCATIONS", "CONSTRAINED_DEF_RPSYSTEMS", "ROADS"]) this.db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(String(r.FK_PARENT_GUID));
-      this.db.prepare("delete from CONSTRAINED_DEFINITIONS where GUID=?").run(String(r.FK_PARENT_GUID));
-    }
+    if (this.all("select GUID from ROADS where NAME=? and FK_PARENT_GUID=?", name, this.template).length) throw new Error(`${name} is the template road`);
+    removeRoad(this.db, name);
   }
 
   private styleOf(sec: Section | null): Row {

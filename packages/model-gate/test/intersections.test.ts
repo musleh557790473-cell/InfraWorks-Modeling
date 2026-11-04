@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import { danglingLinks, pruneDanglingIntersections } from "../src/roads/intersections.js";
+import { removeRoad } from "../src/roads/write.js";
 
 /** Roads A, B, C and a deleted ring R (its definition is gone), with InfraWorks-style rows. */
 function model(): DatabaseSync {
@@ -61,4 +62,31 @@ test("--dry reports without writing", () => {
   assert.equal(r.removed.length, 1);
   assert.equal(n(db, "select count(*) n from INTERSECTIONS"), 3);
   assert.equal(n(db, "select count(*) n from INTERSECTION_ARMS"), 12);
+});
+
+test("deleting a ring removes all its rows, and the intersections left with one road go (Al Qairawan RA-1: 7 tables)", () => {
+  const db = model();
+  db.exec(`
+    create table H_CONSTRAINTS (ID integer primary key, GUID text, FK_PARENT_GUID text);
+    create table V_CONSTRAINTS (ID integer primary key, GUID text, FK_PARENT_GUID text);
+    create table CONSTRAINED_DEF_GEOM_LOCATIONS (ID integer primary key, GUID text, FK_PARENT_GUID text);
+    create table CONSTRAINED_DEF_RPSYSTEMS (ID integer primary key, GUID text, FK_PARENT_GUID text);
+    create table PRIMITIVES (ID integer primary key, GUID text, FK_PARENT_GUID text);
+    create table TERRAIN_OPERATIONS (ID integer primary key, GUID text, FK_PARENT_GUID text);
+  `);
+  // the ring is still there: its definition, road and child rows
+  db.prepare("insert into CONSTRAINED_DEFINITIONS (GUID) values ('cd-R')").run();
+  db.prepare("insert into ROADS (GUID, NAME, FK_PARENT_GUID) values ('road-R', 'RA-1', 'cd-R')").run();
+  for (const t of ["H_CONSTRAINTS", "V_CONSTRAINTS", "CONSTRAINED_DEF_GEOM_LOCATIONS", "CONSTRAINED_DEF_RPSYSTEMS"]) db.prepare(`insert into ${t} (GUID, FK_PARENT_GUID) values ('x', 'cd-R')`).run();
+  for (const t of ["PRIMITIVES", "TERRAIN_OPERATIONS"]) db.prepare(`insert into ${t} (GUID, FK_PARENT_GUID) values ('x', 'road-R')`).run();
+  db.prepare("insert into H_CONSTRAINTS (GUID, FK_PARENT_GUID) values ('keep', 'cd-A')").run();
+  assert.equal(danglingLinks(db), 0, "the ring is still there: every link finds its road");
+  assert.equal(removeRoad(db, "RA-1"), 8);
+  for (const t of ["H_CONSTRAINTS", "V_CONSTRAINTS", "CONSTRAINED_DEF_GEOM_LOCATIONS", "CONSTRAINED_DEF_RPSYSTEMS", "PRIMITIVES", "TERRAIN_OPERATIONS"]) {
+    assert.equal(n(db, `select count(*) n from ${t} where FK_PARENT_GUID in ('cd-R', 'road-R')`), 0, t);
+  }
+  assert.equal(n(db, "select count(*) n from H_CONSTRAINTS where GUID='keep'"), 1, "other roads untouched");
+  const r = pruneDanglingIntersections(db);
+  assert.deepEqual(r.removed.map((i) => i.guid), ["ring-x"]);
+  assert.equal(danglingLinks(db), 2, "the cross with A and B is listed, not guessed");
 });

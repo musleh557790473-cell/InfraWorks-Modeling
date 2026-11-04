@@ -70,13 +70,13 @@ export function pruneDanglingIntersections(db: DatabaseSync, opts: { dry?: boole
     res.orphans += Number((db.prepare(`select count(*) n from ${t} t ${orphanWhere}`).get() as Row).n);
   }
   if (opts.dry) return res;
-  db.exec("begin");
+  db.exec("savepoint prune");
   try {
     for (const w of work) w();
     for (const t of ["INTERSECTION_ARMS", "INTERSECTION_REGIONS"]) db.prepare(`delete from ${t} as t ${orphanWhere}`).run();
-    db.exec("commit");
+    db.exec("release prune");
   } catch (e) {
-    db.exec("rollback");
+    db.exec("rollback to prune; release prune");
     throw e;
   }
   return res;
