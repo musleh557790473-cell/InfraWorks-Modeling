@@ -385,8 +385,10 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   regions; one still joining two roads is not guessed (listed for a rebuild). Code:
   `packages/model-gate/src/roads/intersections.ts` (`pruneDanglingIntersections`), CLI
   `pnpm model:intersections <model> [--dry]`, test `test/intersections.test.ts`. Dry run on the
-  working model: removes 7, 8, 10, 11 (left: R.1.F.2, R.0.D.2, R.0.D.1, R.2.F.3), keeps none. Not
-  yet written: the model was open in InfraWorks (lock 16:12).
+  working model: removes 7, 8, 10, 11 (left: R.1.F.2, R.0.D.2, R.0.D.1, R.2.F.3), keeps none.
+  Written to the closed working model (4 Nov, after 16:16): 36 intersections, 112 arms, 82 regions,
+  276 links, 0 dangling; InfraWorks' journal tables got the 4 / 16 / 16 deleted rows; integrity ok.
+  Not yet opened in InfraWorks after the write.
 - How InfraWorks stores an intersection (the 40 it built): INTERSECTIONS row with GEOMETRY = the
   bounding box polygon, REFERENCE_POINTS = a 32-byte point blob, INTERSECTION_TYPE 0, DESIGN_VEHICLE
   "P", MANUAL_CHANGES 0, style/model columns null. One arm per road direction leaving the junction
