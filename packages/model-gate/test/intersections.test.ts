@@ -134,30 +134,31 @@ test("a roundabout written into the file as InfraWorks stores one: type 1, one R
   db.prepare("insert into INTERSECTIONS (ID, GUID, REFERENCE_POINTS, INTERSECTION_TYPE) values (41, 'j', ?, 0)").run(rp);
   db.exec(`insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, APPROACH_DIRECTION_MATCHES_ASSET) values
     ('west', 'j', 'cd-A', 1), ('east', 'j', 'cd-A', 0), ('north', 'j', 'cd-B', 0)`);
-  assert.throws(() => writeRoundabout(db, 41, { inscribedCircleDiameter: 40.4, islandDiameter: 24, apronWidth: 2, lanes: 1, laneWidth: 8.2 }), /= 44.40 m, not the circle 40.4 m/);
-  const idx = writeRoundabout(db, 41, { inscribedCircleDiameter: 40.4, islandDiameter: 20, apronWidth: 2, lanes: 1, laneWidth: 8.2 });
+  assert.throws(() => writeRoundabout(db, 41, { inscribedCircleDiameter: 40.4, islandDiameter: 20, apronWidth: 2, lanes: 1, laneWidth: 8.2 }), /InfraWorks keeps the standard's one lane of 7.225 m/);
+  assert.throws(() => writeRoundabout(db, 41, { inscribedCircleDiameter: 40.4, islandDiameter: 24, apronWidth: 2, lanes: 1, laneWidth: 7.225 }), /= 42.45 m, not the circle 40.4 m/);
+  const idx = writeRoundabout(db, 41, { inscribedCircleDiameter: 40.4, islandDiameter: 24, apronWidth: 0.975, lanes: 1, laneWidth: 7.225 });
   assert.deepEqual(Object.fromEntries(idx), { west: 1, east: 2, north: 3 }, "anticlockwise from the west, as InfraWorks numbered junction 4");
   assert.equal(n(db, "select INTERSECTION_TYPE n from INTERSECTIONS where ID=41"), 1);
   const r = db.prepare("select * from ROUNDABOUTS").get() as Record<string, unknown>;
   assert.equal(r.FK_PARENT_GUID, "j");
   assert.equal(r.INSCRIBED_CIRCLE_DIAMETER, 40.4);
-  assert.equal(r.ISLAND_DIAMETER, 20);
-  assert.equal(r.APRON_WIDTH, 2);
-  assert.equal(r.LANE_DETAILS, '{"version":"1.0.0","lanes":[{"id":1,"width":8.2}]}');
+  assert.equal(r.ISLAND_DIAMETER, 24);
+  assert.equal(r.APRON_WIDTH, 0.975);
+  assert.equal(r.LANE_DETAILS, '{"version":"1.0.0","lanes":[{"id":1,"width":7.225}]}');
   const box = Buffer.from(r.GEOMETRY as Uint8Array);
   assert.deepEqual([box.readUInt32LE(0), box.readDoubleLE(16), box.readDoubleLE(24), box.readDoubleLE(48)], [3, -20.2, -20.2, 20.2], "the circle's square around the centre");
   // written again with other sizes: the same row is updated, not a second one
-  writeRoundabout(db, 41, { inscribedCircleDiameter: 42.4, islandDiameter: 22, apronWidth: 2, lanes: 1, laneWidth: 8.2 });
+  writeRoundabout(db, 41, { inscribedCircleDiameter: 40.45, islandDiameter: 22, apronWidth: 2, lanes: 1, laneWidth: 7.225 });
   assert.equal(n(db, "select count(*) n from ROUNDABOUTS"), 1);
   assert.equal(n(db, "select ISLAND_DIAMETER n from ROUNDABOUTS"), 22);
-  assert.equal(Buffer.from((db.prepare("select GEOMETRY g from ROUNDABOUTS").get() as { g: Uint8Array }).g).readDoubleLE(16), -21.2);
+  assert.equal(Buffer.from((db.prepare("select GEOMETRY g from ROUNDABOUTS").get() as { g: Uint8Array }).g).readDoubleLE(16), -20.225);
 });
 
 test("a roundabout is not written with a missing size", () => {
   const db = model();
   db.exec("alter table INTERSECTIONS add column INTERSECTION_TYPE integer; alter table INTERSECTIONS add column REFERENCE_POINTS blob; create table ROUNDABOUTS (ID integer primary key, FK_PARENT_GUID text);");
   const id = n(db, "select ID n from INTERSECTIONS where GUID='tee'");
-  assert.throws(() => writeRoundabout(db, id, { inscribedCircleDiameter: 40.4, islandDiameter: 24, apronWidth: 0, lanes: 1, laneWidth: 8.2 }), /apronWidth missing/);
+  assert.throws(() => writeRoundabout(db, id, { inscribedCircleDiameter: 40.4, islandDiameter: 24, apronWidth: 0, lanes: 1, laneWidth: 7.225 }), /apronWidth missing/);
 });
 test("the circle InfraWorks shows is island + 2 x apron + 2 x lanes (junctions 4 and 41)", () => {
   assert.equal(roundaboutDiameter({ islandDiameter: 27, apronWidth: 2, lanes: 1, laneWidth: 7.225 }), 45.45);

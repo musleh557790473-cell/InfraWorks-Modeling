@@ -471,3 +471,13 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   `--roundabout 41 --icd 40.4 --island 20.0 --apron 2.0 --lanes 1 --lane-width 8.2`), integrity ok.
   Next: the user types 40.4 in the Stack's Inscribed Circle Diameter (Autodesk "To modify roundabout
   geometry") to see whether InfraWorks builds the body and which lane width it keeps.
+- Roundabout 41 built (22:34-22:36): the user selected the roundel (Autodesk "To modify roundabout
+  geometry") and edited apron / island in its Stack (Inscribed Circle Diameter, Apron Width, Center
+  Island Diameter, Center Point Elevation 681.83 editable; Total Width of Lanes 7.225 read-only).
+  Only then did InfraWorks build the body (31 strips, 4 grading rows) and blend points (76.9 m).
+  Saved: ICD 40.45, island 22, apron 2, LANE_DETAILS rewritten to 7.225 (our 8.2 replaced). Rules in
+  code: the lane is the standard's 7.225 m (`IW_ROUNDABOUT_STANDARD.laneWidth`, other widths refused);
+  ICD = island + 2 x apron + 2 x 7.225. The body sits on a tall wall at the grading edge (yellow line),
+  the known site-edge terrain issue, not the roundabout.
+  Open: Parsons' ring is 8.2 m (r 12.0 to r 20.2) but the lane is 7.225, so apron = 0.975 if both
+  drawn edges are kept (island 24.0, ICD 40.4); apron 2.0 moves the island edge to r 10.975.

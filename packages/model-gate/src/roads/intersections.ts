@@ -158,7 +158,12 @@ export interface RoundaboutSpec {
  * The roundabout standard InfraWorks 2026 chose itself when junction 4 was converted in the Stack
  * (4 Nov 2026); the only one whose pool GUID is known. Its sizes are replaced by the designer's.
  */
-export const IW_ROUNDABOUT_STANDARD = { EXTERNAL_STANDARD_GUID: "4bfa64b5-07ca-4a15-8413-79dab6124e1d", STANDARD_NAME: "FHWA 2010: Rural Double Lane Roundabout", STANDARD_SOURCE: "Pool" } as const;
+/**
+ * Its circulatory lane is 7.225 m, and InfraWorks writes that width back over LANE_DETAILS when it
+ * builds the roundabout (junction 41: 8.2 written, 7.225 after the rebuild, 4 Nov 2026), so only the
+ * circle, island and apron can be chosen.
+ */
+export const IW_ROUNDABOUT_STANDARD = { EXTERNAL_STANDARD_GUID: "4bfa64b5-07ca-4a15-8413-79dab6124e1d", STANDARD_NAME: "FHWA 2010: Rural Double Lane Roundabout", STANDARD_SOURCE: "Pool", laneWidth: 7.225 } as const;
 
 const pt3 = (x: number, y: number, z: number) => { const b = Buffer.alloc(32); b.writeUInt32LE(1, 0); b.writeUInt32LE(1, 4); b.writeDoubleLE(x, 8); b.writeDoubleLE(y, 16); b.writeDoubleLE(z, 24); return b; };
 /** FGF polygon, XY, one ring (as InfraWorks stores INTERSECTIONS / ROUNDABOUTS boxes). */
@@ -184,7 +189,8 @@ function armBearing(line: number[][], cx: number, cy: number, upstream: boolean)
  * Turns an intersection into a roundabout as InfraWorks stores one (junction 4 converted in the Stack,
  * 4 Nov 2026): INTERSECTION_TYPE 1; one ROUNDABOUTS row on the intersection, its box the inscribed
  * circle's square around the reference point; arms numbered anticlockwise, one lane each way at the
- * yield line. Blend points and the body are left to InfraWorks. On a roundabout already, only its sizes
+ * yield line. Blend points and the body are left to InfraWorks, which builds them when a roundel
+ * property (apron or island) is edited in the Stack (junction 41, 4 Nov 2026). On a roundabout already, only its sizes
  * are replaced. Returns the arm numbers by arm GUID.
  */
 export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: RoundaboutSpec): Map<string, number> {
@@ -192,6 +198,7 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
   if (!i) throw new Error(`no intersection ${intersectionId}`);
   const guid = String(i.GUID);
   for (const [k, v] of Object.entries(spec)) if (!(Number(v) > 0)) throw new Error(`roundabout ${intersectionId}: ${k} missing`);
+  if (spec.lanes !== 1 || Math.abs(spec.laneWidth - IW_ROUNDABOUT_STANDARD.laneWidth) > 0.001) throw new Error(`roundabout ${intersectionId}: ${spec.lanes} x ${spec.laneWidth} m lanes; InfraWorks keeps the standard's one lane of ${IW_ROUNDABOUT_STANDARD.laneWidth} m`);
   const sum = roundaboutDiameter(spec);
   if (Math.abs(sum - spec.inscribedCircleDiameter) > 0.01) throw new Error(`roundabout ${intersectionId}: island ${spec.islandDiameter} + 2 x apron ${spec.apronWidth} + 2 x ${spec.lanes} x lane ${spec.laneWidth} = ${sum.toFixed(2)} m, not the circle ${spec.inscribedCircleDiameter} m`);
   const existing = db.prepare("select GUID from ROUNDABOUTS where FK_PARENT_GUID = ?").get(guid) as Row | undefined;
