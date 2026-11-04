@@ -91,3 +91,41 @@ export function danglingLinks(db: DatabaseSync): number {
   ) where g is not null and g not in (select GUID from CONSTRAINED_DEFINITIONS)`;
   return Number((db.prepare(q).get() as Row).n);
 }
+
+export interface Junction {
+  id: number;
+  guid: string;
+  /** INTERSECTION_TYPE 0 = intersection, 1 = roundabout. */
+  type: "intersection" | "roundabout";
+  arms: number;
+  roads: string[];
+  roundabout?: { inscribedCircleDiameter: number; islandDiameter: number; apronWidth: number; lanes: number; standard: string };
+  /** Type and ROUNDABOUTS row disagree (a roundabout without its row, or a row on an intersection). */
+  problem?: string;
+}
+
+/**
+ * The junctions as InfraWorks stores them (InfraWorks 2026, Al Qairawan junction 4, 4 Nov 2026).
+ * Converting an intersection to a roundabout in the Stack sets INTERSECTIONS.INTERSECTION_TYPE 0 -> 1,
+ * adds one ROUNDABOUTS row (FK_PARENT_TABLE INTERSECTIONS, FK_PARENT_GUID = the intersection;
+ * INSCRIBED_CIRCLE_DIAMETER, ISLAND_DIAMETER, APRON_WIDTH, LANES + LANE_DETAILS widths, STANDARD_NAME)
+ * and fills ARM_INDEX, blend points and ENTRY/EXIT_LANES_AT_YIELD on each arm; regions are kept.
+ * Converting back sets the type to 0 and deletes the ROUNDABOUTS row (the arm fields stay).
+ */
+export function readJunctions(db: DatabaseSync): Junction[] {
+  const names = new Map(
+    (db.prepare("select c.GUID g, r.NAME n from CONSTRAINED_DEFINITIONS c join ROADS r on r.FK_PARENT_GUID = c.GUID").all() as Row[]).map((r) => [String(r.g), String(r.n)]),
+  );
+  const ra = new Map<string, Row>();
+  for (const r of db.prepare("select * from ROUNDABOUTS").all() as Row[]) ra.set(String(r.FK_PARENT_GUID), r);
+  return (db.prepare("select ID, GUID, INTERSECTION_TYPE t from INTERSECTIONS order by ID").all() as Row[]).map((i) => {
+    const guid = String(i.GUID);
+    const arms = (db.prepare("select FK_ASSET_GUID g from INTERSECTION_ARMS where FK_PARENT_GUID = ?").all(guid) as Row[]).map((r) => String(r.g));
+    const j: Junction = { id: Number(i.ID), guid, type: Number(i.t) === 1 ? "roundabout" : "intersection", arms: arms.length, roads: [...new Set(arms)].map((g) => names.get(g) ?? g) };
+    const r = ra.get(guid);
+    if (r) j.roundabout = { inscribedCircleDiameter: Number(r.INSCRIBED_CIRCLE_DIAMETER), islandDiameter: Number(r.ISLAND_DIAMETER), apronWidth: Number(r.APRON_WIDTH), lanes: Number(r.LANES), standard: String(r.STANDARD_NAME ?? "") };
+    if (j.type === "roundabout" && !r) j.problem = "roundabout type without a ROUNDABOUTS row";
+    if (j.type === "intersection" && r) j.problem = "ROUNDABOUTS row on an intersection";
+    return j;
+  });
+}

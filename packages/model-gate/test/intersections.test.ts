@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { danglingLinks, pruneDanglingIntersections } from "../src/roads/intersections.js";
+import { danglingLinks, pruneDanglingIntersections, readJunctions } from "../src/roads/intersections.js";
 import { removeRoad } from "../src/roads/write.js";
 
 /** Roads A, B, C and a deleted ring R (its definition is gone), with InfraWorks-style rows. */
@@ -89,4 +89,24 @@ test("deleting a ring removes all its rows, and the intersections left with one 
   const r = pruneDanglingIntersections(db);
   assert.deepEqual(r.removed.map((i) => i.guid), ["ring-x"]);
   assert.equal(danglingLinks(db), 2, "the cross with A and B is listed, not guessed");
+});
+test("a roundabout is an intersection of type 1 with one ROUNDABOUTS row (Al Qairawan junction 4 converted in InfraWorks)", () => {
+  const db = model();
+  db.exec(`
+    alter table INTERSECTIONS add column INTERSECTION_TYPE integer;
+    create table ROUNDABOUTS (ID integer primary key, GUID text, FK_PARENT_TABLE text, FK_PARENT_GUID text, STANDARD_NAME text, LANES integer,
+      ISLAND_DIAMETER real, APRON_WIDTH real, INSCRIBED_CIRCLE_DIAMETER real);
+    update INTERSECTIONS set INTERSECTION_TYPE = 0;
+    update INTERSECTIONS set INTERSECTION_TYPE = 1 where GUID in ('tee', 'cross');
+    insert into ROUNDABOUTS (GUID, FK_PARENT_TABLE, FK_PARENT_GUID, STANDARD_NAME, LANES, ISLAND_DIAMETER, APRON_WIDTH, INSCRIBED_CIRCLE_DIAMETER)
+      values ('ra', 'INTERSECTIONS', 'tee', 'FHWA 2010: Rural Double Lane Roundabout', 1, 27, 2, 45.45);
+  `);
+  const js = readJunctions(db);
+  const tee = js.find((j) => j.guid === "tee")!;
+  assert.equal(tee.type, "roundabout");
+  assert.deepEqual(tee.roundabout, { inscribedCircleDiameter: 45.45, islandDiameter: 27, apronWidth: 2, lanes: 1, standard: "FHWA 2010: Rural Double Lane Roundabout" });
+  assert.deepEqual(tee.roads, ["B", "C"]);
+  assert.equal(tee.problem, undefined);
+  assert.equal(js.find((j) => j.guid === "cross")!.problem, "roundabout type without a ROUNDABOUTS row");
+  assert.equal(js.find((j) => j.guid === "ring-x")!.type, "intersection");
 });

@@ -418,3 +418,20 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   243 roads, 8 intersections, 25 arms, 18 regions, 61 links, 0 dangling, integrity ok. Intersection 9
   (RA-1 centre: R.0.D.2, R.2.F.3, R.1.F.2, R.0.D.1) is kept for the roundabout trial. The other RA
   centres have no intersection yet (their through roads were never rebuilt by InfraWorks).
+- InfraWorks rebuilds a road we wrote the first time it handles it (our range hash is zeroed): at
+  21:19 R.2.G.11 (grading FixedWidth -> FixedSlope, profile end moved < 1 mm) and 10 new T junctions;
+  21:22 R.0.D.1 after the user set its grading: its junctions incl. 41 at the RA-2 centre (R.0.C.2,
+  R.0.C.1, R.0.D.1). Junction 9 (RA-1 centre) was not rebuilt. Arms of the divided R.0.D roads carry
+  LANES `{"version": 1}` (no lanes) even on junctions InfraWorks just built: normal, not stale.
+- Roundabout conversion: junction 9 (4 arms, R.0.D.2 / R.0.D.1 divided) does not convert (the
+  Roundabout thumbnail does nothing; cause not known: space, per Roads Tutorial 3 Ex 3, or the
+  divided arms). Junction 4 (T, R.1.F.2 / R.1.F.1) converts. Diff (`.files` 6d846cb, revert 7282287):
+  INTERSECTIONS.INTERSECTION_TYPE 0 -> 1 and GEOMETRY grows to the roundabout's box; one ROUNDABOUTS
+  row (FK_PARENT_TABLE INTERSECTIONS, FK_PARENT_GUID the intersection, EXTERNAL_STANDARD_GUID,
+  STANDARD_NAME "FHWA 2010: Rural Double Lane Roundabout", STANDARD_SOURCE "Pool", LOCATION_OFFSET,
+  LANES 1, LANE_DETAILS width 7.225, ISLAND_DIAMETER 27, APRON_WIDTH 2, INSCRIBED_CIRCLE_DIAMETER 45.45,
+  TILTED_PLANE_* 0, STATUS 0); each arm gets ARM_INDEX 1..n, BLEND_POINT_ENTRY (+offset 73.5 m),
+  widths 3.3, ENTRY/EXIT_LANES_AT_YIELD 1, STATUS 0; regions unchanged. The body is InfraWorks':
+  PRIMITIVES / TERRAIN_OPERATIONS with FK_PARENT_TABLE INTERSECTIONS (37 strips, 4 grading rows),
+  and the two roads' bodies regenerated. Revert: type 0, ROUNDABOUTS row deleted, arm fields stay.
+  Rule in code: `readJunctions()` (test in `test/intersections.test.ts`).
