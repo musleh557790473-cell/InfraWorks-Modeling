@@ -326,6 +326,13 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   (12 intersections, 41 arms, 34 regions, 109 links), moved to C:\IW under the usual name. The
   previous local copy (49 intersections, edited in InfraWorks on the morning of 4 Nov) is kept as
   `C:\IW\Al Qairawan Roads (Parsons 6 junctions) old-2026-11-04` until the new one is checked.
+- Scripting Console rebuild (`iw-road-probe.js`, `iw-road-rebuild.js`): `readRoadModel()` takes the
+  CONSTRAINED_DEFINITIONS.ID (RA-2: 299; ROADS.ID 280 returns false). RA-2 rebuilt with
+  readRoadModel, regenModel, saveUpdates, updateIntersections(extents, [], [299], [], true): the
+  last returned [] but the model went from 12 to 20 intersections (arms 41 -> 68, regions 34 -> 57);
+  RA-2 got InfraWorks' own body (21 strips, 11 grading rows, real range hash) and 6 arms, still one
+  row; 182 links, all resolve. The console ran the script twice (output printed twice). Next: the
+  closed roads (RA-1, RA-3..RA-7, R.1.G.23, R.2.G.5, R.2.G.24), then all roads.
 - Intersections link to roads by the road's CONSTRAINED_DEFINITIONS GUID (all 385 links of the 49
   intersections, 44 roads). The writer used to give a replaced road new GUIDs, which would have
   left those links pointing at nothing (it never happened: the model with intersections came from

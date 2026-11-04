@@ -110,6 +110,9 @@ pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profi
   invalidateModel, saveUpdates, getRoadID, addPVI, createRoad...), `app.ActiveModel.Intersections`
   (updateIntersections, findIntersectionById), `app.ActiveModelDb` (Table, BeginTransaction,
   ExecuteSqlCommand), `app.Regenerate`. Autodesk calls this API unofficial.
+  Signatures come from the Qt metadata in `AIM_JavaScriptAPI.dll` (every method reports length 0).
+  `RoadModel.readRoadModel(id)` takes the road's CONSTRAINED_DEFINITIONS.ID (RA-2: 299), not
+  ROADS.ID (280, the "ID" in the properties panel): with 280 it returns false and stays empty.
 - InfraWorks' intersections point at roads by the road's CONSTRAINED_DEFINITIONS GUID
   (INTERSECTION_ARMS.FK_ASSET_GUID, INTERSECTION_REGIONS.FK_INCOMING/OUTGOING_ASSET_GUID), not
   ROADS.GUID. model:roads keeps both GUIDs when it replaces a road, so they stay valid.
