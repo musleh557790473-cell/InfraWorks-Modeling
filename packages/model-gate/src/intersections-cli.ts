@@ -2,13 +2,17 @@
 import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
-import { danglingLinks, pruneDanglingIntersections } from "./roads/intersections.js";
+import { danglingLinks, pruneDanglingIntersections, writeRoundabout } from "./roads/intersections.js";
 import { removeRoad } from "./roads/write.js";
 
 const USAGE = `
 model-intersections - InfraWorks intersections in a closed model, written in place
 
   model-intersections <model.sqlite> [--delete-roads RA-1,RA-3] [--dry]
+      [--roundabout 41 --icd 40.4 --island 24.0 --apron 2.0 --lanes 1 --lane-width 8.2]
+
+--roundabout turns that intersection into a roundabout as InfraWorks stores one (sizes from the
+designer; nothing is assumed: every size must be given). InfraWorks builds the body.
 
 --delete-roads deletes those roads (definition, constraints, body) first.
 Then removes the intersections left pointing at a deleted road, as InfraWorks does when a road is
@@ -43,6 +47,12 @@ function main(argv: string[]): number {
       if (r.orphans) say(`removed ${r.orphans} arm/region rows without an intersection`);
       say(`dangling links after: ${danglingLinks(db)}`);
       kept = r.kept.length;
+      const ra = flag("--roundabout");
+      if (ra) {
+        const num = (f: string) => Number(flag(f));
+        const idx = writeRoundabout(db, Number(ra), { inscribedCircleDiameter: num("--icd"), islandDiameter: num("--island"), apronWidth: num("--apron"), lanes: num("--lanes"), laneWidth: num("--lane-width") });
+        say(`roundabout on intersection ${ra}: ${idx.size} arms, ICD ${flag("--icd")} m, island ${flag("--island")} m, apron ${flag("--apron")} m, ${flag("--lanes")} x ${flag("--lane-width")} m`);
+      }
       db.exec(dry ? "rollback" : "commit");
       if (dry) say("--dry: nothing written");
     } catch (e) {

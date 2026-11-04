@@ -448,3 +448,14 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   R.0.C.1 deleted (70 rows): 242 roads, 37 intersections, 0 dangling, integrity ok; junction 41 now
   R.0.C.2 < > and R.0.D.1 <, junction 39 R.0.D.16 on R.0.C.2. RoadWriter now uses savepoints so the
   merge runs in one transaction. Next: the user converts 41 (ICD 40.4, island 24.0) in InfraWorks.
+- After the merge InfraWorks rebuilt junction 41 as a proper T (R.0.C.2 through, R.0.D.1 ending), but
+  the Roundabout thumbnail still does nothing. Likely space (not proven): InfraWorks' default
+  roundabout (FHWA 2010 Rural Double Lane, ICD 45.45) put junction 4's blend points 73.5 m out; the
+  nearest other junction is 99 m from 4, but 65.8 / 70.3 m from 9 (RA-1) and 76.6 m from 41 (RA-2).
+- Roundabout written into the file (AICC: apron 2.0 m, InfraWorks' default, not in Parsons'
+  drawings): `pnpm model:intersections <model> --roundabout 41 --icd 40.4 --island 24.0 --apron 2.0
+  --lanes 1 --lane-width 8.2` (`writeRoundabout`): INTERSECTION_TYPE 1, ROUNDABOUTS row (box = the
+  circle's square around REFERENCE_POINTS, InfraWorks' standard GUID from junction 4, LOCATION_OFFSET
+  0), arms numbered anticlockwise (checked: same numbers InfraWorks gave junction 4), one lane each
+  way at the yield line; blend points and body left to InfraWorks. Written 4 Nov ~22:15; model then
+  72 intersections, integrity ok. Not yet opened in InfraWorks.

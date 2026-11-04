@@ -6,7 +6,10 @@
  * INTERSECTION_REGIONS row per kerb return between two arms. Arms and regions point at roads by the
  * road's CONSTRAINED_DEFINITIONS GUID (FK_ASSET_GUID, FK_INCOMING/OUTGOING_ASSET_GUID).
  */
+import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
+
+import { parseFgf } from "@infraworks/imx-gate";
 
 export interface PrunedIntersection {
   id: number;
@@ -140,4 +143,79 @@ export function readJunctions(db: DatabaseSync): Junction[] {
     if (j.type === "intersection" && r) j.problem = "ROUNDABOUTS row on an intersection";
     return j;
   });
+}
+/** Roundabout values for writeRoundabout, all from the designer's drawings (or an AICC decision). */
+export interface RoundaboutSpec {
+  inscribedCircleDiameter: number;
+  islandDiameter: number;
+  apronWidth: number;
+  /** circulatory lanes and the width of each */
+  lanes: number;
+  laneWidth: number;
+}
+
+/**
+ * The roundabout standard InfraWorks 2026 chose itself when junction 4 was converted in the Stack
+ * (4 Nov 2026); the only one whose pool GUID is known. Its sizes are replaced by the designer's.
+ */
+export const IW_ROUNDABOUT_STANDARD = { EXTERNAL_STANDARD_GUID: "4bfa64b5-07ca-4a15-8413-79dab6124e1d", STANDARD_NAME: "FHWA 2010: Rural Double Lane Roundabout", STANDARD_SOURCE: "Pool" } as const;
+
+const pt3 = (x: number, y: number, z: number) => { const b = Buffer.alloc(32); b.writeUInt32LE(1, 0); b.writeUInt32LE(1, 4); b.writeDoubleLE(x, 8); b.writeDoubleLE(y, 16); b.writeDoubleLE(z, 24); return b; };
+/** FGF polygon, XY, one ring (as InfraWorks stores INTERSECTIONS / ROUNDABOUTS boxes). */
+export const boxBlob = (x0: number, y0: number, x1: number, y1: number) => {
+  const ring = [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]];
+  const b = Buffer.alloc(16 + 16 * ring.length);
+  b.writeUInt32LE(3, 0); b.writeUInt32LE(0, 4); b.writeUInt32LE(1, 8); b.writeUInt32LE(ring.length, 12);
+  ring.forEach(([x, y], i) => { b.writeDoubleLE(x!, 16 + 16 * i); b.writeDoubleLE(y!, 24 + 16 * i); });
+  return b;
+};
+
+/** Bearing (deg from north, clockwise) of the arm leaving the centre along its road. */
+function armBearing(line: number[][], cx: number, cy: number, upstream: boolean): number {
+  let best = 0, bd = Infinity;
+  line.forEach((p, i) => { const d = Math.hypot(p[0]! - cx, p[1]! - cy); if (d < bd) { bd = d; best = i; } });
+  const step = upstream ? -1 : 1;
+  let q = line[best]!;
+  for (let i = best + step; i >= 0 && i < line.length; i += step) { q = line[i]!; if (Math.hypot(q[0]! - cx, q[1]! - cy) > 5) break; }
+  return (Math.atan2(q[0]! - cx, q[1]! - cy) * 180 / Math.PI + 360) % 360;
+}
+
+/**
+ * Turns an intersection into a roundabout as InfraWorks stores one (junction 4 converted in the Stack,
+ * 4 Nov 2026): INTERSECTION_TYPE 1; one ROUNDABOUTS row on the intersection, its box the inscribed
+ * circle's square around the reference point; arms numbered anticlockwise, one lane each way at the
+ * yield line. Blend points and the body are left to InfraWorks. Returns the arm numbers by arm GUID.
+ */
+export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: RoundaboutSpec): Map<string, number> {
+  const i = db.prepare("select GUID, REFERENCE_POINTS rp, INTERSECTION_TYPE t from INTERSECTIONS where ID = ?").get(intersectionId) as Row | undefined;
+  if (!i) throw new Error(`no intersection ${intersectionId}`);
+  const guid = String(i.GUID);
+  if (Number(i.t) === 1 || db.prepare("select 1 from ROUNDABOUTS where FK_PARENT_GUID = ?").get(guid)) throw new Error(`intersection ${intersectionId} is a roundabout already`);
+  for (const [k, v] of Object.entries(spec)) if (!(Number(v) > 0)) throw new Error(`roundabout ${intersectionId}: ${k} missing`);
+  if (spec.islandDiameter >= spec.inscribedCircleDiameter) throw new Error(`roundabout ${intersectionId}: island ${spec.islandDiameter} m is not inside the circle ${spec.inscribedCircleDiameter} m`);
+  const rp = Buffer.from(i.rp as Uint8Array), cx = rp.readDoubleLE(8), cy = rp.readDoubleLE(16);
+  const arms = db.prepare(`select a.GUID g, a.APPROACH_DIRECTION_MATCHES_ASSET d, r.GEOMETRY geom from INTERSECTION_ARMS a
+    join ROADS r on r.FK_PARENT_GUID = a.FK_ASSET_GUID where a.FK_PARENT_GUID = ?`).all(guid) as Row[];
+  if (arms.length < 3) throw new Error(`intersection ${intersectionId}: ${arms.length} arms, a roundabout needs 3 or more`);
+  // an arm that approaches in the road's direction lies before the centre along the road
+  const order = arms.map((a) => ({ g: String(a.g), b: armBearing(parseFgf(Buffer.from(a.geom as Uint8Array)).points as number[][], cx, cy, Boolean(a.d)) }))
+    .sort((p, q) => q.b - p.b);
+  const index = new Map(order.map((a, k) => [a.g, k + 1]));
+  const h = spec.inscribedCircleDiameter / 2;
+  db.exec("savepoint roundabout");
+  try {
+    db.prepare(`insert into ROUNDABOUTS (GUID, GEOMETRY, FK_PARENT_TABLE, FK_PARENT_GUID, EXTERNAL_STANDARD_GUID, STANDARD_NAME, STANDARD_SOURCE,
+      LOCATION_OFFSET, LANES, LANE_DETAILS, ISLAND_DIAMETER, APRON_WIDTH, INSCRIBED_CIRCLE_DIAMETER, TILTED_PLANE_BEARING, TILTED_PLANE_CROSSFALL, STATUS)
+      values (?, ?, 'INTERSECTIONS', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)`).run(
+      randomUUID(), boxBlob(cx - h, cy - h, cx + h, cy + h), guid, IW_ROUNDABOUT_STANDARD.EXTERNAL_STANDARD_GUID, IW_ROUNDABOUT_STANDARD.STANDARD_NAME, IW_ROUNDABOUT_STANDARD.STANDARD_SOURCE,
+      pt3(0, 0, 0), spec.lanes, JSON.stringify({ version: "1.0.0", lanes: Array.from({ length: spec.lanes }, (_, k) => ({ id: k + 1, width: spec.laneWidth })) }),
+      spec.islandDiameter, spec.apronWidth, spec.inscribedCircleDiameter);
+    db.prepare("update INTERSECTIONS set INTERSECTION_TYPE = 1 where GUID = ?").run(guid);
+    for (const [g, k] of index) db.prepare("update INTERSECTION_ARMS set ARM_INDEX = ?, ENTRY_LANES_AT_YIELD = 1, EXIT_LANES_AT_YIELD = 1, STATUS = 0 where GUID = ?").run(k, g);
+    db.exec("release roundabout");
+  } catch (e) {
+    db.exec("rollback to roundabout; release roundabout");
+    throw e;
+  }
+  return index;
 }
