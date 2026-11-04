@@ -16,6 +16,7 @@
     "gate:model": "pnpm --filter @infraworks/model-gate gate",
     "model:names": "pnpm --filter @infraworks/model-gate names",
     "model:roads": "pnpm --filter @infraworks/model-gate roads",
+    "model:intersections": "pnpm --filter @infraworks/model-gate intersections",
     "fixtures:dwg": "python fixtures/make_fixtures.py"
   },
   "devDependencies": {

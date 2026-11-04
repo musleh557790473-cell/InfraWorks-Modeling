@@ -366,3 +366,39 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   Arcs are not yet assigned to single corners (a nearby bend or the next corner can be counted).
 - `parsons-questions.md`: the open questions for Parsons (levels, sections, crossfall sides,
   utilities, Al Narjis), each with what AICC modelled meanwhile.
+
+## Session 6 (4 Nov 2026, AYNLAP1201): intersections in the model file
+
+- The working model holds 40 intersections, 128 arms, 98 regions (not 20/68/57): InfraWorks itself
+  added 20 (IDs 21-40, around R.10/R.14/R.0.D.5 and RA-7) at 15:33 ("Merged undo stack" in `.files`),
+  finishing the cancelled regeneration. 244 roads, 252 definitions (8 without a road, IDs 1, 11-15,
+  18, 19, NAME null).
+- `.files` history is readable: each InfraWorks commit stores tables as text rows under
+  `exploded/<TABLE>/<n>` (`git log`, `git show <c> -- exploded/INTERSECTION_ARMS`), so every edit
+  InfraWorks made can be diffed without opening the model. Only 5 commits touched intersections;
+  none removed an arm.
+- The 24 dangling links all point at ONE definition, RA-1's (`ce9d4a19-...`, ID 298 in the backup),
+  in intersections 7, 8, 10, 11 (each: a through road's 2 arms + RA-1's 2 arms, 4 regions). The
+  other rings had no intersections. Rule (Autodesk tutorial "Roads Tutorial 3 Exercise 1: Creating
+  Intersections": deleting a road, "the lower intersection disappears and the upper ... reverts to
+  ... a simple T-junction"): an intersection left with fewer than two roads goes with its arms and
+  regions; one still joining two roads is not guessed (listed for a rebuild). Code:
+  `packages/model-gate/src/roads/intersections.ts` (`pruneDanglingIntersections`), CLI
+  `pnpm model:intersections <model> [--dry]`, test `test/intersections.test.ts`. Dry run on the
+  working model: removes 7, 8, 10, 11 (left: R.1.F.2, R.0.D.2, R.0.D.1, R.2.F.3), keeps none. Not
+  yet written: the model was open in InfraWorks (lock 16:12).
+- How InfraWorks stores an intersection (the 40 it built): INTERSECTIONS row with GEOMETRY = the
+  bounding box polygon, REFERENCE_POINTS = a 32-byte point blob, INTERSECTION_TYPE 0, DESIGN_VEHICLE
+  "P", MANUAL_CHANGES 0, style/model columns null. One arm per road direction leaving the junction
+  (a through road gives 2, APPROACH_DIRECTION_MATCHES_ASSET 0 and 1), LANES JSON per lane,
+  CENTER_TURN_LANES_COUNT -1. One region per kerb return between neighbouring arms of different roads
+  (T: 2, cross: 4, three roads: 3), CURB_RETURN_TYPE 2 (radius; 4 seen too), INPUT_CURB_RETURN_TYPE -1,
+  lane width 3.3, transitions 30 m / taper 6 / radii 10, 7.5, 20. CURB_RETURN_RADIUS is InfraWorks'
+  own (9.0 mostly, also 5-18, -1, 0.96), not Parsons' 10 / 12 / 20 m. ROUNDABOUTS exists, empty
+  (INSCRIBED_CIRCLE_DIAMETER, ISLAND_DIAMETER, APRON_WIDTH, LANES, STANDARD_NAME ...).
+- Already built at the centres: 9 at RA-1 (R.0.D.2, R.2.F.3, R.1.F.2, R.0.D.1), 19 at RA-2
+  (R.0.C.2, R.0.C.1, R.0.D.1), 23 at RA-7 (R.0.B.1, R.0.C.4, R.0.D.5).
+- Roundabout by hand (Autodesk "To convert an intersection to a roundabout": select it, Stack >
+  Junction Type thumbnail > Roundabout; "To modify roundabout geometry": select the roundel, drag the
+  grips or edit in the Stack). Next: the user converts intersection 9 (RA-1 centre) with ICD 40.4 m,
+  central circle 24.0 m, then the before/after diff from `.files`.

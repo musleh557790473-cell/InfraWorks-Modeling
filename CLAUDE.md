@@ -47,6 +47,7 @@ pnpm gate:model "<model>.sqlite" --package <package.zip>      # Gate G3, on a cl
 pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"]
 pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profiles <40000.dxf> --surface <grading.xml> [--package <road_centerline>] [--dry]
 #   Al Qairawan: add --section R.9.G.6=A1,R.9.G.7=A1 (AICC decision for the two roads the drawing does not type)
+pnpm model:intersections "<model>.sqlite" [--dry]               # drop intersections left on a deleted road
 ```
 
 ## Inputs from Parsons
@@ -116,6 +117,8 @@ pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profi
 - InfraWorks' intersections point at roads by the road's CONSTRAINED_DEFINITIONS GUID
   (INTERSECTION_ARMS.FK_ASSET_GUID, INTERSECTION_REGIONS.FK_INCOMING/OUTGOING_ASSET_GUID), not
   ROADS.GUID. model:roads keeps both GUIDs when it replaces a road, so they stay valid.
+- `<model>.files` keeps every InfraWorks edit as text rows (`exploded/<TABLE>/<n>`): diff its Git
+  history to see what InfraWorks wrote, read-only, without opening the model.
 - InfraWorks rebuilds a component road (body, and the intersections where it meets other roads)
   only on a single-road edit. Rebuilding RA-1 split it into 4 pieces between its arms and created
   9 intersections; the one-piece closed ring model:roads writes draws a stray band until then.
