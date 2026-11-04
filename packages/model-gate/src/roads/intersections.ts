@@ -192,7 +192,8 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
   const guid = String(i.GUID);
   if (Number(i.t) === 1 || db.prepare("select 1 from ROUNDABOUTS where FK_PARENT_GUID = ?").get(guid)) throw new Error(`intersection ${intersectionId} is a roundabout already`);
   for (const [k, v] of Object.entries(spec)) if (!(Number(v) > 0)) throw new Error(`roundabout ${intersectionId}: ${k} missing`);
-  if (spec.islandDiameter >= spec.inscribedCircleDiameter) throw new Error(`roundabout ${intersectionId}: island ${spec.islandDiameter} m is not inside the circle ${spec.inscribedCircleDiameter} m`);
+  const sum = roundaboutDiameter(spec);
+  if (Math.abs(sum - spec.inscribedCircleDiameter) > 0.01) throw new Error(`roundabout ${intersectionId}: island ${spec.islandDiameter} + 2 x apron ${spec.apronWidth} + 2 x ${spec.lanes} x lane ${spec.laneWidth} = ${sum.toFixed(2)} m, not the circle ${spec.inscribedCircleDiameter} m`);
   const rp = Buffer.from(i.rp as Uint8Array), cx = rp.readDoubleLE(8), cy = rp.readDoubleLE(16);
   const arms = db.prepare(`select a.GUID g, a.APPROACH_DIRECTION_MATCHES_ASSET d, r.GEOMETRY geom from INTERSECTION_ARMS a
     join ROADS r on r.FK_PARENT_GUID = a.FK_ASSET_GUID where a.FK_PARENT_GUID = ?`).all(guid) as Row[];
@@ -218,4 +219,12 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
     throw e;
   }
   return index;
+}
+/**
+ * The inscribed circle InfraWorks shows for a roundabout: island + 2 x apron + 2 x the circulatory
+ * lanes (Al Qairawan, 4 Nov 2026: junction 4 27 + 4 + 2 x 7.225 = 45.45; junction 41 24 + 4 + 14.45 =
+ * 42.45 shown, though 40.4 was stored). Sizes that do not add up are not written.
+ */
+export function roundaboutDiameter(s: Pick<RoundaboutSpec, "islandDiameter" | "apronWidth" | "lanes" | "laneWidth">): number {
+  return s.islandDiameter + 2 * s.apronWidth + 2 * s.lanes * s.laneWidth;
 }

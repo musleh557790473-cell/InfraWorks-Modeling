@@ -459,3 +459,10 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   0), arms numbered anticlockwise (checked: same numbers InfraWorks gave junction 4), one lane each
   way at the yield line; blend points and body left to InfraWorks. Written 4 Nov ~22:15; model then
   72 intersections, integrity ok. Not yet opened in InfraWorks.
+- Opened in InfraWorks (22:16): the Stack shows Roundabout 41 (Junction Type Roundabout, FHWA 2010
+  standard, island 24.0, apron 2.0, 3 arms) but Inscribed Circle Diameter 42.45 although 40.4 is
+  stored: InfraWorks shows island + 2 x apron + 2 x 7.225 (the standard's lane; junction 4: 27 + 4 +
+  14.45 = 45.45). Rule in code: `roundaboutDiameter`; writeRoundabout refuses sizes that do not add
+  up. The body was not rebuilt (the old T's 52 strips and 4 grading rows stay; blend offsets null).
+  Open: where the 2.0 m apron goes inside Parsons' 8.2 m ring (island 20.0 + apron to r 12, lane 8.2;
+  or island 24.0, lane 6.2), and the hand step that makes InfraWorks build the body.
