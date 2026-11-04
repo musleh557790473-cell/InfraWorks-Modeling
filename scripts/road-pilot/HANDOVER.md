@@ -404,3 +404,12 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   Junction Type thumbnail > Roundabout; "To modify roundabout geometry": select the roundel, drag the
   grips or edit in the Stack). Next: the user converts intersection 9 (RA-1 centre) with ICD 40.4 m,
   central circle 24.0 m, then the before/after diff from `.files`.
+- Restored (4 Nov, ~17:15, user's decision): the working model went through the cancelled script,
+  and InfraWorks logged "Model Repair: Git repo is in undo branch" at 15:33; every later open sat
+  10+ minutes regenerating (the document itself opened in under a minute: "is opened" in
+  `%APPDATA%\Autodesk\Autodesk InfraWorks\logs`). `C:\IW\Al Qairawan Roads (Parsons 6 junctions)`
+  is again road-model-2026-11-03b.zip: 250 roads (RA-1..RA-7 one row each), 12 intersections,
+  41 arms, 34 regions, 109 links, 0 dangling, integrity ok. The Session 6 cleanup above was on the
+  replaced file. Not in 03b: the 4 Nov write of R.9.G.6 / R.9.G.7 as A1 (redo with
+  `model:roads ... --section R.9.G.6=A1,R.9.G.7=A1 --only R.9.G.6,R.9.G.7`). Next: delete the rings in
+  the file (no script) with their intersections, test, then the roundabout by hand.
