@@ -486,3 +486,9 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   (`--roundabout 41 --icd 40.4 --island 24.0 --apron 0.975 --lanes 1 --lane-width 7.225`); its body
   is rebuilt by one roundel edit in the Stack. RA-1 merges dry run: R.0.D.2 = R.0.D.1 + R.0.D.2
   (1085.545 m, B1), R.2.F.3 = R.1.F.2 + R.2.F.3 (807.596 m, A2); not written.
+- RA-1 written (4 Nov ~23:00, model closed): R.0.D.2 = R.0.D.1 + R.0.D.2 (22 links moved, R.0.D.1
+  deleted), R.2.F.3 = R.1.F.2 + R.2.F.3 (7 links moved, R.1.F.2 deleted); junction 9 is now two
+  through roads crossing, then `--roundabout 9 --icd 40.4 --island 24.0 --apron 0.975 --lanes 1
+  --lane-width 7.225` (4 arms). Model: 240 roads, 72 intersections, 514 links, 0 dangling, integrity
+  ok; roundabouts 9 and 41 both 40.4 / 24.0 / 0.975. Bodies need one roundel edit each in InfraWorks.
+  Merged names so far: R.0.C.2 (+R.0.C.1), R.0.D.2 (+R.0.D.1), R.2.F.3 (+R.1.F.2).
