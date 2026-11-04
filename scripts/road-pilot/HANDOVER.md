@@ -321,8 +321,11 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   with `model:roads --section R.9.G.6=A1,R.9.G.7=A1` (`applySectionDecisions`: only untyped roads,
   flagged `decided`). Crossfall from the surface: both fall right at 2 %. The A1 section stays
   centred on the drawn centreline: up to ~1.8 m off the drawn edges on R.9.G.6, no widening on
-  R.9.G.7. Written to the working model (unpacked from road-model-2026-11-03b.zip) with
-  `--only R.9.G.6,R.9.G.7`: A1, 20 km/h.
+  R.9.G.7. Written to the working model with `--only R.9.G.6,R.9.G.7`: A1, 20 km/h.
+- Working model on AYNLAP1201 since 4 Nov 2026: the one from road-model-2026-11-03b.zip
+  (12 intersections, 41 arms, 34 regions, 109 links), moved to C:\IW under the usual name. The
+  previous local copy (49 intersections, edited in InfraWorks on the morning of 4 Nov) is kept as
+  `C:\IW\Al Qairawan Roads (Parsons 6 junctions) old-2026-11-04` until the new one is checked.
 - Intersections link to roads by the road's CONSTRAINED_DEFINITIONS GUID (all 385 links of the 49
   intersections, 44 roads). The writer used to give a replaced road new GUIDs, which would have
   left those links pointing at nothing (it never happened: the model with intersections came from
