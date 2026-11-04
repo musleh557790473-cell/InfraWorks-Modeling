@@ -413,3 +413,8 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   replaced file. Not in 03b: the 4 Nov write of R.9.G.6 / R.9.G.7 as A1 (redo with
   `model:roads ... --section R.9.G.6=A1,R.9.G.7=A1 --only R.9.G.6,R.9.G.7`). Next: delete the rings in
   the file (no script) with their intersections, test, then the roundabout by hand.
+- Rings deleted in the file (4 Nov, AICC: all 7): `pnpm model:intersections <model> --delete-roads
+  RA-1,RA-2,RA-3,RA-4,RA-5,RA-6,RA-7`: 223 rows, intersections 7, 8, 10, 11 removed. Working model now:
+  243 roads, 8 intersections, 25 arms, 18 regions, 61 links, 0 dangling, integrity ok. Intersection 9
+  (RA-1 centre: R.0.D.2, R.2.F.3, R.1.F.2, R.0.D.1) is kept for the roundabout trial. The other RA
+  centres have no intersection yet (their through roads were never rebuilt by InfraWorks).
