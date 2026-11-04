@@ -444,3 +444,7 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   (`mergeRoads`: refuses a gap, reversed part, level step or curve at the joint), writes it under
   R.0.C.2 (GUIDs kept), moves R.0.C.1's intersection links (`repointLinks`) and deletes R.0.C.1.
   Dry run: 1231.277 m, 15 PVIs, C1. Naming to settle if it works (two Parsons names, one road).
+  Written (4 Nov ~21:52, model closed): R.0.C.2 = R.0.C.1 + R.0.C.2 (1231.277 m), 7 links moved,
+  R.0.C.1 deleted (70 rows): 242 roads, 37 intersections, 0 dangling, integrity ok; junction 41 now
+  R.0.C.2 < > and R.0.D.1 <, junction 39 R.0.D.16 on R.0.C.2. RoadWriter now uses savepoints so the
+  merge runs in one transaction. Next: the user converts 41 (ICD 40.4, island 24.0) in InfraWorks.

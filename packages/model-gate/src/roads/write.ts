@@ -110,7 +110,7 @@ export class RoadWriter {
    * rows as read when this writer was made, so the result does not depend on this refresh.
    */
   refreshTemplate(plan: RoadPlan, sec: Section | null) {
-    this.db.exec("BEGIN");
+    this.db.exec("SAVEPOINT road_write");
     try {
       const road = this.tRoad, guid = String(road.GUID), rps = String(this.tRps.GUID);
       for (const t of ["PRIMITIVES", "TERRAIN_OPERATIONS"]) this.db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(guid);
@@ -119,9 +119,9 @@ export class RoadWriter {
       this.db.prepare("update ROADS set GEOMETRY=? where GUID=?").run(lineBlob(plan.line), guid);
       if (sec) this.db.prepare("update ROADS set MANUAL_STYLE=?, MAX_SPEED=? where GUID=?").run(String(style.MANUAL_STYLE), Number(style.MAX_SPEED), guid);
       this.db.prepare("update CONSTRAINED_DEF_RPSYSTEMS set GEOMETRY=? where GUID=?").run(lineBlob(plan.line), rps);
-      this.db.exec("COMMIT");
+      this.db.exec("RELEASE road_write");
     } catch (e) {
-      this.db.exec("ROLLBACK");
+      this.db.exec("ROLLBACK TO road_write; RELEASE road_write");
       throw e;
     }
   }
@@ -153,7 +153,7 @@ export class RoadWriter {
     const old = this.all("select GUID, FK_PARENT_GUID from ROADS where NAME=? order by ID", name);
     const linked = old.slice(1).filter((r) => this.intersectionLinks(String(r.FK_PARENT_GUID)) > 0);
     if (linked.length) throw new Error(`${name}: ${old.length} rows, and ${linked.length} piece(s) besides the first carry intersections; not replaced`);
-    this.db.exec("BEGIN");
+    this.db.exec("SAVEPOINT road_write");
     try {
       if (old.length) this.remove(name);
       const style = this.styleOf(sec);
@@ -201,9 +201,9 @@ export class RoadWriter {
       const staleHash = Buffer.from(Buffer.from(this.tRps.JSON_RANGE_HASH as Uint8Array).toString("utf8").replace(/"Value": "[0-9A-F]{32}"/g, `"Value": "${"0".repeat(32)}"`), "utf8");
       this.insert("CONSTRAINED_DEF_RPSYSTEMS", this.tRps, { GUID: gRps, FK_PARENT_GUID: gCD, GEOMETRY: lineBlob(line), LENGTH_2D: total, JSON_RANGE_HASH: staleHash });
       this.insertBody(gRoad, String(this.tRps.GUID), gRps, line, sec);
-      this.db.exec("COMMIT");
+      this.db.exec("RELEASE road_write");
     } catch (e) {
-      this.db.exec("ROLLBACK");
+      this.db.exec("ROLLBACK TO road_write; RELEASE road_write");
       throw e;
     }
   }
