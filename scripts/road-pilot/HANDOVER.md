@@ -466,3 +466,8 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   up. The body was not rebuilt (the old T's 52 strips and 4 grading rows stay; blend offsets null).
   Open: where the 2.0 m apron goes inside Parsons' 8.2 m ring (island 20.0 + apron to r 12, lane 8.2;
   or island 24.0, lane 6.2), and the hand step that makes InfraWorks build the body.
+- AICC decision (4 Nov): the 2.0 m apron sits inside Parsons' island circle (r 12.0): InfraWorks island
+  20.0, apron 2.0, one lane 8.2 m (Parsons' ring width), ICD 40.4. Written to junction 41 (~22:40,
+  `--roundabout 41 --icd 40.4 --island 20.0 --apron 2.0 --lanes 1 --lane-width 8.2`), integrity ok.
+  Next: the user types 40.4 in the Stack's Inscribed Circle Diameter (Autodesk "To modify roundabout
+  geometry") to see whether InfraWorks builds the body and which lane width it keeps.
