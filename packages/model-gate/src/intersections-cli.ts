@@ -2,7 +2,7 @@
 import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
-import { danglingLinks, pruneDanglingIntersections, writeRoundabout } from "./roads/intersections.js";
+import { danglingLinks, fixBlendLevels, pruneDanglingIntersections, writeRoundabout } from "./roads/intersections.js";
 import { removeRoad } from "./roads/write.js";
 
 const USAGE = `
@@ -11,6 +11,7 @@ model-intersections - InfraWorks intersections in a closed model, written in pla
   model-intersections <model.sqlite> [--delete-roads RA-1,RA-3] [--dry]
       [--roundabout 41 --icd 40.4 --island 24.0 --apron 2.0 --lanes 1 --lane-width 8.2]
 
+Roundabout blend points InfraWorks left at height 0 get the road's level (always).
 --roundabout turns that intersection into a roundabout as InfraWorks stores one (sizes from the
 designer; nothing is assumed: every size must be given). InfraWorks builds the body.
 
@@ -45,14 +46,18 @@ function main(argv: string[]): number {
       for (const i of r.removed) say(`removed intersection ${i.id} (${i.arms} arms, ${i.regions} regions; left: ${i.roads.join(" ") || "none"})`);
       for (const i of r.kept) say(`kept, rebuild in InfraWorks: intersection ${i.id} (roads ${i.roads.join(" ")})`);
       if (r.orphans) say(`removed ${r.orphans} arm/region rows without an intersection`);
+      if (r.bodies) say(`removed ${r.bodies} body rows (PRIMITIVES, TERRAIN_OPERATIONS) of intersections that no longer exist`);
       say(`dangling links after: ${danglingLinks(db)}`);
       kept = r.kept.length;
       const ra = flag("--roundabout");
       if (ra) {
         const num = (f: string) => Number(flag(f));
         const idx = writeRoundabout(db, Number(ra), { inscribedCircleDiameter: num("--icd"), islandDiameter: num("--island"), apronWidth: num("--apron"), lanes: num("--lanes"), laneWidth: num("--lane-width") });
+        void idx;
         say(`roundabout on intersection ${ra}: ${idx.size} arms, ICD ${flag("--icd")} m, island ${flag("--island")} m, apron ${flag("--apron")} m, ${flag("--lanes")} x ${flag("--lane-width")} m`);
       }
+      const fixed = fixBlendLevels(db);
+      for (const f of fixed) say(`blend point height: intersection ${f.id} arm ${f.arm} -> ${f.z.toFixed(3)} (road ${f.off.toFixed(3)} m away)`);
       db.exec(dry ? "rollback" : "commit");
       if (dry) say("--dry: nothing written");
     } catch (e) {

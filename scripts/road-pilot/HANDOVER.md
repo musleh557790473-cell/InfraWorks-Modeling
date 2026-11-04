@@ -492,3 +492,12 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   --lane-width 7.225` (4 arms). Model: 240 roads, 72 intersections, 514 links, 0 dangling, integrity
   ok; roundabouts 9 and 41 both 40.4 / 24.0 / 0.975. Bodies need one roundel edit each in InfraWorks.
   Merged names so far: R.0.C.2 (+R.0.C.1), R.0.D.2 (+R.0.D.1), R.2.F.3 (+R.1.F.2).
+- Deep wall under roundabouts 9 and 41 (4 Nov, ~23:10): their grading reached z 7-8 m. Causes:
+  (1) InfraWorks placed each arm's blend point on its road but at height 0.00 (9: 80.8 m out, 41:
+  76.9 m), so every arm graded down from ~683 to 0; junction 4, converted in the Stack, had real
+  heights (683.x). Fix: `fixBlendLevels` sets the road's 3D centreline level at that point (Parsons'
+  profile), position kept; run by every model:intersections. (2) my prune removed junctions 7, 8, 10,
+  11 but left their bodies (166 PRIMITIVES, 15 TERRAIN_OPERATIONS with cut-outs around the RA-1
+  centre); prune now removes intersection bodies too. Dry run on the model: 181 body rows, 7 blend
+  heights 680.4-683.7, each 0.000 m from its road. The Stack field keeps 2 decimals: apron 0.975
+  typed was saved as 0.97 (ICD 40.39).

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { danglingLinks, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, writeRoundabout } from "../src/roads/intersections.js";
+import { danglingLinks, fixBlendLevels, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, writeRoundabout } from "../src/roads/intersections.js";
 import { lineBlob, removeRoad } from "../src/roads/write.js";
 
 /** Roads A, B, C and a deleted ring R (its definition is gone), with InfraWorks-style rows. */
@@ -163,4 +163,44 @@ test("a roundabout is not written with a missing size", () => {
 test("the circle InfraWorks shows is island + 2 x apron + 2 x lanes (junctions 4 and 41)", () => {
   assert.equal(roundaboutDiameter({ islandDiameter: 27, apronWidth: 2, lanes: 1, laneWidth: 7.225 }), 45.45);
   assert.equal(roundaboutDiameter({ islandDiameter: 24, apronWidth: 2, lanes: 1, laneWidth: 7.225 }), 42.45);
+});
+test("a removed intersection takes its body with it: left behind, its terrain cut-outs hole the ground (RA-1 ring junctions)", () => {
+  const db = model();
+  db.exec(`
+    create table PRIMITIVES (ID integer primary key, GUID text, FK_PARENT_TABLE text, FK_PARENT_GUID text);
+    create table TERRAIN_OPERATIONS (ID integer primary key, GUID text, FK_PARENT_TABLE text, FK_PARENT_GUID text, OPERATION_TYPE text);
+    insert into PRIMITIVES (GUID, FK_PARENT_TABLE, FK_PARENT_GUID) values ('p1', 'INTERSECTIONS', 'ring-x'), ('p2', 'INTERSECTIONS', 'tee'), ('p3', 'ROADS', 'road-A'), ('p4', 'INTERSECTIONS', 'gone-earlier');
+    insert into TERRAIN_OPERATIONS (GUID, FK_PARENT_TABLE, FK_PARENT_GUID, OPERATION_TYPE) values ('t1', 'INTERSECTIONS', 'ring-x', 'CutOut'), ('t2', 'INTERSECTIONS', 'tee', 'CutOut');
+  `);
+  const dry = pruneDanglingIntersections(db, { dry: true });
+  assert.equal(dry.bodies, 3, "ring-x's strip and cut-out, and a strip whose junction went earlier");
+  assert.equal(n(db, "select count(*) n from PRIMITIVES"), 4, "--dry writes nothing");
+  pruneDanglingIntersections(db);
+  assert.deepEqual((db.prepare("select GUID from PRIMITIVES order by GUID").all() as { GUID: string }[]).map((r) => r.GUID), ["p2", "p3"]);
+  assert.deepEqual((db.prepare("select GUID from TERRAIN_OPERATIONS").all() as { GUID: string }[]).map((r) => r.GUID), ["t2"]);
+});
+
+test("roundabout blend points at height 0 get the road's level there (junctions 9, 41: graded down to 0)", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`
+    create table ROADS (ID integer primary key, GUID text, NAME text, FK_PARENT_GUID text, GEOMETRY blob);
+    create table INTERSECTIONS (ID integer primary key, GUID text, INTERSECTION_TYPE integer);
+    create table INTERSECTION_ARMS (ID integer primary key, GUID text, FK_PARENT_GUID text, FK_ASSET_GUID text, ARM_INDEX integer, BLEND_POINT_ENTRY blob, BLEND_POINT_EXIT blob);
+  `);
+  db.prepare("insert into ROADS (GUID, NAME, FK_PARENT_GUID, GEOMETRY) values ('ra', 'A', 'cd-A', ?)").run(lineBlob([[0, 0, 680], [100, 0, 690]]));
+  db.exec("insert into INTERSECTIONS (ID, GUID, INTERSECTION_TYPE) values (9, 'ra9', 1), (12, 'j12', 0)");
+  const pt = (x: number, y: number, z: number) => { const b = Buffer.alloc(32); b.writeUInt32LE(1, 0); b.writeUInt32LE(1, 4); b.writeDoubleLE(x, 8); b.writeDoubleLE(y, 16); b.writeDoubleLE(z, 24); return b; };
+  const ins = db.prepare("insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, ARM_INDEX, BLEND_POINT_ENTRY) values (?, ?, 'cd-A', ?, ?)");
+  ins.run("zero", "ra9", 1, pt(80.8, 0, 0));
+  ins.run("set", "ra9", 2, pt(20, 0, 682.5));
+  ins.run("plain", "j12", 1, pt(50, 0, 0));
+  const fixed = fixBlendLevels(db);
+  assert.equal(fixed.length, 1, "only the roundabout's zero-height point");
+  assert.ok(Math.abs(fixed[0]!.z - 688.08) < 1e-9);
+  const z = (g: string) => Buffer.from((db.prepare("select BLEND_POINT_ENTRY b from INTERSECTION_ARMS where GUID=?").get(g) as { b: Uint8Array }).b).readDoubleLE(24);
+  assert.ok(Math.abs(z("zero") - 688.08) < 1e-9);
+  assert.equal(z("set"), 682.5, "a point with a height is not touched");
+  assert.equal(z("plain"), 0, "an intersection that is not a roundabout is not touched");
+  db.prepare("insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, ARM_INDEX, BLEND_POINT_ENTRY) values ('far', 'ra9', 'cd-A', 3, ?)").run(pt(50, 30, 0));
+  assert.throws(() => fixBlendLevels(db), /30.00 m off its road/);
 });

@@ -31,6 +31,12 @@ export interface PruneResult {
   kept: PrunedIntersection[];
   /** Arms and regions whose parent intersection no longer exists, removed. */
   orphans: number;
+  /**
+   * Body rows (PRIMITIVES, TERRAIN_OPERATIONS with FK_PARENT_TABLE INTERSECTIONS) of intersections that
+   * no longer exist, removed. Left behind, their terrain cut-outs keep holes in the ground (the four
+   * RA-1 ring junctions, 4 Nov 2026: a roundabout graded down into them).
+   */
+  bodies: number;
 }
 
 type Row = Record<string, unknown>;
@@ -50,7 +56,7 @@ export function pruneDanglingIntersections(db: DatabaseSync, opts: { dry?: boole
   const names = new Map(
     (db.prepare("select c.GUID g, r.NAME n from CONSTRAINED_DEFINITIONS c join ROADS r on r.FK_PARENT_GUID = c.GUID").all() as Row[]).map((r) => [String(r.g), String(r.n)]),
   );
-  const res: PruneResult = { removed: [], kept: [], orphans: 0 };
+  const res: PruneResult = { removed: [], kept: [], orphans: 0, bodies: 0 };
   const work: (() => void)[] = [];
   for (const i of db.prepare("select ID, GUID from INTERSECTIONS order by ID").all() as Row[]) {
     const guid = String(i.GUID);
@@ -72,11 +78,19 @@ export function pruneDanglingIntersections(db: DatabaseSync, opts: { dry?: boole
   for (const t of ["INTERSECTION_ARMS", "INTERSECTION_REGIONS"]) {
     res.orphans += Number((db.prepare(`select count(*) n from ${t} t ${orphanWhere}`).get() as Row).n);
   }
+  const removing = new Set(res.removed.map((i) => i.guid));
+  const bodyTables = ["PRIMITIVES", "TERRAIN_OPERATIONS"].filter((t) => (db.prepare(`pragma table_info("${t}")`).all() as Row[]).some((c) => c.name === "FK_PARENT_TABLE"));
+  const bodyWhere = `where t.FK_PARENT_TABLE = 'INTERSECTIONS' and not exists (select 1 from INTERSECTIONS i where i.GUID = t.FK_PARENT_GUID)`;
+  for (const t of bodyTables) {
+    res.bodies += Number((db.prepare(`select count(*) n from ${t} t ${bodyWhere}`).get() as Row).n);
+    for (const g of removing) res.bodies += Number((db.prepare(`select count(*) n from ${t} where FK_PARENT_TABLE = 'INTERSECTIONS' and FK_PARENT_GUID = ?`).get(g) as Row).n);
+  }
   if (opts.dry) return res;
   db.exec("savepoint prune");
   try {
     for (const w of work) w();
     for (const t of ["INTERSECTION_ARMS", "INTERSECTION_REGIONS"]) db.prepare(`delete from ${t} as t ${orphanWhere}`).run();
+    for (const t of bodyTables) db.prepare(`delete from ${t} as t ${bodyWhere}`).run();
     db.exec("release prune");
   } catch (e) {
     db.exec("rollback to prune; release prune");
@@ -244,4 +258,50 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
  */
 export function roundaboutDiameter(s: Pick<RoundaboutSpec, "islandDiameter" | "apronWidth" | "lanes" | "laneWidth">): number {
   return s.islandDiameter + 2 * s.apronWidth + 2 * s.lanes * s.laneWidth;
+}
+/** Height of a 3D polyline at the point nearest to (x, y), interpolated along the nearest segment. */
+function levelAt(line: number[][], x: number, y: number): { z: number; d: number } {
+  let best = { z: NaN, d: Infinity };
+  for (let i = 0; i + 1 < line.length; i++) {
+    const a = line[i]!, b = line[i + 1]!, dx = b[0]! - a[0]!, dy = b[1]! - a[1]!;
+    const t = Math.max(0, Math.min(1, ((x - a[0]!) * dx + (y - a[1]!) * dy) / (dx * dx + dy * dy || 1)));
+    const d = Math.hypot(a[0]! + t * dx - x, a[1]! + t * dy - y);
+    if (d < best.d) best = { z: a[2]! + t * (b[2]! - a[2]!), d };
+  }
+  return best;
+}
+
+/**
+ * Gives roundabout blend points their height. On a roundabout written into the file, InfraWorks places
+ * each arm's blend point on its road but at height 0 (junctions 9 and 41, 4 Nov 2026: 0.00, so the
+ * arms graded down ~680 m; on junction 4, converted in the Stack, they had the road's level). The height
+ * is the road's own 3D centreline (the designer's profile) at that point; the position stays
+ * InfraWorks'. Returns the points set: intersection, arm number, height, distance to the road.
+ */
+export function fixBlendLevels(db: DatabaseSync, opts: { dry?: boolean } = {}): { id: number; arm: number; z: number; off: number }[] {
+  const out: { id: number; arm: number; z: number; off: number }[] = [];
+  const rows = db.prepare(`select i.ID id, a.GUID g, a.ARM_INDEX ix, a.BLEND_POINT_ENTRY e, a.BLEND_POINT_EXIT x, r.GEOMETRY geom
+    from INTERSECTIONS i join INTERSECTION_ARMS a on a.FK_PARENT_GUID = i.GUID join ROADS r on r.FK_PARENT_GUID = a.FK_ASSET_GUID
+    where i.INTERSECTION_TYPE = 1 order by i.ID, a.ARM_INDEX`).all() as Row[];
+  if (!opts.dry) db.exec("savepoint blend");
+  try {
+    for (const r of rows) {
+      const line = parseFgf(Buffer.from(r.geom as Uint8Array)).points as number[][];
+      for (const col of ["BLEND_POINT_ENTRY", "BLEND_POINT_EXIT"] as const) {
+        const v = r[col === "BLEND_POINT_ENTRY" ? "e" : "x"] as Uint8Array | null;
+        if (!v) continue;
+        const b = Buffer.from(v);
+        if (b.length < 32 || b.readDoubleLE(24) !== 0) continue;
+        const x = b.readDoubleLE(8), y = b.readDoubleLE(16), at = levelAt(line, x, y);
+        if (!(at.d < 1)) throw new Error(`intersection ${r.id} arm ${r.ix}: blend point ${at.d.toFixed(2)} m off its road`);
+        out.push({ id: Number(r.id), arm: Number(r.ix), z: at.z, off: at.d });
+        if (!opts.dry) db.prepare(`update INTERSECTION_ARMS set ${col} = ? where GUID = ?`).run(pt3(x, y, at.z), String(r.g));
+      }
+    }
+    if (!opts.dry) db.exec("release blend");
+  } catch (e) {
+    if (!opts.dry) db.exec("rollback to blend; release blend");
+    throw e;
+  }
+  return out;
 }
