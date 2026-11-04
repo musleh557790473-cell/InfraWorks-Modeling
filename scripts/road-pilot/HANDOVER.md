@@ -331,8 +331,26 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   readRoadModel, regenModel, saveUpdates, updateIntersections(extents, [], [299], [], true): the
   last returned [] but the model went from 12 to 20 intersections (arms 41 -> 68, regions 34 -> 57);
   RA-2 got InfraWorks' own body (21 strips, 11 grading rows, real range hash) and 6 arms, still one
-  row; 182 links, all resolve. The console ran the script twice (output printed twice). Next: the
-  closed roads (RA-1, RA-3..RA-7, R.1.G.23, R.2.G.5, R.2.G.24), then all roads.
+  row; 182 links, all resolve. The console ran the script twice (output printed twice).
+- Roundabouts the InfraWorks way (AICC, 4 Nov 2026): InfraWorks creates an intersection wherever
+  component roads cross; a roundabout is such an intersection converted to the roundabout type
+  (Autodesk help "To convert an intersection to a roundabout"; Inscribed Circle Diameter, apron
+  width, central circle diameter). The JS API has no call to change an intersection's type (the
+  Intersection object: setCurbReturnRadius, setDesignVehicle, widenings; Roundabout: deleteMe only).
+  model:roads no longer writes RA rings (`roadsToWrite`, `--roundabouts-as-roads` to force).
+- `iw-roundabouts.js` (delete RA-1, RA-3..RA-7, rebuild the 19 roads through their centres) called
+  updateIntersections(..., invalidate = true) per road: InfraWorks sat in "Regenerating full model /
+  Batch generating tiles" at 84 % for many minutes and the user cancelled. State after it (model
+  closed, 14:30): 244 roads (rings deleted; RA-2 kept: its 3 roads stop 3 m short of the centre),
+  20 intersections, 68 arms, 57 regions, 182 links of which 24 point at the deleted rings; the 19
+  through roads were NOT rebuilt (our bodies, no arms). Rule since then: time any script on one item
+  first and never be slower than by hand (`iw-rebuild-one.js`, invalidate = false, not run).
+  Decision: write intersections and roundabouts straight into the model file instead (new session).
+  Roads through each centre (CONSTRAINED_DEFINITIONS.ID): RA-1 R.0.D.2=46 R.1.F.2=185 R.2.F.3=73
+  R.0.D.1=274; RA-3 R.0.D.9=48 R.0.D.14=51 R.0.D.15=184 R.0.D.11=276; RA-4 R.6.F.1=23 R.0.D.10=49
+  R.0.D.12=50 R.0.D.15; RA-5 R.0.D.3=193 R.0.D.4=231 R.0.D.10 R.0.D.13=258; RA-6 R.0.C.3=192
+  R.0.C.4=230 R.12.E.1=272 R.0.D.13; RA-7 R.0.B.1=45 R.0.C.4 R.0.D.5=271. Roundabout size from the
+  drawn edges: outer r 20.2 (ICD 40.4 m), island r 12.0 (central circle 24.0 m), apron not given.
 - Intersections link to roads by the road's CONSTRAINED_DEFINITIONS GUID (all 385 links of the 49
   intersections, 44 roads). The writer used to give a replaced road new GUIDs, which would have
   left those links pointing at nothing (it never happened: the model with intersections came from
