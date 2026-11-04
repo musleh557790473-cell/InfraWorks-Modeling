@@ -10,8 +10,10 @@ import {
 
 import { junctionSteps, levelProblems, roadRows } from "./roads/checks.js";
 import { planRoad } from "./roads/plan.js";
+import { repointLinks } from "./roads/intersections.js";
+import { mergeRoads, parseMerges } from "./roads/merge.js";
 import { roadsToWrite } from "./roads/select.js";
-import { RoadWriter } from "./roads/write.js";
+import { RoadWriter, removeRoad } from "./roads/write.js";
 
 const USAGE = `
 model-roads - Parsons roads as InfraWorks component roads, written into a model (closed in InfraWorks)
@@ -22,6 +24,9 @@ model-roads - Parsons roads as InfraWorks component roads, written into a model 
       [--layout-block "Xref Road Layout Al Qairawan"] [--profiles-block "Xref Al Qairawan Profiles"]
       [--surface-name "Al_Qairawan_Mass Grading"] [--only R.6.E.1,R.6.F.1] [--dry]
       [--section R.9.G.6=A1,R.9.G.7=A1]   (AICC decisions for roads the drawing does not type)
+      [--merge R.0.C.2=R.0.C.1+R.0.C.2]   (join roads that continue each other into one road, named
+                                  after one of them; only these are written, the others are deleted
+                                  and their intersection links moved to the joined road)
       [--roundabouts-as-roads]   (write RA rings as closed roads; by default they are left to
                                   InfraWorks as intersections of the roads through their centres)
 
@@ -104,11 +109,42 @@ function main(argv: string[]): number {
       w("road-report.txt", [...al.report, "", ...pv.issues.map((i) => `PVI ${i}`), "", ...or.report].join("\n") + "\n");
       say(`results: ${outDir}`);
     }
+    const merges = parseMerges(flag("--merge") ?? "").map((m) => {
+      const parts = m.parts.map((n) => {
+        const a = al.roads.find((r) => r.name === n), v = pv.roads[n];
+        if (!a || !v) throw new Error(`--merge: no alignment or profile for ${n}`);
+        return { al: a, pv: v };
+      });
+      const t = new Set(m.parts.map((n) => `${sections[n]?.type}/${xfall[n]?.side}/${xfall[n]?.fall}`));
+      if (t.size > 1) throw new Error(`--merge ${m.name}: the roads have different sections or crossfall (${[...t].join(", ")})`);
+      const r = mergeRoads(m.name, parts);
+      say(`merge ${m.name} = ${m.parts.join(" + ")}: ${r.al.length.toFixed(3)} m, ${r.pv.length} PVIs, section ${sections[m.parts[0]!]?.type}`);
+      return { ...m, road: r };
+    });
     if (dry) return 0;
     if (existsSync(model.replace(/\.sqlite$/i, ".lock"))) throw new Error("the model is open in InfraWorks (its .lock is there): close it first");
     if (!existsSync(model)) throw new Error(`model not found: ${model}`);
     const db = new DatabaseSync(model, { enableDoubleQuotedStringLiterals: true } as ConstructorParameters<typeof DatabaseSync>[1]);
     const writer = new RoadWriter(db, template!);
+    if (merges.length) {
+      db.exec("begin");
+      try {
+        for (const m of merges) {
+          writer.write(planRoad(m.road.al, m.road.pv), sectionOf(m.parts[0]!));
+          const to = String((db.prepare("select FK_PARENT_GUID g from ROADS where NAME=?").get(m.name) as { g: string }).g);
+          for (const n of m.parts.filter((n) => n !== m.name)) {
+            const from = db.prepare("select FK_PARENT_GUID g from ROADS where NAME=?").get(n) as { g: string } | undefined;
+            const moved = from ? repointLinks(db, from.g, to) : 0;
+            const rows = removeRoad(db, n);
+            say(`  ${n}: ${moved} intersection links moved to ${m.name}, ${rows} rows deleted`);
+          }
+        }
+        db.exec("commit");
+      } catch (e) { db.exec("rollback"); throw e; }
+      say(`written ${merges.length} merged road(s)`);
+      db.close();
+      return 0;
+    }
     const failed: string[] = [];
     let written = 0;
     const choice = roadsToWrite(al.roads, new Set(raOf.keys()), { only, roundaboutsAsRoads: args.includes("--roundabouts-as-roads") });

@@ -82,6 +82,18 @@ export function pruneDanglingIntersections(db: DatabaseSync, opts: { dry?: boole
   return res;
 }
 
+/**
+ * Moves every intersection link from one road definition to another (a road merged into another
+ * that runs the same way). Returns the links moved.
+ */
+export function repointLinks(db: DatabaseSync, fromGuid: string, toGuid: string): number {
+  let n = 0;
+  n += Number(db.prepare("update INTERSECTION_ARMS set FK_ASSET_GUID = ? where FK_ASSET_GUID = ?").run(toGuid, fromGuid).changes);
+  n += Number(db.prepare("update INTERSECTION_REGIONS set FK_INCOMING_ASSET_GUID = ? where FK_INCOMING_ASSET_GUID = ?").run(toGuid, fromGuid).changes);
+  n += Number(db.prepare("update INTERSECTION_REGIONS set FK_OUTGOING_ASSET_GUID = ? where FK_OUTGOING_ASSET_GUID = ?").run(toGuid, fromGuid).changes);
+  return n;
+}
+
 /** Links (arm or region ends) that point at no road definition. */
 export function danglingLinks(db: DatabaseSync): number {
   const q = `select count(*) n from (

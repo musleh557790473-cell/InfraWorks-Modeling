@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { danglingLinks, pruneDanglingIntersections, readJunctions } from "../src/roads/intersections.js";
+import { danglingLinks, pruneDanglingIntersections, readJunctions, repointLinks } from "../src/roads/intersections.js";
 import { removeRoad } from "../src/roads/write.js";
 
 /** Roads A, B, C and a deleted ring R (its definition is gone), with InfraWorks-style rows. */
@@ -109,4 +109,10 @@ test("a roundabout is an intersection of type 1 with one ROUNDABOUTS row (Al Qai
   assert.equal(tee.problem, undefined);
   assert.equal(js.find((j) => j.guid === "cross")!.problem, "roundabout type without a ROUNDABOUTS row");
   assert.equal(js.find((j) => j.guid === "ring-x")!.type, "intersection");
+});
+test("a road merged into another keeps its intersection links, moved to the merged road", () => {
+  const db = model();
+  assert.equal(repointLinks(db, "cd-B", "cd-A"), 4 + 2 + 2, "4 arms, 2 incoming and 2 outgoing region ends");
+  assert.equal(n(db, "select count(*) n from INTERSECTION_ARMS where FK_ASSET_GUID='cd-B'"), 0);
+  assert.equal(n(db, "select count(*) n from INTERSECTION_REGIONS where 'cd-B' in (FK_INCOMING_ASSET_GUID, FK_OUTGOING_ASSET_GUID)"), 0);
 });

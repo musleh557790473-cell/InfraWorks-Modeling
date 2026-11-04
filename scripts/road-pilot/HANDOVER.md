@@ -435,3 +435,12 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   PRIMITIVES / TERRAIN_OPERATIONS with FK_PARENT_TABLE INTERSECTIONS (37 strips, 4 grading rows),
   and the two roads' bodies regenerated. Revert: type 0, ROUNDABOUTS row deleted, arm fields stay.
   Rule in code: `readJunctions()` (test in `test/intersections.test.ts`).
+- Roundabout centres are made of road ends only (RA-1: R.0.D.2, R.2.F.3 start, R.1.F.2, R.0.D.1 end at
+  one point, z 683.390; RA-2: R.0.C.2, R.0.D.1 start, R.0.C.1 ends, z 681.825); no road passes through.
+  InfraWorks: junction 41 (RA-2) "Intersection not supported", junction 9 (RA-1) will not convert; the
+  converted junction 4 has a through road. Straight pairs: RA-1 R.0.D.2/R.0.D.1 and R.2.F.3/R.1.F.2,
+  RA-2 R.0.C.1/R.0.C.2 (R.0.D.1 the T). No Autodesk help topic for the warning or for joining roads.
+  Trial (AICC, 4 Nov): `model:roads ... --merge R.0.C.2=R.0.C.1+R.0.C.2` joins the pair as drawn
+  (`mergeRoads`: refuses a gap, reversed part, level step or curve at the joint), writes it under
+  R.0.C.2 (GUIDs kept), moves R.0.C.1's intersection links (`repointLinks`) and deletes R.0.C.1.
+  Dry run: 1231.277 m, 15 PVIs, C1. Naming to settle if it works (two Parsons names, one road).
