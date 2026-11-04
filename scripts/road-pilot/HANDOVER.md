@@ -481,3 +481,8 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   the known site-edge terrain issue, not the roundabout.
   Open: Parsons' ring is 8.2 m (r 12.0 to r 20.2) but the lane is 7.225, so apron = 0.975 if both
   drawn edges are kept (island 24.0, ICD 40.4); apron 2.0 moves the island edge to r 10.975.
+- AICC decision (4 Nov, ~22:50): keep both of Parsons' drawn edges: island 24.0 (r 12.0), ICD 40.4
+  (r 20.2), lane 7.225 (the standard's), so apron = 8.2 - 7.225 = 0.975 m. Written to junction 41
+  (`--roundabout 41 --icd 40.4 --island 24.0 --apron 0.975 --lanes 1 --lane-width 7.225`); its body
+  is rebuilt by one roundel edit in the Stack. RA-1 merges dry run: R.0.D.2 = R.0.D.1 + R.0.D.2
+  (1085.545 m, B1), R.2.F.3 = R.1.F.2 + R.2.F.3 (807.596 m, A2); not written.
