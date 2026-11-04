@@ -10,6 +10,7 @@ import {
 
 import { junctionSteps, levelProblems, roadRows } from "./roads/checks.js";
 import { planRoad } from "./roads/plan.js";
+import { roadsToWrite } from "./roads/select.js";
 import { RoadWriter } from "./roads/write.js";
 
 const USAGE = `
@@ -21,6 +22,8 @@ model-roads - Parsons roads as InfraWorks component roads, written into a model 
       [--layout-block "Xref Road Layout Al Qairawan"] [--profiles-block "Xref Al Qairawan Profiles"]
       [--surface-name "Al_Qairawan_Mass Grading"] [--only R.6.E.1,R.6.F.1] [--dry]
       [--section R.9.G.6=A1,R.9.G.7=A1]   (AICC decisions for roads the drawing does not type)
+      [--roundabouts-as-roads]   (write RA rings as closed roads; by default they are left to
+                                  InfraWorks as intersections of the roads through their centres)
 
 Reads the profiles (FG line, PVI and curve labels), chains each road's centreline (its length must
 equal its profile length), checks every road's direction against the grading surface and the levels at
@@ -108,8 +111,9 @@ function main(argv: string[]): number {
     const writer = new RoadWriter(db, template!);
     const failed: string[] = [];
     let written = 0;
-    for (const a of al.roads) {
-      if (only && !only.includes(a.name)) continue;
+    const choice = roadsToWrite(al.roads, new Set(raOf.keys()), { only, roundaboutsAsRoads: args.includes("--roundabouts-as-roads") });
+    if (choice.skipped.length) say(`not written: ${choice.skipped.map((s) => s.name).join(" ")} (roundabouts are InfraWorks intersections; --roundabouts-as-roads writes them as roads)`);
+    for (const a of choice.write) {
       try {
         const plan = planRoad(a, pv.roads[a.name] ?? []);
         writer.write(plan, sectionOf(a.name));
