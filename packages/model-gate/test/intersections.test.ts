@@ -146,7 +146,11 @@ test("a roundabout written into the file as InfraWorks stores one: type 1, one R
   assert.equal(r.LANE_DETAILS, '{"version":"1.0.0","lanes":[{"id":1,"width":8.2}]}');
   const box = Buffer.from(r.GEOMETRY as Uint8Array);
   assert.deepEqual([box.readUInt32LE(0), box.readDoubleLE(16), box.readDoubleLE(24), box.readDoubleLE(48)], [3, -20.2, -20.2, 20.2], "the circle's square around the centre");
-  assert.throws(() => writeRoundabout(db, 41, { inscribedCircleDiameter: 40.4, islandDiameter: 20, apronWidth: 2, lanes: 1, laneWidth: 8.2 }), /a roundabout already/);
+  // written again with other sizes: the same row is updated, not a second one
+  writeRoundabout(db, 41, { inscribedCircleDiameter: 42.4, islandDiameter: 22, apronWidth: 2, lanes: 1, laneWidth: 8.2 });
+  assert.equal(n(db, "select count(*) n from ROUNDABOUTS"), 1);
+  assert.equal(n(db, "select ISLAND_DIAMETER n from ROUNDABOUTS"), 22);
+  assert.equal(Buffer.from((db.prepare("select GEOMETRY g from ROUNDABOUTS").get() as { g: Uint8Array }).g).readDoubleLE(16), -21.2);
 });
 
 test("a roundabout is not written with a missing size", () => {

@@ -184,16 +184,17 @@ function armBearing(line: number[][], cx: number, cy: number, upstream: boolean)
  * Turns an intersection into a roundabout as InfraWorks stores one (junction 4 converted in the Stack,
  * 4 Nov 2026): INTERSECTION_TYPE 1; one ROUNDABOUTS row on the intersection, its box the inscribed
  * circle's square around the reference point; arms numbered anticlockwise, one lane each way at the
- * yield line. Blend points and the body are left to InfraWorks. Returns the arm numbers by arm GUID.
+ * yield line. Blend points and the body are left to InfraWorks. On a roundabout already, only its sizes
+ * are replaced. Returns the arm numbers by arm GUID.
  */
 export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: RoundaboutSpec): Map<string, number> {
   const i = db.prepare("select GUID, REFERENCE_POINTS rp, INTERSECTION_TYPE t from INTERSECTIONS where ID = ?").get(intersectionId) as Row | undefined;
   if (!i) throw new Error(`no intersection ${intersectionId}`);
   const guid = String(i.GUID);
-  if (Number(i.t) === 1 || db.prepare("select 1 from ROUNDABOUTS where FK_PARENT_GUID = ?").get(guid)) throw new Error(`intersection ${intersectionId} is a roundabout already`);
   for (const [k, v] of Object.entries(spec)) if (!(Number(v) > 0)) throw new Error(`roundabout ${intersectionId}: ${k} missing`);
   const sum = roundaboutDiameter(spec);
   if (Math.abs(sum - spec.inscribedCircleDiameter) > 0.01) throw new Error(`roundabout ${intersectionId}: island ${spec.islandDiameter} + 2 x apron ${spec.apronWidth} + 2 x ${spec.lanes} x lane ${spec.laneWidth} = ${sum.toFixed(2)} m, not the circle ${spec.inscribedCircleDiameter} m`);
+  const existing = db.prepare("select GUID from ROUNDABOUTS where FK_PARENT_GUID = ?").get(guid) as Row | undefined;
   const rp = Buffer.from(i.rp as Uint8Array), cx = rp.readDoubleLE(8), cy = rp.readDoubleLE(16);
   const arms = db.prepare(`select a.GUID g, a.APPROACH_DIRECTION_MATCHES_ASSET d, r.GEOMETRY geom from INTERSECTION_ARMS a
     join ROADS r on r.FK_PARENT_GUID = a.FK_ASSET_GUID where a.FK_PARENT_GUID = ?`).all(guid) as Row[];
@@ -203,13 +204,22 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
     .sort((p, q) => q.b - p.b);
   const index = new Map(order.map((a, k) => [a.g, k + 1]));
   const h = spec.inscribedCircleDiameter / 2;
+  const laneDetails = JSON.stringify({ version: "1.0.0", lanes: Array.from({ length: spec.lanes }, (_, k) => ({ id: k + 1, width: spec.laneWidth })) });
   db.exec("savepoint roundabout");
   try {
+    if (existing) {
+      // a roundabout already: its sizes are replaced, the rest (arms, standard) stays
+      db.prepare(`update ROUNDABOUTS set GEOMETRY = ?, LANES = ?, LANE_DETAILS = ?, ISLAND_DIAMETER = ?, APRON_WIDTH = ?, INSCRIBED_CIRCLE_DIAMETER = ? where GUID = ?`)
+        .run(boxBlob(cx - h, cy - h, cx + h, cy + h), spec.lanes, laneDetails, spec.islandDiameter, spec.apronWidth, spec.inscribedCircleDiameter, String(existing.GUID));
+      db.prepare("update INTERSECTIONS set INTERSECTION_TYPE = 1 where GUID = ?").run(guid);
+      db.exec("release roundabout");
+      return index;
+    }
     db.prepare(`insert into ROUNDABOUTS (GUID, GEOMETRY, FK_PARENT_TABLE, FK_PARENT_GUID, EXTERNAL_STANDARD_GUID, STANDARD_NAME, STANDARD_SOURCE,
       LOCATION_OFFSET, LANES, LANE_DETAILS, ISLAND_DIAMETER, APRON_WIDTH, INSCRIBED_CIRCLE_DIAMETER, TILTED_PLANE_BEARING, TILTED_PLANE_CROSSFALL, STATUS)
       values (?, ?, 'INTERSECTIONS', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)`).run(
       randomUUID(), boxBlob(cx - h, cy - h, cx + h, cy + h), guid, IW_ROUNDABOUT_STANDARD.EXTERNAL_STANDARD_GUID, IW_ROUNDABOUT_STANDARD.STANDARD_NAME, IW_ROUNDABOUT_STANDARD.STANDARD_SOURCE,
-      pt3(0, 0, 0), spec.lanes, JSON.stringify({ version: "1.0.0", lanes: Array.from({ length: spec.lanes }, (_, k) => ({ id: k + 1, width: spec.laneWidth })) }),
+      pt3(0, 0, 0), spec.lanes, laneDetails,
       spec.islandDiameter, spec.apronWidth, spec.inscribedCircleDiameter);
     db.prepare("update INTERSECTIONS set INTERSECTION_TYPE = 1 where GUID = ?").run(guid);
     for (const [g, k] of index) db.prepare("update INTERSECTION_ARMS set ARM_INDEX = ?, ENTRY_LANES_AT_YIELD = 1, EXIT_LANES_AT_YIELD = 1, STATUS = 0 where GUID = ?").run(k, g);
