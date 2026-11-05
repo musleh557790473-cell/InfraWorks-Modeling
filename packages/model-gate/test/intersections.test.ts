@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { armsFromRoads, danglingLinks, fixBlendLevels, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, splitLinks, writeRoundabout } from "../src/roads/intersections.js";
+import { armsFromRoads, danglingLinks, deleteIntersection, fixBlendLevels, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, splitLinks, writeRoundabout } from "../src/roads/intersections.js";
 import { lineBlob, removeRoad } from "../src/roads/write.js";
 
 /** Roads A, B, C and a deleted ring R (its definition is gone), with InfraWorks-style rows. */
@@ -250,4 +250,14 @@ test("roundabout arms built without lanes get the lanes and median of their road
   assert.deepEqual(JSON.parse(String(row.LANES)).lanes.map((l: { travelDirection: number }) => l.travelDirection), [2, 2, 1, 1]);
   assert.deepEqual([row.BLEND_POINT_ENTRY_LANES, row.BLEND_POINT_EXIT_LANES, row.BLEND_POINT_ENTRY_WIDTH, row.BLEND_POINT_MEDIAN_WIDTH], [2, 2, 3.3, 4]);
   assert.equal(String((db.prepare("select LANES l from INTERSECTION_ARMS where GUID='j'").get() as { l: string }).l), '{"version": 1}', "an ordinary junction is not touched");
+});
+test("a junction is deleted with its arms, regions and body, the others untouched (to let InfraWorks build it afresh)", () => {
+  const db = model();
+  db.exec(`create table PRIMITIVES (ID integer primary key, GUID text, FK_PARENT_TABLE text, FK_PARENT_GUID text);
+    insert into PRIMITIVES (GUID, FK_PARENT_TABLE, FK_PARENT_GUID) values ('p1', 'INTERSECTIONS', 'tee'), ('p2', 'INTERSECTIONS', 'cross');`);
+  const id = n(db, "select ID n from INTERSECTIONS where GUID='tee'");
+  assert.equal(deleteIntersection(db, id), 3 + 2 + 1 + 1, "3 arms, 2 regions, 1 strip, the junction");
+  assert.equal(n(db, "select count(*) n from INTERSECTION_ARMS where FK_PARENT_GUID='tee'"), 0);
+  assert.equal(n(db, "select count(*) n from PRIMITIVES where FK_PARENT_GUID='cross'"), 1);
+  assert.throws(() => deleteIntersection(db, id), /no intersection/);
 });

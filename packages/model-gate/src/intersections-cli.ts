@@ -2,7 +2,7 @@
 import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
-import { armsFromRoads, danglingLinks, fixBlendLevels, pruneDanglingIntersections, writeRoundabout } from "./roads/intersections.js";
+import { armsFromRoads, danglingLinks, deleteIntersection, fixBlendLevels, pruneDanglingIntersections, writeRoundabout } from "./roads/intersections.js";
 import { removeRoad } from "./roads/write.js";
 
 const USAGE = `
@@ -11,6 +11,7 @@ model-intersections - InfraWorks intersections in a closed model, written in pla
   model-intersections <model.sqlite> [--delete-roads RA-1,RA-3] [--dry]
       [--roundabout 41 --icd 40.4 --island 24.0 --apron 2.0 --lanes 1 --lane-width 8.2]
 
+--delete-junctions 135,161: delete those junctions (rows and body) so InfraWorks builds them afresh.
 --arms-from-roads: roundabout arms built without lanes get the lanes, lane width and median of their road.
 Roundabout blend points InfraWorks left at height 0 get the road's level (always).
 --roundabout turns that intersection into a roundabout as InfraWorks stores one (sizes from the
@@ -42,6 +43,7 @@ function main(argv: string[]): number {
         if (!n) throw new Error(`no road named ${name}`);
         say(`deleted road ${name} (${n} rows)`);
       }
+      for (const id of (flag("--delete-junctions") ?? "").split(",").filter(Boolean).map(Number)) say(`deleted junction ${id} (${deleteIntersection(db, id)} rows); InfraWorks creates it again when one of its roads is edited`);
       say(`dangling links before: ${danglingLinks(db)}`);
       const r = pruneDanglingIntersections(db);
       for (const i of r.removed) say(`removed intersection ${i.id} (${i.arms} arms, ${i.regions} regions; left: ${i.roads.join(" ") || "none"})`);

@@ -609,3 +609,10 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   InfraWorks rebuilds can make new junctions with neighbours not yet rebuilt; until every road has been
   rebuilt once, such pits can appear. Fix now: one edit on those 5 roads. Open: a way to have all ~200
   remaining roads rebuilt once without 200 hand edits.
+- Pits 106, 135, 161 (5 Nov ~22:50): rebuilding their 5 roads, then a Design Vehicle change on 135
+  (P -> SU-9 -> P, Autodesk "About Intersections"), rebuilt the junction but its surface and cut-out
+  still drop to ~0 / 637 m. Not the road levels (spread <= 0.14 m, like good 103), not the grading
+  surface (present, 686.9-689.1), not other cut-outs, not the layout (139 = same make-up as 135, ok;
+  136 = same as 106, ok). Remaining difference: they were first created while a road had our body.
+  Test: `model:intersections --delete-junctions 135` then one edit on R.9.G.5 so InfraWorks creates the
+  junction afresh (`deleteIntersection`, test).

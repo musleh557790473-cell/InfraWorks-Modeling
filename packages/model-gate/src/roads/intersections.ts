@@ -385,3 +385,22 @@ export function armsFromRoads(db: DatabaseSync, opts: { dry?: boolean } = {}): {
   }
   return out;
 }
+/**
+ * Deletes one intersection with its arms, regions, roundabout row and body, so that InfraWorks creates
+ * it afresh where the roads meet the next time one of them is edited (Al Qairawan junctions 106, 135,
+ * 161: built while a road still had our body, they kept a surface dropping to height 0 through every
+ * rebuild). Returns the rows deleted.
+ */
+export function deleteIntersection(db: DatabaseSync, id: number): number {
+  const i = db.prepare("select GUID from INTERSECTIONS where ID = ?").get(id) as Row | undefined;
+  if (!i) throw new Error(`no intersection ${id}`);
+  const g = String(i.GUID), has = (t: string) => Boolean(db.prepare("select 1 from sqlite_master where type = 'table' and name = ?").get(t));
+  let n = 0;
+  db.exec("savepoint deljunction");
+  try {
+    for (const t of ["INTERSECTION_REGIONS", "INTERSECTION_ARMS", "ROUNDABOUTS", "PRIMITIVES", "TERRAIN_OPERATIONS"]) if (has(t)) n += Number(db.prepare(`delete from ${t} where FK_PARENT_GUID = ?`).run(g).changes);
+    n += Number(db.prepare("delete from INTERSECTIONS where GUID = ?").run(g).changes);
+    db.exec("release deljunction");
+  } catch (e) { db.exec("rollback to deljunction; release deljunction"); throw e; }
+  return n;
+}
