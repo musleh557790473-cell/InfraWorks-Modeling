@@ -626,3 +626,11 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   InfraWorks build problem at 3 of 21 divided-road crossings (106, 161, 298), not explained by the
   data. Proposed: delete 298 and 161 as a cosmetic workaround (they come back on a road edit), report
   to Autodesk with the evidence, continue with RA-3..RA-7 (106 is replaced by RA-3's roundabout).
+- 6 Nov: junctions 298 and 161 deleted (cosmetic workaround; they come back with the pit on an edit of
+  their roads); Autodesk report `autodesk-report-junction-pits.md`. The single height-0 strip on
+  roundabouts 9 / 41 is a dashed marking with autoDraped: harmless.
+  RA-3..RA-7 plan (dry run passes): R.0.D.15 = R.0.D.14 + R.0.D.15 (RA-3, B1); R.0.D.12 = R.0.D.13 +
+  R.0.D.10 + R.0.D.12 (RA-5 and RA-4, B1); R.0.D.4 = R.0.D.3 + R.0.D.4 (RA-5, B1); R.0.C.4 = R.0.C.3 +
+  R.0.C.4 (RA-6, C1). Refused by the tool: R.0.D.9 + R.0.D.11 at RA-3 (Parsons' levels 687.859 vs
+  688.000 at the centre); not needed (one through road suffices). RA-7: no straight pair (R.0.B.1 C2,
+  R.0.C.4 C1, R.0.D.5 B1 at three angles): no through road without inventing; decision pending.
