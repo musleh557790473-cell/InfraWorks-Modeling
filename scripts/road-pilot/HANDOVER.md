@@ -511,3 +511,8 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   arm meets a merged road InfraWorks has not rebuilt yet (R.0.D.2, R.2.F.3 still carry our body;
   R.0.C.2 rebuilt, no seam). Next: one road edit each (Grading Limit 5.0 -> 5.1 -> 5.0, Autodesk
   "To set the roadside grading method") so InfraWorks rebuilds them.
+- 5 Nov 15:00: Grading Limit 5.0 -> 5.1 -> 5.0 on R.0.D.2 and R.2.F.3 made InfraWorks rebuild both
+  (95 / 56 strips, real range hash). Roundabout 9 arm 4 blend point moved to 55.6 m and InfraWorks gave
+  it a real height (683.23) itself: blend heights come out as 0 only on roads still carrying our body.
+  Order for the next roundabouts: merge, let InfraWorks rebuild the roads (one road edit each), then
+  write the roundabout and toggle its island. Grading 9: 683.0-683.9, 41: 680.7-683.2; 0 dangling.
