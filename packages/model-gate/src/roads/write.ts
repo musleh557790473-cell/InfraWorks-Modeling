@@ -21,6 +21,21 @@ import type { RoadPlan, XYZ } from "./plan.js";
 type Row = Record<string, unknown>;
 
 /**
+ * Replaces only a road's section (componentStyle and lane counts in its MANUAL_STYLE); its other style
+ * settings, geometry, body, GUIDs and junction links stay. InfraWorks builds the new section when the
+ * road is next edited. Returns false when there is no road of that name.
+ */
+export function restyleRoad(db: DatabaseSync, name: string, sec: Section): boolean {
+  const r = db.prepare("select GUID, MANUAL_STYLE m from ROADS where NAME=?").get(name) as Row | undefined;
+  if (!r) return false;
+  const s = JSON.parse(String(r.m));
+  s.componentStyle = JSON.stringify(sec.componentStyle);
+  s.lanes = { ...s.lanes, countForward: sec.lanes, countBackward: sec.lanes };
+  db.prepare("update ROADS set MANUAL_STYLE=? where GUID=?").run(JSON.stringify(s, null, "\t"), String(r.GUID));
+  return true;
+}
+
+/**
  * Deletes a road by name: its definition, constraints, start/end locations, reference system and
  * body. These are the only rows that point at a road (checked on Al Qairawan's 7 rings), besides
  * intersection links: clear those after with pruneDanglingIntersections. Returns the rows removed.

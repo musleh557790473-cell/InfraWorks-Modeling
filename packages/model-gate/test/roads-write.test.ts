@@ -5,7 +5,7 @@ import test from "node:test";
 import { buildSection, type Alignment } from "@infraworks/domain";
 
 import { planRoad } from "../src/roads/plan.js";
-import { RoadWriter } from "../src/roads/write.js";
+import { RoadWriter, restyleRoad } from "../src/roads/write.js";
 
 const TPL = "tpl-cd";
 const J = (o: unknown) => Buffer.from(JSON.stringify(o), "utf8");
@@ -69,4 +69,19 @@ test("a road InfraWorks split into pieces is not replaced when a later piece car
   db.prepare("insert into INTERSECTION_REGIONS (GUID, FK_INCOMING_ASSET_GUID) values ('reg', 'cd-piece-2')").run();
   assert.throws(() => w.write(plan("RA-1"), null), /2 rows, and 1 piece\(s\) besides the first carry intersections/);
   assert.equal(one(db, "select count(*) n from ROADS where NAME='RA-1'").n, 2, "nothing changed");
+});
+
+test("restyling a road replaces only its section: other style settings, geometry and GUIDs stay", () => {
+  const db = model(), w = new RoadWriter(db, TPL);
+  w.write(plan("R.X"), buildSection("A1"));
+  const before = one(db, "select GUID, FK_PARENT_GUID, GEOMETRY, MANUAL_STYLE from ROADS where NAME='R.X'");
+  const ms = JSON.parse(String(before.MANUAL_STYLE)); ms.somethingInfraWorksSet = 7; db.prepare("update ROADS set MANUAL_STYLE=? where NAME='R.X'").run(JSON.stringify(ms));
+  assert.equal(restyleRoad(db, "R.X", buildSection("C1")), true);
+  const after = one(db, "select GUID, FK_PARENT_GUID, GEOMETRY, MANUAL_STYLE from ROADS where NAME='R.X'");
+  const s = JSON.parse(String(after.MANUAL_STYLE));
+  assert.equal(s.somethingInfraWorksSet, 7);
+  assert.equal(s.lanes.countForward, 2);
+  assert.ok(String(s.componentStyle).includes("Sloped Median"));
+  assert.deepEqual([after.GUID, after.FK_PARENT_GUID, Buffer.compare(Buffer.from(after.GEOMETRY as Uint8Array), Buffer.from(before.GEOMETRY as Uint8Array))], [before.GUID, before.FK_PARENT_GUID, 0]);
+  assert.equal(restyleRoad(db, "R.NONE", buildSection("C1")), false);
 });

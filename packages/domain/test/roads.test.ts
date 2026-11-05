@@ -138,7 +138,7 @@ test("direction: a junction at the same level keeps a road the surface alone wou
 test("sections: the median is raised 150 mm by upstand kerbs, lanes start at the profile level (C1)", () => {
   const s = buildSection("C1");
   assert.equal(s.width, 30);
-  const median = s.parts.filter((p) => p.role === "median").flatMap((p) => p.crossSection.map((q) => q[1]));
+  const median = s.parts.filter((p) => p.role === "median" || p.role === "median kerb").flatMap((p) => p.crossSection.map((q) => q[1]));
   assert.ok(Math.abs(Math.max(...median) - 0.15) < 1e-9);
   const shy = s.parts.find((p) => p.role === "shy")!.crossSection.map((q) => q[1]);
   assert.ok(Math.abs(Math.max(...shy)) < 1e-9, "shy lane edge at the profile level");
@@ -241,4 +241,17 @@ test("section decisions: an untyped road takes the AICC type; a road the drawing
   assert.equal(sections["R.9.G.6"]!.decided, true);
   assert.equal(sections["R.0.D.6"]!.type, "B1");
   assert.throws(() => parseSectionDecisions("R.9.G.6=D9"), /expected <road>=/);
+});
+
+test("sections: the raised median is the kerbs themselves, nothing else sits on the median, the road hangs off the kerb (B1, C1, C2)", () => {
+  for (const t of ["B1", "C1", "C2"] as const) {
+    const refs = (buildSection(t).componentStyle as { references: { def: string; attachment?: { point: number; ex_comp: number; ex_point: number }; paramOverrides: { name: string; value: number }[] }[] }).references;
+    const w = (r: (typeof refs)[number]) => r.paramOverrides.find((p) => p.name === "Width")!.value;
+    const onMedian = refs.filter((r) => r.attachment?.ex_comp === 0);
+    assert.deepEqual(onMedian.map((r) => r.def), ["ComponentDefinition/Curb", "ComponentDefinition/Curb"], `${t}: only the two median kerbs`);
+    assert.ok(onMedian.every((r) => w(r) === w(refs[0]!) / 2), `${t}: each kerb half the median`);
+    const kerbs = onMedian.map((r) => refs.indexOf(r));
+    const shoulders = refs.filter((r) => r.def.endsWith("/Shoulder"));
+    assert.deepEqual(shoulders.map((r) => [kerbs.includes(r.attachment!.ex_comp), r.attachment!.ex_point]), [[true, 1], [true, 1]], `${t}: shoulder on the kerb face`);
+  }
 });

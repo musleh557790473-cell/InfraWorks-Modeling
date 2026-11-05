@@ -14,7 +14,7 @@ import { repointLinks, splitLinks } from "./roads/intersections.js";
 import { parseFgf } from "@infraworks/imx-gate";
 import { mergeRoads, missingDrawnRoads, parseMerges, partsDescription, setDescription } from "./roads/merge.js";
 import { roadsToWrite } from "./roads/select.js";
-import { RoadWriter, removeRoad } from "./roads/write.js";
+import { RoadWriter, removeRoad, restyleRoad } from "./roads/write.js";
 
 const USAGE = `
 model-roads - Parsons roads as InfraWorks component roads, written into a model (closed in InfraWorks)
@@ -29,6 +29,8 @@ model-roads - Parsons roads as InfraWorks component roads, written into a model 
                                   after one of them; only these are written, the others are deleted
                                   and their intersection links moved to the joined road)
       [--record-merges R.0.D.2=R.0.D.1+R.0.D.2]   (record the drawn parts of a merge written earlier)
+      [--restyle divided | R.0.C.2,R.0.D.2]   (replace only the section of those roads, "divided" = every
+                                  B1 / C1 / C2 road; InfraWorks builds it when the road is next edited)
       [--split R.0.C.2=R.0.C.1+R.0.C.2]   (undo a merge: write the roads again as the drawing has
                                   them and move each junction link to the part it lies on)
       [--roundabouts-as-roads]   (write RA rings as closed roads; by default they are left to
@@ -141,6 +143,24 @@ function main(argv: string[]): number {
       say(`${m.name}: ${d}`);
     }
     const missing = () => missingDrawnRoads(db.prepare("select NAME, DESCRIPTION from ROADS").all() as { NAME: string; DESCRIPTION: string | null }[], al.roads.map((r) => r.name).filter((n) => !raOf.has(n)));
+    const restyle = flag("--restyle");
+    if (restyle) {
+      const names = restyle === "divided"
+        ? (db.prepare("select NAME from ROADS").all() as { NAME: string }[]).map((r) => r.NAME).filter((n) => ["B1", "C1", "C2"].includes(String(sections[n]?.type)))
+        : restyle.split(",").filter(Boolean);
+      db.exec("begin");
+      try {
+        for (const n of names) {
+          const sec = sectionOf(n);
+          if (!sec) throw new Error(`--restyle: no section for ${n}`);
+          if (!restyleRoad(db, n, sec)) throw new Error(`--restyle: no road ${n} in the model`);
+        }
+        db.exec("commit");
+      } catch (e) { db.exec("rollback"); throw e; }
+      say(`restyled ${names.length} road(s): ${names.join(" ")}`);
+      db.close();
+      return 0;
+    }
     if (splits.length) {
       db.exec("begin");
       try {

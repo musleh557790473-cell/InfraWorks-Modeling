@@ -593,3 +593,11 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   the median (InfraWorks seems to take a sidewalk as the carriageway edge). Plan: the raised median is
   drawn by the kerbs themselves (each kerb half the median wide, 150 mm upstand, flat top); test V5 on
   R.0.D.2 in the copy, then change `buildSection`.
+- Round 3 (lanetest): V5 R.0.D.2 = raised median drawn by the kerbs (each half the median wide, 150 mm
+  upstand), nothing else on the median, shoulder off the kerb face -> every arm reads 2 + 2 lanes
+  (9, 12, 21, 22, 40, 41, 90; roundabout median 2.0). `buildSection` B1/C1/C2 changed to this layout
+  (tests: median top 150 mm, only the two kerbs on the median, shoulder on the kerb face).
+  `model:roads ... --restyle divided` (`restyleRoad`: only the section in MANUAL_STYLE) applied to the
+  19 divided roads of the working model (5 Nov ~21:15); 0 dangling, integrity ok. Test copy deleted.
+  Next: InfraWorks rebuilds each of the 19 (one road edit each), then roundabout island toggles;
+  check junction arms read lanes. armsFromRoads should no longer be needed.
