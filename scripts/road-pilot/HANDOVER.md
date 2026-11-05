@@ -539,3 +539,10 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   R.0.D.2 (R.0.D.1 0+000-0+756.589, R.0.D.2 to 1+085.545), R.2.F.3 (R.1.F.2 0+000-0+440.093, R.2.F.3
   to 0+807.596). `missingDrawnRoads`: every drawn road is in the model as a road or a recorded part.
   0 dangling, integrity ok. Next: rebuild R.0.C.2 (Grading Limit toggle), then island toggle on 41.
+- RA-2 restored (5 Nov 16:17): R.0.C.2 rebuilt by InfraWorks (114 strips), island toggled; roundabout
+  41 40.4 / 24.0 / 0.975, grading 680.7-683.2; RA-1 683.0-683.9; all blend heights real; 0 orphans,
+  0 dangling. The DESCRIPTION records survive InfraWorks' rebuilds. RA-1 and RA-2 done.
+  Recipe for RA-3..RA-7 (each): merge the straight pairs through the centre (`--merge`, parts
+  recorded), one road edit per merged road so InfraWorks rebuilds it and creates the centre junction,
+  `model:intersections --roundabout <id> --icd 40.4 --island 24.0 --apron 0.975 --lanes 1
+  --lane-width 7.225`, then the island toggle (24.1 -> 24.0) in the roundel Stack.
