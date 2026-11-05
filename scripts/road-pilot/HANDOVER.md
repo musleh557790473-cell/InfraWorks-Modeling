@@ -527,3 +527,10 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   Model: R.0.C.1 (39, 70 and 41's approaching arm) and R.0.C.2 (75, 76 and 41's leaving arm), 0
   dangling, integrity ok; roundabout 41 row kept. Next: the user opens it, checks 41, then makes
   InfraWorks rebuild R.0.C.1 (Grading Limit 5.0 -> 5.1 -> 5.0) and sees whether 41 stays a roundabout.
+- Split test result (5 Nov 16:06): after the user made InfraWorks rebuild R.0.C.1 (Grading Limit
+  toggle), roundabout 41 lost its body (1 strip, no grading; row and links kept): with R.0.C.1 and
+  R.0.C.2 only ending at the centre the junction is road ends only, which InfraWorks does not support.
+  Rule: every roundabout centre needs a road passing through it, so the approach roads stay merged.
+  Next (to agree): merge R.0.C.1 + R.0.C.2 again, rebuild, toggle the island; record Parsons' part
+  names and stations in each merged road's DESCRIPTION, and gate that every Parsons name is either a
+  road or a recorded part.
