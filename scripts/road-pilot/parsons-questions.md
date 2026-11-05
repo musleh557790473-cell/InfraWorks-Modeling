@@ -42,6 +42,23 @@ these documents; where AICC had to choose, the choice is stated and awaits confi
    - unclear, modelled falling right (the typical section as drawn): R.6.G.14 R.3.G.2 R.4.G.13
      R.11.G.4, and R.6.G.22 (crowned on the surface)
 
+## Roundabouts (added 6 Nov 2026)
+
+12. **Roads ending at roundabout centres.** On 10200 every approach road ends at the roundabout centre.
+    InfraWorks only builds a roundabout where a road passes through the centre, so AICC joined each
+    straight pair of approach roads into one road (plan, profile and section exactly as drawn; Parsons'
+    names and stations kept in the road's description): R.0.C.1+R.0.C.2, R.0.D.1+R.0.D.2,
+    R.1.F.2+R.2.F.3, R.0.D.14+R.0.D.15, R.0.D.13+R.0.D.10+R.0.D.12, R.0.D.3+R.0.D.4, R.0.C.3+R.0.C.4.
+    Please confirm this is acceptable for the model.
+13. **RA-7.** R.0.B.1 (C2), R.0.C.4 (C1) and R.0.D.5 (B1) meet at three different angles with three
+    sections, so no road can pass through without changing the design. Which road is the main
+    through road, and how should it continue across the roundabout? Meanwhile RA-7 is modelled as an
+    ordinary junction.
+14. **RA-3 levels.** R.0.D.9 ends at the centre at 687.859 and R.0.D.11 starts at 688.000 (0.141 m
+    step); R.0.D.14 / R.0.D.15 meet at 687.982. Which level is the roundabout centre?
+15. **Roundabout entries.** Number of entry lanes and the taper from the two-lane divided approaches to
+    the single circulatory lane; apron width (AICC assumed 0.975 m = ring 8.2 m - one 7.225 m lane, with
+    the island at r 12.0 and the outer edge at r 20.2 as drawn).
 ## Utilities (already open)
 
 9. Irrigation cover: 0.80 m assumed by AICC (not in the PWT/IRR documents).

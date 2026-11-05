@@ -75,16 +75,22 @@ export class RoadWriter {
   private readonly tCD: Row; private readonly tRoad: Row; private readonly tH: Row; private readonly tV: Row;
   private readonly tLoc: Row[]; private readonly tRps: Row; private readonly tPrim: Row[]; private readonly tTop: Row[];
 
-  constructor(private readonly db: DatabaseSync, private readonly template: string) {
-    const one = (q: string, ...a: string[]) => { const r = this.all(q, ...a)[0]; if (!r) throw new Error(`template ${template}: nothing for "${q}"`); return r; };
+  /**
+   * src: where the template road is read (default the model itself). Once InfraWorks has rebuilt the
+   * template road in the working model its rows are InfraWorks' own (R.6.E.1, 6 Nov 2026: 4 terrain
+   * operations instead of 5), so the template is read from the base model the roads were written from.
+   */
+  constructor(private readonly db: DatabaseSync, private readonly template: string, src: DatabaseSync = db) {
+    const from = (q: string, ...a: string[]) => { const s = src.prepare(q); s.setReadBigInts(true); return s.all(...a) as Row[]; };
+    const one = (q: string, ...a: string[]) => { const r = from(q, ...a)[0]; if (!r) throw new Error(`template ${template}: nothing for "${q}"`); return r; };
     this.tCD = one("select * from CONSTRAINED_DEFINITIONS where GUID=?", template);
     this.tRoad = one("select * from ROADS where FK_PARENT_GUID=?", template);
     this.tH = one("select * from H_CONSTRAINTS where FK_PARENT_GUID=? and CONSTRAINT_TYPE=3", template);
     this.tV = one("select * from V_CONSTRAINTS where FK_PARENT_GUID=? and CONSTRAINT_TYPE=15", template);
-    this.tLoc = this.all("select * from CONSTRAINED_DEF_GEOM_LOCATIONS where FK_PARENT_GUID=? order by TYPE", template);
+    this.tLoc = from("select * from CONSTRAINED_DEF_GEOM_LOCATIONS where FK_PARENT_GUID=? order by TYPE", template);
     this.tRps = one("select * from CONSTRAINED_DEF_RPSYSTEMS where FK_PARENT_GUID=?", template);
-    this.tPrim = this.all("select * from PRIMITIVES where FK_PARENT_GUID=?", String(this.tRoad.GUID));
-    this.tTop = this.all("select * from TERRAIN_OPERATIONS where FK_PARENT_GUID=?", String(this.tRoad.GUID));
+    this.tPrim = from("select * from PRIMITIVES where FK_PARENT_GUID=?", String(this.tRoad.GUID));
+    this.tTop = from("select * from TERRAIN_OPERATIONS where FK_PARENT_GUID=?", String(this.tRoad.GUID));
   }
 
   private all(q: string, ...a: string[]): Row[] {

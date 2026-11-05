@@ -28,6 +28,8 @@ model-roads - Parsons roads as InfraWorks component roads, written into a model 
       [--merge R.0.C.2=R.0.C.1+R.0.C.2]   (join roads that continue each other into one road, named
                                   after one of them; only these are written, the others are deleted
                                   and their intersection links moved to the joined road)
+      [--template-from <base model.sqlite>]   (read the template road there: once InfraWorks rebuilt it
+                                  in the working model its rows no longer fit)
       [--record-merges R.0.D.2=R.0.D.1+R.0.D.2]   (record the drawn parts of a merge written earlier)
       [--restyle divided | R.0.C.2,R.0.D.2]   (replace only the section of those roads, "divided" = every
                                   B1 / C1 / C2 road; InfraWorks builds it when the road is next edited)
@@ -134,7 +136,8 @@ function main(argv: string[]): number {
     if (existsSync(model.replace(/\.sqlite$/i, ".lock"))) throw new Error("the model is open in InfraWorks (its .lock is there): close it first");
     if (!existsSync(model)) throw new Error(`model not found: ${model}`);
     const db = new DatabaseSync(model, { enableDoubleQuotedStringLiterals: true } as ConstructorParameters<typeof DatabaseSync>[1]);
-    const writer = new RoadWriter(db, template!);
+    const tplFrom = flag("--template-from");
+    const writer = new RoadWriter(db, template!, tplFrom ? new DatabaseSync(tplFrom, { readOnly: true }) : db);
     // --record-merges: a merge written earlier gets its parts recorded (no geometry is written)
     for (const m of parseMerges(flag("--record-merges") ?? "")) {
       const d = partsDescription(m.parts.map((n) => { const a = al.roads.find((r) => r.name === n); if (!a) throw new Error(`--record-merges: no alignment for ${n}`); return { name: n, length: a.length }; }));

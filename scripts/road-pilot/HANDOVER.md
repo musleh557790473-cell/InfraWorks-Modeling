@@ -634,3 +634,10 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   R.0.C.4 (RA-6, C1). Refused by the tool: R.0.D.9 + R.0.D.11 at RA-3 (Parsons' levels 687.859 vs
   688.000 at the centre); not needed (one through road suffices). RA-7: no straight pair (R.0.B.1 C2,
   R.0.C.4 C1, R.0.D.5 B1 at three angles): no through road without inventing; decision pending.
+- 6 Nov: merges written (template read from the base model `Al Qairawan Roads (Parsons 2).sqlite`
+  with `--template-from`: InfraWorks had rebuilt R.6.E.1 in the working model, 4 terrain operations
+  instead of 5): R.0.D.15 = R.0.D.14 + R.0.D.15, R.0.D.12 = R.0.D.13 + R.0.D.10 + R.0.D.12,
+  R.0.D.4 = R.0.D.3 + R.0.D.4, R.0.C.4 = R.0.C.3 + R.0.C.4; links moved, 0 dangling, integrity ok,
+  14 divided roads all with the new median layout, every drawn road recorded. Parsons questions 12-15
+  added (merges, RA-7, RA-3 levels, entries / apron). Next: InfraWorks rebuilds the 4 merged roads,
+  then roundabouts on the centre junctions of RA-3..RA-6.

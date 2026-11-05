@@ -85,3 +85,12 @@ test("restyling a road replaces only its section: other style settings, geometry
   assert.deepEqual([after.GUID, after.FK_PARENT_GUID, Buffer.compare(Buffer.from(after.GEOMETRY as Uint8Array), Buffer.from(before.GEOMETRY as Uint8Array))], [before.GUID, before.FK_PARENT_GUID, 0]);
   assert.equal(restyleRoad(db, "R.NONE", buildSection("C1")), false);
 });
+test("the template road can be read from another model (the working model's one was rebuilt by InfraWorks)", () => {
+  const base = model(), work = model();
+  // in the working model InfraWorks rebuilt the template: 4 terrain operations
+  work.prepare("delete from TERRAIN_OPERATIONS where GUID='t0'").run();
+  assert.throws(() => new RoadWriter(work, TPL).write(plan("R.X"), buildSection("A1")), /expected 5 terrain operations/);
+  new RoadWriter(work, TPL, base).write(plan("R.X"), buildSection("A1"));
+  assert.equal(one(work, "select count(*) n from ROADS where NAME='R.X'").n, 1);
+  assert.equal(one(base, "select count(*) n from ROADS where NAME='R.X'").n, 0, "the base model is only read");
+});
