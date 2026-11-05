@@ -616,3 +616,9 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   136 = same as 106, ok). Remaining difference: they were first created while a road had our body.
   Test: `model:intersections --delete-junctions 135` then one edit on R.9.G.5 so InfraWorks creates the
   junction afresh (`deleteIntersection`, test).
+- Fresh-build test (5 Nov ~23:10): junction 135 deleted in the file (82 rows; area flat and clean in
+  InfraWorks), then an edit on R.9.G.5: InfraWorks created it again (now ID 298) with the same pit. So
+  it is how InfraWorks builds this junction, not its history. Also ruled out: grades near the junction
+  (pit 135: 1.74 / 0.95 %, good ones down to 0.008 %). Open: 3 of 21 crossings on divided roads
+  (106, 161, 298) build with surfaces dropping to 0; next cheap test: "Extend into Intersection" off in
+  the junction's Stack; else raise with Autodesk with the evidence.
