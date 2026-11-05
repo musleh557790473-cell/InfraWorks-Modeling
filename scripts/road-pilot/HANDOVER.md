@@ -553,3 +553,8 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   while the road says 2) and the raised median fill as Sidewalk pieces on the median; InfraWorks' own
   "Four Lane Divided with Sloped Asphalt Median & Curb & Gutter" has only real lanes on the median's
   curb. Hypothesis to test on one road: write the shy strip as a Shoulder component.
+- Test (5 Nov ~16:45): the 0.4 m shy strip of B1/C1/C2 is now a Shoulder component (same shape as a
+  Lane; `sections.ts`, test "a divided road has exactly its lanes as Lane components"). Only R.0.C.2
+  rewritten (re-run of its merge: GUIDs, links, Parsons record kept). Next: InfraWorks rebuilds
+  R.0.C.2 (Grading Limit toggle) and roundabout 41 (island toggle); then read the arms' LANES /
+  BLEND_POINT_MEDIAN_WIDTH in the file.

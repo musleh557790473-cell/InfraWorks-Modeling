@@ -37,9 +37,11 @@ const DEF: Record<string, (p: Params) => XY[]> = {
     const s = p.LeftSideFactor ?? 1, W = p.Width ?? 0.225, Dp = p.Depth ?? 0.45, Db = p.DepthBelow ?? 0.3, H = Dp - Db;
     return [[0, -Db], [0, 0], [0, H], [s * W, H], [s * W, H - (p.BackHeight ?? 0)], [s * W, -Db]];
   },
+  // same shape as a Lane; InfraWorks does not count it as a traffic lane
+  Shoulder: (p) => { const s = p.LeftSideFactor ?? 1, W = p.Width!, Y = p.Slope! * W, D = p.Depth ?? 0.2; return [[0, 0], [s * W, Y], [s * W, Y - D], [0, -D]]; },
   "Sloped Median": (p) => { const h = p.Width! / 2, G = (p.Slope ?? -0.03) * h, D = p.Depth ?? 0.2; return [[-h, 0], [0, G], [h, 0], [h, -D], [0, G - D], [-h, -D]]; },
 };
-const TOP: Record<string, number[]> = { Lane: [0, 1], Sidewalk: [0, 1], Curb: [2, 3], "Sloped Median": [0, 1, 2] };
+const TOP: Record<string, number[]> = { Lane: [0, 1], Shoulder: [0, 1], Sidewalk: [0, 1], Curb: [2, 3], "Sloped Median": [0, 1, 2] };
 
 export interface SectionPart { role: string; id: number; material: string; crossSection: [number, number, number?][] }
 export interface Section {
@@ -88,7 +90,9 @@ export function buildSection(type: SectionType, opts: { fall?: "right" | "left" 
       const inward: Params = side < 0 ? {} : { LeftSideFactor: -1 }, edgePt = side < 0 ? 0 : 2;
       const mk = add("Curb", { ...inward, Width: KERB_W }, { point: 1, ex_comp: 0, ex_point: edgePt }, "kerb");
       add("Sidewalk", { ...inward, Width: T.median! / 2 - KERB_W, Slope: 0, Depth: 0.15 }, { point: 0, ex_comp: mk, ex_point: 4 }, "median");
-      lastC = add("Lane", { ...L, Width: SHY, Slope: -XFALL, Depth: 0.2 }, { point: 0, ex_comp: 0, ex_point: edgePt }, "shy");
+      // the 0.4 m strip by the median kerb is a Shoulder: written as a Lane it made 3 lanes a side and
+      // InfraWorks read no lanes at all on these roads (junction arms without lanes, Al Qairawan 5 Nov 2026)
+      lastC = add("Shoulder", { ...L, Width: SHY, Slope: -XFALL, Depth: 0.2 }, { point: 0, ex_comp: 0, ex_point: edgePt }, "shy");
       lastC = add("Lane", { ...L, Width: LANE, Slope: -XFALL, Depth: 0.2 }, { point: 0, ex_comp: lastC, ex_point: 1 }, "lane");
       lastC = add("Lane", { ...L, Width: LANE, Slope: -XFALL, Depth: 0.2 }, { point: 0, ex_comp: lastC, ex_point: 1 }, "lane");
     }

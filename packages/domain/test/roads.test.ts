@@ -144,6 +144,18 @@ test("sections: the median is raised 150 mm by upstand kerbs, lanes start at the
   assert.ok(Math.abs(Math.max(...shy)) < 1e-9, "shy lane edge at the profile level");
 });
 
+test("sections: a divided road has exactly its lanes as Lane components; the 0.4 m strip is a Shoulder (B1, C1, C2)", () => {
+  for (const t of ["B1", "C1", "C2"] as const) {
+    const s = buildSection(t);
+    const refs = (s.componentStyle as { references: { def: string; paramOverrides: { name: string; value: number }[] }[] }).references;
+    const lanes = refs.filter((r) => r.def.endsWith("/Lane"));
+    assert.equal(lanes.length, 2 * s.lanes, `${t}: ${s.lanes} lanes each way`);
+    assert.ok(lanes.every((r) => r.paramOverrides.find((p) => p.name === "Width")!.value === 3.3));
+    const shoulders = refs.filter((r) => r.def.endsWith("/Shoulder"));
+    assert.deepEqual(shoulders.map((r) => r.paramOverrides.find((p) => p.name === "Width")!.value), [0.4, 0.4]);
+  }
+});
+
 test("sections: a local road falling left has its lane slopes flipped", () => {
   const slopes = (fall: "left" | "right") => (buildSection("A1", { fall }).componentStyle as { references: { def: string; paramOverrides: { name: string; value: number }[] }[] }).references
     .filter((r) => r.def.endsWith("/Lane")).map((r) => r.paramOverrides.find((p) => p.name === "Slope")!.value);
