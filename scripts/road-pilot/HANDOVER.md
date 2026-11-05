@@ -570,3 +570,9 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   9 arms 1, 3 and 41 arm 1 (R.0.D.2, B1) 2 + 2 x 3.3, median 1.2; 41 arms 2, 3 (R.0.C.2, C1) 2 + 2 x
   3.3, median 4.0; yield 1 lane. 0 dangling, integrity ok. Next: rebuild R.0.D.2, toggle islands 9
   and 41, then check whether InfraWorks keeps or recomputes the arm values.
+- After the rebuild (5 Nov ~20:05): the road Stack shows the Parsons record (CONSTRAINED_DEFINITIONS
+  .DESCRIPTION is the field it shows). Arms: InfraWorks KEPT BLEND_POINT_MEDIAN_WIDTH (1.2 / 4.0) and
+  ENTRY/EXIT_WIDTH 3.3 (the arms now show a median and a nose at the road) but RESET LANES and
+  ENTRY/EXIT_LANES to 0: it takes the lane count from the road, and still reads 0 lanes on our
+  divided sections (also with the Shoulder). Grading 680.7-683.9, 0 dangling. Remaining fix: make
+  B1/C1/C2 lanes readable to InfraWorks (controlled test with its own divided assembly on a copy).
