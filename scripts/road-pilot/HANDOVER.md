@@ -505,3 +505,9 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   removed, blend heights 9: 683.62 / 683.33 / 682.73 / 683.65, 41: 681.08 / 680.41 / 682.97, both
   roundabouts 40.4 / 24.0 / 0.975 / 7.225 exactly; 0 orphans, 0 dangling, integrity ok. The bodies
   rebuild after one roundel edit each (island 24.1 then 24.0: exact at 2 decimals).
+- Checked (5 Nov 14:47, after the user toggled each island 24.1 -> 24.0): the wall is gone. Grading
+  9: 683.0-683.9, 41: 680.7-683.2; no point below 600 (before 1428 / 1028); apron stays 0.975 (the
+  island toggle does not round it); 0 orphan bodies, 0 dangling. Remaining: a seam where a roundabout
+  arm meets a merged road InfraWorks has not rebuilt yet (R.0.D.2, R.2.F.3 still carry our body;
+  R.0.C.2 rebuilt, no seam). Next: one road edit each (Grading Limit 5.0 -> 5.1 -> 5.0, Autodesk
+  "To set the roadside grading method") so InfraWorks rebuilds them.
