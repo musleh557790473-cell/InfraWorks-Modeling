@@ -12,7 +12,7 @@ import { junctionSteps, levelProblems, roadRows } from "./roads/checks.js";
 import { planRoad } from "./roads/plan.js";
 import { repointLinks, splitLinks } from "./roads/intersections.js";
 import { parseFgf } from "@infraworks/imx-gate";
-import { mergeRoads, parseMerges } from "./roads/merge.js";
+import { mergeRoads, missingDrawnRoads, parseMerges, partsDescription } from "./roads/merge.js";
 import { roadsToWrite } from "./roads/select.js";
 import { RoadWriter, removeRoad } from "./roads/write.js";
 
@@ -28,6 +28,7 @@ model-roads - Parsons roads as InfraWorks component roads, written into a model 
       [--merge R.0.C.2=R.0.C.1+R.0.C.2]   (join roads that continue each other into one road, named
                                   after one of them; only these are written, the others are deleted
                                   and their intersection links moved to the joined road)
+      [--record-merges R.0.D.2=R.0.D.1+R.0.D.2]   (record the drawn parts of a merge written earlier)
       [--split R.0.C.2=R.0.C.1+R.0.C.2]   (undo a merge: write the roads again as the drawing has
                                   them and move each junction link to the part it lies on)
       [--roundabouts-as-roads]   (write RA rings as closed roads; by default they are left to
@@ -132,6 +133,14 @@ function main(argv: string[]): number {
     if (!existsSync(model)) throw new Error(`model not found: ${model}`);
     const db = new DatabaseSync(model, { enableDoubleQuotedStringLiterals: true } as ConstructorParameters<typeof DatabaseSync>[1]);
     const writer = new RoadWriter(db, template!);
+    // --record-merges: a merge written earlier gets its parts recorded (no geometry is written)
+    for (const m of parseMerges(flag("--record-merges") ?? "")) {
+      const d = partsDescription(m.parts.map((n) => { const a = al.roads.find((r) => r.name === n); if (!a) throw new Error(`--record-merges: no alignment for ${n}`); return { name: n, length: a.length }; }));
+      const n = Number(db.prepare("update ROADS set DESCRIPTION = ? where NAME = ?").run(d, m.name).changes);
+      if (n !== 1) throw new Error(`--record-merges: ${n} roads named ${m.name}`);
+      say(`${m.name}: ${d}`);
+    }
+    const missing = () => missingDrawnRoads(db.prepare("select NAME, DESCRIPTION from ROADS").all() as { NAME: string; DESCRIPTION: string | null }[], al.roads.map((r) => r.name).filter((n) => !raOf.has(n)));
     if (splits.length) {
       db.exec("begin");
       try {
@@ -156,6 +165,7 @@ function main(argv: string[]): number {
       try {
         for (const m of merges) {
           writer.write(planRoad(m.road.al, m.road.pv), sectionOf(m.parts[0]!));
+          db.prepare("update ROADS set DESCRIPTION = ? where NAME = ?").run(partsDescription(m.parts.map((n) => ({ name: n, length: al.roads.find((r) => r.name === n)!.length }))), m.name);
           const to = String((db.prepare("select FK_PARENT_GUID g from ROADS where NAME=?").get(m.name) as { g: string }).g);
           for (const n of m.parts.filter((n) => n !== m.name)) {
             const from = db.prepare("select FK_PARENT_GUID g from ROADS where NAME=?").get(n) as { g: string } | undefined;
@@ -167,6 +177,8 @@ function main(argv: string[]): number {
         db.exec("commit");
       } catch (e) { db.exec("rollback"); throw e; }
       say(`written ${merges.length} merged road(s)`);
+      const lost = missing();
+      say(lost.length ? `drawn roads missing from the model: ${lost.join(" ")}` : "every drawn road is in the model (as a road or a recorded part)");
       db.close();
       return 0;
     }

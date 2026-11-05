@@ -534,3 +534,8 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   Next (to agree): merge R.0.C.1 + R.0.C.2 again, rebuild, toggle the island; record Parsons' part
   names and stations in each merged road's DESCRIPTION, and gate that every Parsons name is either a
   road or a recorded part.
+- Re-merged (5 Nov ~16:20): R.0.C.2 = R.0.C.1 + R.0.C.2 again (11 links back); parts recorded in
+  ROADS.DESCRIPTION (`partsDescription`, `--record-merges` for merges written earlier): R.0.C.2,
+  R.0.D.2 (R.0.D.1 0+000-0+756.589, R.0.D.2 to 1+085.545), R.2.F.3 (R.1.F.2 0+000-0+440.093, R.2.F.3
+  to 0+807.596). `missingDrawnRoads`: every drawn road is in the model as a road or a recorded part.
+  0 dangling, integrity ok. Next: rebuild R.0.C.2 (Grading Limit toggle), then island toggle on 41.

@@ -48,3 +48,29 @@ export function parseMerges(spec: string): { name: string; parts: string[] }[] {
     return { name: name.trim(), parts };
   });
 }
+
+const station = (s: number) => `${Math.floor(s / 1000)}+${(s % 1000).toFixed(3).padStart(7, "0")}`;
+
+/**
+ * The designer's roads inside a merged road, for its DESCRIPTION (shown in the road's Stack):
+ * "Parsons: R.0.C.1 0+000.000-0+780.422; R.0.C.2 0+780.422-1+231.277". A roundabout needs a road
+ * through its centre (Al Qairawan RA-2, 5 Nov 2026: written back as two roads ending there, InfraWorks
+ * dropped the roundabout's body), so merged roads stay; this keeps each drawn road traceable.
+ */
+export function partsDescription(parts: { name: string; length: number }[]): string {
+  let s = 0;
+  return "Parsons: " + parts.map((p) => { const t = `${p.name} ${station(s)}-${station(s + p.length)}`; s += p.length; return t; }).join("; ");
+}
+
+/** The part names recorded by partsDescription, or [] for any other description. */
+export function partsFromDescription(d: string | null | undefined): string[] {
+  const m = /^Parsons: (.+)$/.exec(d ?? "");
+  return m ? m[1]!.split("; ").map((t) => t.split(" ")[0]!).filter(Boolean) : [];
+}
+
+/** Names of the drawing that are neither a road in the model nor a recorded part of a merged road. */
+export function missingDrawnRoads(roads: { NAME: string; DESCRIPTION: string | null }[], drawn: string[]): string[] {
+  const have = new Set<string>();
+  for (const r of roads) { have.add(r.NAME); for (const n of partsFromDescription(r.DESCRIPTION)) have.add(n); }
+  return drawn.filter((n) => !have.has(n));
+}
