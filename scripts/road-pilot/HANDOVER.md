@@ -641,3 +641,10 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   14 divided roads all with the new median layout, every drawn road recorded. Parsons questions 12-15
   added (merges, RA-7, RA-3 levels, entries / apron). Next: InfraWorks rebuilds the 4 merged roads,
   then roundabouts on the centre junctions of RA-3..RA-6.
+- 6 Nov: roundabouts written on the centre junctions RA-3 106, RA-4 125, RA-5 136, RA-6 140 (40.4 /
+  24.0 / 0.975 / 1 x 7.225). Found: after the divided roads became readable, InfraWorks set 2 lanes at
+  the yield line on every divided-road arm of 9 and 41 and widened their rings to 2 lanes (7.225 +
+  7.275, ICD 54.95, its "Rural Double Lane" standard). Parsons' ring is one lane: writeRoundabout now
+  resets the arms' yield lanes to the ring's count when it rewrites the sizes; 9 and 41 written back
+  to 1 lane, ICD 40.4. To check after the island toggles: whether InfraWorks widens them again (then
+  a single-lane roundabout standard is needed). Pits re-created as 298 (old 161) and 299 (old 135).

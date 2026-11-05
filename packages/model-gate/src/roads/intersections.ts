@@ -233,6 +233,10 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
       db.prepare(`update ROUNDABOUTS set GEOMETRY = ?, LANES = ?, LANE_DETAILS = ?, ISLAND_DIAMETER = ?, APRON_WIDTH = ?, INSCRIBED_CIRCLE_DIAMETER = ? where GUID = ?`)
         .run(boxBlob(cx - h, cy - h, cx + h, cy + h), spec.lanes, laneDetails, spec.islandDiameter, spec.apronWidth, spec.inscribedCircleDiameter, String(existing.GUID));
       db.prepare("update INTERSECTIONS set INTERSECTION_TYPE = 1 where GUID = ?").run(guid);
+      // InfraWorks widens the ring to two lanes once the approaches read two lanes each way (it set 2 at
+      // the yield line on every divided-road arm; Al Qairawan 9 and 41, 6 Nov 2026): the arms take the
+      // ring's lane count again
+      db.prepare("update INTERSECTION_ARMS set ENTRY_LANES_AT_YIELD = ?, EXIT_LANES_AT_YIELD = ? where FK_PARENT_GUID = ?").run(spec.lanes, spec.lanes, guid);
       db.exec("release roundabout");
       return index;
     }

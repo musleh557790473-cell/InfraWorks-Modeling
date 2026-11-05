@@ -147,6 +147,11 @@ test("a roundabout written into the file as InfraWorks stores one: type 1, one R
   assert.equal(r.LANE_DETAILS, '{"version":"1.0.0","lanes":[{"id":1,"width":7.225}]}');
   const box = Buffer.from(r.GEOMETRY as Uint8Array);
   assert.deepEqual([box.readUInt32LE(0), box.readDoubleLE(16), box.readDoubleLE(24), box.readDoubleLE(48)], [3, -20.2, -20.2, 20.2], "the circle's square around the centre");
+  // InfraWorks widened it to two lanes (two at the yield line on the arms, two ring lanes): written again, one lane
+  db.exec("update INTERSECTION_ARMS set ENTRY_LANES_AT_YIELD = 2, EXIT_LANES_AT_YIELD = 2; update ROUNDABOUTS set LANES = 2");
+  writeRoundabout(db, 41, { inscribedCircleDiameter: 40.4, islandDiameter: 24, apronWidth: 0.975, lanes: 1, laneWidth: 7.225 });
+  assert.equal(n(db, "select max(ENTRY_LANES_AT_YIELD) n from INTERSECTION_ARMS"), 1);
+  assert.equal(n(db, "select LANES n from ROUNDABOUTS"), 1);
   // written again with other sizes: the same row is updated, not a second one
   writeRoundabout(db, 41, { inscribedCircleDiameter: 40.45, islandDiameter: 22, apronWidth: 2, lanes: 1, laneWidth: 7.225 });
   assert.equal(n(db, "select count(*) n from ROUNDABOUTS"), 1);
