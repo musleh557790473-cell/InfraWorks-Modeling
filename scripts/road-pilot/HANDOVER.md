@@ -576,3 +576,8 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   ENTRY/EXIT_LANES to 0: it takes the lane count from the road, and still reads 0 lanes on our
   divided sections (also with the Shoulder). Grading 680.7-683.9, 0 dangling. Remaining fix: make
   B1/C1/C2 lanes readable to InfraWorks (controlled test with its own divided assembly on a copy).
+- Lane-reading test on a temporary copy C:\IW\lanetest (5 Nov ~20:20; delete after the test):
+  V1 R.0.C.2 = our C1 without the kerbs and fill on the median (lanes off the median edge, as
+  InfraWorks' "Four Lane Divided ..." hangs them off its median curbs); V2 R.0.D.2 = our B1 without the
+  `classification` tags (InfraWorks' assemblies have none). Written to ROADS.MANUAL_STYLE only; the user
+  rebuilds each (Grading Limit toggle), then the junction arms' LANES are read.
