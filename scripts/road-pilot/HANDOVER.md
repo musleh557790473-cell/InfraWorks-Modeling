@@ -648,3 +648,9 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   resets the arms' yield lanes to the ring's count when it rewrites the sizes; 9 and 41 written back
   to 1 lane, ICD 40.4. To check after the island toggles: whether InfraWorks widens them again (then
   a single-lane roundabout standard is needed). Pits re-created as 298 (old 161) and 299 (old 135).
+- After the island toggles (6 Nov): RA-6 (140) built but on the wall again (all 4 blend points at 0;
+  R.12.E.1 still our body) -> blend heights set from the roads (684.9-687.5); needs R.12.E.1 rebuilt
+  and the island toggled again. RA-5 (136): "Invalid roundabout geometry - intersections overlap":
+  InfraWorks' default arm (blend point) is ~77-81 m, the next junctions on its arms are at 70 / 80 m.
+  Same risk on RA-3 (78-82 m) and RA-4 (63 m). Proposed: arm length = distance to the next junction on
+  that road - 25 m, capped at the default (a modelling value, not Parsons data); to agree.
