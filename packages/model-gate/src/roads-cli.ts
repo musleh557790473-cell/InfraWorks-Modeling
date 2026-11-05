@@ -12,7 +12,7 @@ import { junctionSteps, levelProblems, roadRows } from "./roads/checks.js";
 import { planRoad } from "./roads/plan.js";
 import { repointLinks, splitLinks } from "./roads/intersections.js";
 import { parseFgf } from "@infraworks/imx-gate";
-import { mergeRoads, missingDrawnRoads, parseMerges, partsDescription } from "./roads/merge.js";
+import { mergeRoads, missingDrawnRoads, parseMerges, partsDescription, setDescription } from "./roads/merge.js";
 import { roadsToWrite } from "./roads/select.js";
 import { RoadWriter, removeRoad } from "./roads/write.js";
 
@@ -136,7 +136,7 @@ function main(argv: string[]): number {
     // --record-merges: a merge written earlier gets its parts recorded (no geometry is written)
     for (const m of parseMerges(flag("--record-merges") ?? "")) {
       const d = partsDescription(m.parts.map((n) => { const a = al.roads.find((r) => r.name === n); if (!a) throw new Error(`--record-merges: no alignment for ${n}`); return { name: n, length: a.length }; }));
-      const n = Number(db.prepare("update ROADS set DESCRIPTION = ? where NAME = ?").run(d, m.name).changes);
+      const n = setDescription(db, m.name, d);
       if (n !== 1) throw new Error(`--record-merges: ${n} roads named ${m.name}`);
       say(`${m.name}: ${d}`);
     }
@@ -165,7 +165,7 @@ function main(argv: string[]): number {
       try {
         for (const m of merges) {
           writer.write(planRoad(m.road.al, m.road.pv), sectionOf(m.parts[0]!));
-          db.prepare("update ROADS set DESCRIPTION = ? where NAME = ?").run(partsDescription(m.parts.map((n) => ({ name: n, length: al.roads.find((r) => r.name === n)!.length }))), m.name);
+          setDescription(db, m.name, partsDescription(m.parts.map((n) => ({ name: n, length: al.roads.find((r) => r.name === n)!.length }))));
           const to = String((db.prepare("select FK_PARENT_GUID g from ROADS where NAME=?").get(m.name) as { g: string }).g);
           for (const n of m.parts.filter((n) => n !== m.name)) {
             const from = db.prepare("select FK_PARENT_GUID g from ROADS where NAME=?").get(n) as { g: string } | undefined;

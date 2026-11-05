@@ -558,3 +558,9 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   rewritten (re-run of its merge: GUIDs, links, Parsons record kept). Next: InfraWorks rebuilds
   R.0.C.2 (Grading Limit toggle) and roundabout 41 (island toggle); then read the arms' LANES /
   BLEND_POINT_MEDIAN_WIDTH in the file.
+- Shoulder test result (5 Nov ~17:00): R.0.C.2 rebuilt by InfraWorks (102 strips) with the shy strip as
+  a Shoulder; roundabout 41's arms still read LANES 0, median 0, widths 0. Not the cause; the change is
+  kept (the strip is not a traffic lane). The road's Stack "Description" stayed empty with only
+  ROADS.DESCRIPTION set: `setDescription` now also writes CONSTRAINED_DEFINITIONS.DESCRIPTION (to check).
+  Open: why InfraWorks reads no lanes on our divided sections (B1/C1/C2). Next idea: a controlled test
+  with InfraWorks' own "Four Lane Divided with Sloped Asphalt Median & Curb & Gutter" layout.

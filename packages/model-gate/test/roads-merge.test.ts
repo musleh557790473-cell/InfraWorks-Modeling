@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { mergeRoads, missingDrawnRoads, parseMerges, partsDescription, partsFromDescription } from "../src/roads/merge.js";
+import { DatabaseSync } from "node:sqlite";
+
+import { mergeRoads, missingDrawnRoads, parseMerges, partsDescription, partsFromDescription, setDescription } from "../src/roads/merge.js";
 
 const part = (name: string, a: [number, number], b: [number, number], pv: [number, number, number][]) => {
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -38,4 +40,11 @@ test("a merged road records the drawn roads it holds, with their stations, so no
   assert.deepEqual(partsFromDescription("some note"), []);
   const roads = [{ NAME: "R.0.C.2", DESCRIPTION: d }, { NAME: "R.0.D.5", DESCRIPTION: null }];
   assert.deepEqual(missingDrawnRoads(roads, ["R.0.C.1", "R.0.C.2", "R.0.D.5", "R.0.D.6"]), ["R.0.D.6"]);
+});
+test("a road's description goes to the road and its definition (the Stack showed none with the road row alone)", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`create table CONSTRAINED_DEFINITIONS (GUID text, DESCRIPTION text); create table ROADS (NAME text, FK_PARENT_GUID text, DESCRIPTION text);
+    insert into CONSTRAINED_DEFINITIONS values ('cd', null), ('other', null); insert into ROADS values ('R.0.C.2', 'cd', null);`);
+  assert.equal(setDescription(db, "R.0.C.2", "Parsons: x"), 1);
+  assert.deepEqual(db.prepare("select GUID, DESCRIPTION from CONSTRAINED_DEFINITIONS order by GUID").all().map((r) => ({ ...r })), [{ GUID: "cd", DESCRIPTION: "Parsons: x" }, { GUID: "other", DESCRIPTION: null }]);
 });

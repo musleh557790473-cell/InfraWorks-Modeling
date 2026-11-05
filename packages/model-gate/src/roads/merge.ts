@@ -7,6 +7,8 @@
  * with a through road converts (junction 4, 4 Nov 2026). Joining two roads that continue each other
  * gives the centre a through road. Plan and profile stay Parsons' own: the parts are chained as drawn.
  */
+import type { DatabaseSync } from "node:sqlite";
+
 import type { Alignment, Pvi } from "@infraworks/domain";
 
 export interface RoadPart { al: Alignment; pv: Pvi[] }
@@ -73,4 +75,14 @@ export function missingDrawnRoads(roads: { NAME: string; DESCRIPTION: string | n
   const have = new Set<string>();
   for (const r of roads) { have.add(r.NAME); for (const n of partsFromDescription(r.DESCRIPTION)) have.add(n); }
   return drawn.filter((n) => !have.has(n));
+}
+/**
+ * Writes a road's description where InfraWorks shows it: the road's Stack "Description" box stayed
+ * empty with ROADS.DESCRIPTION set alone (R.0.C.2, 5 Nov 2026), so the road's definition row
+ * (CONSTRAINED_DEFINITIONS.DESCRIPTION) gets it too. Returns the roads updated.
+ */
+export function setDescription(db: DatabaseSync, name: string, text: string): number {
+  const n = Number(db.prepare("update ROADS set DESCRIPTION = ? where NAME = ?").run(text, name).changes);
+  db.prepare("update CONSTRAINED_DEFINITIONS set DESCRIPTION = ? where GUID in (select FK_PARENT_GUID from ROADS where NAME = ?)").run(text, name);
+  return n;
 }
