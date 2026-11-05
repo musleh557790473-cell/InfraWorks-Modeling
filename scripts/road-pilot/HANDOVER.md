@@ -601,3 +601,11 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   19 divided roads of the working model (5 Nov ~21:15); 0 dangling, integrity ok. Test copy deleted.
   Next: InfraWorks rebuilds each of the 19 (one road edit each), then roundabout island toggles;
   check junction arms read lanes. armsFromRoads should no longer be needed.
+- After the 19 road edits (5 Nov ~21:40): every divided road reads 4 lanes at its junctions (also
+  roundabouts 9 and 41). 3 pits = junctions 106 (RA-3 centre), 135 (R.0.D.13 south of RA-5), 161:
+  their surface strips go to z 0. Each joins a road InfraWorks has not rebuilt (still our body, zero
+  range hash): 106 R.0.D.14; 135 R.9.G.5, R.10.G.2; 161 R.4.G.2, R.5.G.1. Rule: InfraWorks builds a
+  junction at height 0 on a road that still carries our body (same as the blend points). Every road
+  InfraWorks rebuilds can make new junctions with neighbours not yet rebuilt; until every road has been
+  rebuilt once, such pits can appear. Fix now: one edit on those 5 roads. Open: a way to have all ~200
+  remaining roads rebuilt once without 200 hand edits.
