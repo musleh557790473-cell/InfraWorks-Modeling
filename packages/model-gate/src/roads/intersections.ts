@@ -305,3 +305,48 @@ export function fixBlendLevels(db: DatabaseSync, opts: { dry?: boolean } = {}): 
   }
   return out;
 }
+/** Distance from (x, y) to a polyline, in plan. */
+function distTo(line: number[][], x: number, y: number): number {
+  let d = Infinity;
+  for (let i = 0; i + 1 < line.length; i++) {
+    const a = line[i]!, b = line[i + 1]!, dx = b[0]! - a[0]!, dy = b[1]! - a[1]!;
+    const t = Math.max(0, Math.min(1, ((x - a[0]!) * dx + (y - a[1]!) * dy) / (dx * dx + dy * dy || 1)));
+    d = Math.min(d, Math.hypot(a[0]! + t * dx - x, a[1]! + t * dy - y));
+  }
+  return d;
+}
+
+/**
+ * Moves the intersection links of a road that was split back into its parts (in order, each starting
+ * where the last ends) onto the part each junction lies on. At a joint, where both parts meet, the
+ * direction decides: an arm approaching in the road's direction (APPROACH_DIRECTION_MATCHES_ASSET 1)
+ * and a region end entering along it lie on the part that ends there; the others on the part that
+ * starts there. Returns the links moved per part GUID.
+ */
+export function splitLinks(db: DatabaseSync, fromGuid: string, parts: { guid: string; line: number[][] }[], tol = 1): Map<string, number> {
+  const moved = new Map(parts.map((p) => [p.guid, 0]));
+  const js = db.prepare(`select distinct i.GUID g, i.ID id, i.REFERENCE_POINTS rp from INTERSECTIONS i where exists (select 1 from INTERSECTION_ARMS a where a.FK_PARENT_GUID = i.GUID and a.FK_ASSET_GUID = ?)
+    or exists (select 1 from INTERSECTION_REGIONS r where r.FK_PARENT_GUID = i.GUID and ? in (r.FK_INCOMING_ASSET_GUID, r.FK_OUTGOING_ASSET_GUID))`).all(fromGuid, fromGuid) as Row[];
+  for (const j of js) {
+    const rp = Buffer.from(j.rp as Uint8Array), x = rp.readDoubleLE(8), y = rp.readDoubleLE(16);
+    const d = parts.map((p) => distTo(p.line, x, y));
+    const on = d.map((v, k) => (v < tol ? k : -1)).filter((k) => k >= 0);
+    if (!on.length) throw new Error(`junction ${j.id}: on none of the parts (nearest ${Math.min(...d).toFixed(2)} m)`);
+    // at a joint two consecutive parts touch: [k, k+1], k ends there and k+1 starts there
+    const pick = (alongRoadIntoJunction: boolean) => (on.length === 1 ? on[0]! : alongRoadIntoJunction ? on[0]! : on[on.length - 1]!);
+    const set = (sql: string, k: number, ...a: unknown[]) => {
+      const to = parts[k]!.guid;
+      if (to === fromGuid) return;
+      const n = Number(db.prepare(sql).run(to, ...(a as never[])).changes);
+      moved.set(to, moved.get(to)! + n);
+    };
+    for (const a of db.prepare("select GUID g, APPROACH_DIRECTION_MATCHES_ASSET d from INTERSECTION_ARMS where FK_PARENT_GUID = ? and FK_ASSET_GUID = ?").all(String(j.g), fromGuid) as Row[])
+      set("update INTERSECTION_ARMS set FK_ASSET_GUID = ? where GUID = ?", pick(Boolean(a.d)), String(a.g));
+    for (const r of db.prepare(`select GUID g, FK_INCOMING_ASSET_GUID ig, SAME_DIRECTION_AS_INCOMING_ASSET si, FK_OUTGOING_ASSET_GUID og, SAME_DIRECTION_AS_OUTGOING_ASSET so
+      from INTERSECTION_REGIONS where FK_PARENT_GUID = ?`).all(String(j.g)) as Row[]) {
+      if (r.ig === fromGuid) set("update INTERSECTION_REGIONS set FK_INCOMING_ASSET_GUID = ? where GUID = ?", pick(Boolean(r.si)), String(r.g));
+      if (r.og === fromGuid) set("update INTERSECTION_REGIONS set FK_OUTGOING_ASSET_GUID = ? where GUID = ?", pick(!r.so), String(r.g));
+    }
+  }
+  return moved;
+}

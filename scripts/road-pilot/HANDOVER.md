@@ -521,3 +521,9 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   kerbs, depth: 683.18-683.77) where InfraWorks switches from Parsons' 2+2 divided section to the
   roundabout standard's one-lane arm without a taper. Open: how many entry lanes and what taper
   Parsons draws at the RA entries (to check on 10200 with the kerb radii, step c).
+- Split test (5 Nov ~15:20, AICC: keep Parsons' roads if InfraWorks allows): `model:roads ... --split
+  R.0.C.2=R.0.C.1+R.0.C.2` writes the parts again as drawn and moves each junction link to the part it
+  lies on (`splitLinks`; at the joint, an arm approaching along the road goes to the part ending there).
+  Model: R.0.C.1 (39, 70 and 41's approaching arm) and R.0.C.2 (75, 76 and 41's leaving arm), 0
+  dangling, integrity ok; roundabout 41 row kept. Next: the user opens it, checks 41, then makes
+  InfraWorks rebuild R.0.C.1 (Grading Limit 5.0 -> 5.1 -> 5.0) and sees whether 41 stays a roundabout.

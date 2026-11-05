@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { danglingLinks, fixBlendLevels, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, writeRoundabout } from "../src/roads/intersections.js";
+import { danglingLinks, fixBlendLevels, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, splitLinks, writeRoundabout } from "../src/roads/intersections.js";
 import { lineBlob, removeRoad } from "../src/roads/write.js";
 
 /** Roads A, B, C and a deleted ring R (its definition is gone), with InfraWorks-style rows. */
@@ -203,4 +203,30 @@ test("roundabout blend points at height 0 get the road's level there (junctions 
   assert.equal(z("plain"), 0, "an intersection that is not a roundabout is not touched");
   db.prepare("insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, ARM_INDEX, BLEND_POINT_ENTRY) values ('far', 'ra9', 'cd-A', 3, ?)").run(pt(50, 30, 0));
   assert.throws(() => fixBlendLevels(db), /30.00 m off its road/);
+});
+test("a road split back into its parts: each junction's links go to the part it lies on; at the joint the direction decides (RA-2: R.0.C.1 | R.0.C.2)", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`
+    create table INTERSECTIONS (ID integer primary key, GUID text, REFERENCE_POINTS blob);
+    create table INTERSECTION_ARMS (ID integer primary key, GUID text, FK_PARENT_GUID text, FK_ASSET_GUID text, APPROACH_DIRECTION_MATCHES_ASSET integer);
+    create table INTERSECTION_REGIONS (ID integer primary key, GUID text, FK_PARENT_GUID text, FK_INCOMING_ASSET_GUID text, SAME_DIRECTION_AS_INCOMING_ASSET integer,
+      FK_OUTGOING_ASSET_GUID text, SAME_DIRECTION_AS_OUTGOING_ASSET integer);
+  `);
+  const rp = (x: number) => { const b = Buffer.alloc(32); b.writeUInt32LE(1, 0); b.writeUInt32LE(1, 4); b.writeDoubleLE(x, 8); return b; };
+  // merged road "c2" runs west -> east: c1 part 0..100, c2 part 100..160; junctions at 50 (on c1), 100 (joint), 130 (on c2)
+  db.prepare("insert into INTERSECTIONS (ID, GUID, REFERENCE_POINTS) values (39, 'j39', ?), (41, 'j41', ?), (70, 'j70', ?)").run(rp(50), rp(100), rp(130));
+  db.exec(`insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, APPROACH_DIRECTION_MATCHES_ASSET) values
+    ('a39w', 'j39', 'c2', 1), ('a39e', 'j39', 'c2', 0), ('a41w', 'j41', 'c2', 1), ('a41e', 'j41', 'c2', 0), ('a41n', 'j41', 'side', 0), ('a70', 'j70', 'c2', 1)`);
+  db.exec(`insert into INTERSECTION_REGIONS (GUID, FK_PARENT_GUID, FK_INCOMING_ASSET_GUID, SAME_DIRECTION_AS_INCOMING_ASSET, FK_OUTGOING_ASSET_GUID, SAME_DIRECTION_AS_OUTGOING_ASSET) values
+    ('r41a', 'j41', 'c2', 1, 'side', 1), ('r41b', 'j41', 'side', 0, 'c2', 1), ('r41c', 'j41', 'c2', 0, 'c2', 0)`);
+  const moved = splitLinks(db, "c2", [{ guid: "c1", line: [[0, 0, 0], [100, 0, 0]] }, { guid: "c2", line: [[100, 0, 0], [160, 0, 0]] }]);
+  const arm = (g: string) => (db.prepare("select FK_ASSET_GUID a from INTERSECTION_ARMS where GUID=?").get(g) as { a: string }).a;
+  const reg = (g: string) => ({ ...(db.prepare("select FK_INCOMING_ASSET_GUID i, FK_OUTGOING_ASSET_GUID o from INTERSECTION_REGIONS where GUID=?").get(g) as { i: string; o: string }) });
+  assert.deepEqual([arm("a39w"), arm("a39e")], ["c1", "c1"], "a junction on the first part");
+  assert.deepEqual([arm("a41w"), arm("a41e"), arm("a41n")], ["c1", "c2", "side"], "at the joint: approaching along the road = the part that ends there");
+  assert.equal(arm("a70"), "c2");
+  assert.deepEqual(reg("r41a"), { i: "c1", o: "side" }, "entering along the road comes from the first part");
+  assert.deepEqual(reg("r41b"), { i: "side", o: "c2" }, "leaving along the road goes onto the second part");
+  assert.deepEqual(reg("r41c"), { i: "c2", o: "c1" }, "entering against the road comes from the second part; leaving against it, onto the first");
+  assert.equal(moved.get("c1"), 2 + 1 + 1 + 1);
 });
