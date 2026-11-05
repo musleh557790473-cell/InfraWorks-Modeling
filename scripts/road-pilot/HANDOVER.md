@@ -564,3 +564,9 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   ROADS.DESCRIPTION set: `setDescription` now also writes CONSTRAINED_DEFINITIONS.DESCRIPTION (to check).
   Open: why InfraWorks reads no lanes on our divided sections (B1/C1/C2). Next idea: a controlled test
   with InfraWorks' own "Four Lane Divided with Sloped Asphalt Median & Curb & Gutter" layout.
+- Arms from roads written (5 Nov ~17:20, AICC: the arm meets the road as drawn until Parsons gives the
+  entries): R.0.D.2 rewritten with the Shoulder section (merge re-run; GUIDs, links kept); Parsons
+  records now also on CONSTRAINED_DEFINITIONS.DESCRIPTION for the 3 merged roads; `--arms-from-roads`:
+  9 arms 1, 3 and 41 arm 1 (R.0.D.2, B1) 2 + 2 x 3.3, median 1.2; 41 arms 2, 3 (R.0.C.2, C1) 2 + 2 x
+  3.3, median 4.0; yield 1 lane. 0 dangling, integrity ok. Next: rebuild R.0.D.2, toggle islands 9
+  and 41, then check whether InfraWorks keeps or recomputes the arm values.
