@@ -516,3 +516,8 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   it a real height (683.23) itself: blend heights come out as 0 only on roads still carrying our body.
   Order for the next roundabouts: merge, let InfraWorks rebuild the roads (one road edit each), then
   write the roundabout and toggle its island. Grading 9: 683.0-683.9, 41: 680.7-683.2; 0 dangling.
+- The "seam" at RA-1's north arm (R.0.D.2): no level step. At the blend point the road and the
+  roundabout arm centrelines are both 683.624; the face is the cut end of the B1 section (median,
+  kerbs, depth: 683.18-683.77) where InfraWorks switches from Parsons' 2+2 divided section to the
+  roundabout standard's one-lane arm without a taper. Open: how many entry lanes and what taper
+  Parsons draws at the RA entries (to check on 10200 with the kerb radii, step c).
