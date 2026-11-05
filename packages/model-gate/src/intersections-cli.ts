@@ -2,7 +2,7 @@
 import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
-import { danglingLinks, fixBlendLevels, pruneDanglingIntersections, writeRoundabout } from "./roads/intersections.js";
+import { armsFromRoads, danglingLinks, fixBlendLevels, pruneDanglingIntersections, writeRoundabout } from "./roads/intersections.js";
 import { removeRoad } from "./roads/write.js";
 
 const USAGE = `
@@ -11,6 +11,7 @@ model-intersections - InfraWorks intersections in a closed model, written in pla
   model-intersections <model.sqlite> [--delete-roads RA-1,RA-3] [--dry]
       [--roundabout 41 --icd 40.4 --island 24.0 --apron 2.0 --lanes 1 --lane-width 8.2]
 
+--arms-from-roads: roundabout arms built without lanes get the lanes, lane width and median of their road.
 Roundabout blend points InfraWorks left at height 0 get the road's level (always).
 --roundabout turns that intersection into a roundabout as InfraWorks stores one (sizes from the
 designer; nothing is assumed: every size must be given). InfraWorks builds the body.
@@ -56,6 +57,7 @@ function main(argv: string[]): number {
         void idx;
         say(`roundabout on intersection ${ra}: ${idx.size} arms, ICD ${flag("--icd")} m, island ${flag("--island")} m, apron ${flag("--apron")} m, ${flag("--lanes")} x ${flag("--lane-width")} m`);
       }
+      if (args.includes("--arms-from-roads")) for (const a of armsFromRoads(db)) say(`arm: intersection ${a.id} arm ${a.arm} (${a.road}) -> ${a.lanes} + ${a.lanes} lanes of ${a.laneWidth} m, median ${a.median} m`);
       const fixed = fixBlendLevels(db);
       for (const f of fixed) say(`blend point height: intersection ${f.id} arm ${f.arm} -> ${f.z.toFixed(3)} (road ${f.off.toFixed(3)} m away)`);
       db.exec(dry ? "rollback" : "commit");

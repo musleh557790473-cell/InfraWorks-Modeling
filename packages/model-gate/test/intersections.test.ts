@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { danglingLinks, fixBlendLevels, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, splitLinks, writeRoundabout } from "../src/roads/intersections.js";
+import { armsFromRoads, danglingLinks, fixBlendLevels, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, splitLinks, writeRoundabout } from "../src/roads/intersections.js";
 import { lineBlob, removeRoad } from "../src/roads/write.js";
 
 /** Roads A, B, C and a deleted ring R (its definition is gone), with InfraWorks-style rows. */
@@ -229,4 +229,25 @@ test("a road split back into its parts: each junction's links go to the part it 
   assert.deepEqual(reg("r41b"), { i: "side", o: "c2" }, "leaving along the road goes onto the second part");
   assert.deepEqual(reg("r41c"), { i: "c2", o: "c1" }, "entering against the road comes from the second part; leaving against it, onto the first");
   assert.equal(moved.get("c1"), 2 + 1 + 1 + 1);
+});
+test("roundabout arms built without lanes get the lanes and median of their road (C1: 2 + 2 of 3.3, median 4.0)", async () => {
+  const { buildSection } = await import("@infraworks/domain");
+  const db = new DatabaseSync(":memory:");
+  db.exec(`
+    create table ROADS (ID integer primary key, GUID text, NAME text, FK_PARENT_GUID text, MANUAL_STYLE text);
+    create table INTERSECTIONS (ID integer primary key, GUID text, INTERSECTION_TYPE integer);
+    create table INTERSECTION_ARMS (ID integer primary key, GUID text, FK_PARENT_GUID text, FK_ASSET_GUID text, ARM_INDEX integer, LANES text,
+      BLEND_POINT_ENTRY_LANES integer, BLEND_POINT_EXIT_LANES integer, BLEND_POINT_ENTRY_WIDTH real, BLEND_POINT_EXIT_WIDTH real, BLEND_POINT_MEDIAN_WIDTH real);
+  `);
+  const ms = (t: "C1" | "A2") => JSON.stringify({ componentStyle: JSON.stringify(buildSection(t).componentStyle) });
+  db.prepare("insert into ROADS (GUID, NAME, FK_PARENT_GUID, MANUAL_STYLE) values ('rc', 'R.0.C.2', 'cd-C', ?), ('ra', 'R.2.F.3', 'cd-A', ?)").run(ms("C1"), ms("A2"));
+  db.exec(`insert into INTERSECTIONS (ID, GUID, INTERSECTION_TYPE) values (41, 'ra41', 1), (12, 'j12', 0);
+    insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, ARM_INDEX, LANES) values
+      ('c', 'ra41', 'cd-C', 1, '{"version": 1}'), ('a', 'ra41', 'cd-A', 2, '{"version": 1,"lanes": [{"id": 1}]}'), ('j', 'j12', 'cd-C', 1, '{"version": 1}');`);
+  const set = armsFromRoads(db);
+  assert.deepEqual(set.map((s) => [s.id, s.arm, s.road, s.lanes, s.laneWidth, s.median]), [[41, 1, "R.0.C.2", 2, 3.3, 4]]);
+  const row = { ...(db.prepare("select * from INTERSECTION_ARMS where GUID='c'").get() as Record<string, unknown>) };
+  assert.deepEqual(JSON.parse(String(row.LANES)).lanes.map((l: { travelDirection: number }) => l.travelDirection), [2, 2, 1, 1]);
+  assert.deepEqual([row.BLEND_POINT_ENTRY_LANES, row.BLEND_POINT_EXIT_LANES, row.BLEND_POINT_ENTRY_WIDTH, row.BLEND_POINT_MEDIAN_WIDTH], [2, 2, 3.3, 4]);
+  assert.equal(String((db.prepare("select LANES l from INTERSECTION_ARMS where GUID='j'").get() as { l: string }).l), '{"version": 1}', "an ordinary junction is not touched");
 });

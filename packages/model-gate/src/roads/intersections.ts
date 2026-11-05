@@ -350,3 +350,38 @@ export function splitLinks(db: DatabaseSync, fromGuid: string, parts: { guid: st
   }
   return moved;
 }
+/** Lanes each side, lane width and median width of a road, read from its own component style. */
+export function roadSectionOf(manualStyle: string): { left: number; right: number; laneWidth: number; median: number } {
+  const ms = JSON.parse(manualStyle) as { componentStyle?: string };
+  const refs = ((ms.componentStyle ? JSON.parse(ms.componentStyle) : { references: [] }) as { references: { def?: string; paramOverrides?: { name: string; value: number }[] }[] }).references;
+  const par = (r: (typeof refs)[number], n: string) => r.paramOverrides?.find((p) => p.name === n)?.value;
+  const lanes = refs.filter((r) => r.def?.endsWith("/Lane"));
+  const left = lanes.filter((r) => par(r, "LeftSideFactor") === -1).length;
+  const med = refs.find((r) => r.def?.endsWith("/Sloped Median"));
+  return { left, right: lanes.length - left, laneWidth: lanes.length ? Math.max(...lanes.map((r) => par(r, "Width") ?? 0)) : 0, median: med ? par(med, "Width") ?? 0 : 0 };
+}
+
+/**
+ * Roundabout arms InfraWorks built without lanes (Parsons' divided roads B1 / C1: it reads no lanes,
+ * 5 Nov 2026) get the lanes, lane width and median of the road they join, so the arm meets the road
+ * as drawn until Parsons gives the entry design (AICC decision, 5 Nov 2026). Lanes are written as
+ * InfraWorks writes them on a two-lane arm it did read (R.2.F.3: the road's left lanes travel 2, its
+ * right lanes 1, category 1). One lane at the yield line stays. Returns the arms set.
+ */
+export function armsFromRoads(db: DatabaseSync, opts: { dry?: boolean } = {}): { id: number; arm: number; road: string; lanes: number; laneWidth: number; median: number }[] {
+  const rows = db.prepare(`select i.ID id, a.GUID g, a.ARM_INDEX ix, a.LANES l, r.NAME n, r.MANUAL_STYLE ms
+    from INTERSECTIONS i join INTERSECTION_ARMS a on a.FK_PARENT_GUID = i.GUID join ROADS r on r.FK_PARENT_GUID = a.FK_ASSET_GUID
+    where i.INTERSECTION_TYPE = 1 order by i.ID, a.ARM_INDEX`).all() as Row[];
+  const out: { id: number; arm: number; road: string; lanes: number; laneWidth: number; median: number }[] = [];
+  for (const r of rows) {
+    const have = (JSON.parse(String(r.l ?? "{}")) as { lanes?: unknown[] }).lanes ?? [];
+    if (have.length) continue;
+    const s = roadSectionOf(String(r.ms));
+    if (!s.left || s.left !== s.right) throw new Error(`intersection ${r.id} arm ${r.ix}: ${r.n} has ${s.left} + ${s.right} lanes; not set`);
+    const lanes = [...Array(s.left)].map(() => 2).concat([...Array(s.right)].map(() => 1)).map((td, k) => ({ id: k + 1, travelDirection: td, directionCategory: 1, directionVisibility: true }));
+    out.push({ id: Number(r.id), arm: Number(r.ix), road: String(r.n), lanes: s.left, laneWidth: s.laneWidth, median: s.median });
+    if (!opts.dry) db.prepare(`update INTERSECTION_ARMS set LANES = ?, BLEND_POINT_ENTRY_LANES = ?, BLEND_POINT_EXIT_LANES = ?, BLEND_POINT_ENTRY_WIDTH = ?,
+      BLEND_POINT_EXIT_WIDTH = ?, BLEND_POINT_MEDIAN_WIDTH = ? where GUID = ?`).run(JSON.stringify({ version: 1, lanes }), s.left, s.right, s.laneWidth, s.laneWidth, s.median, String(r.g));
+  }
+  return out;
+}
