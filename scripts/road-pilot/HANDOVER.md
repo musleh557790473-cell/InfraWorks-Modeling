@@ -587,3 +587,9 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   Round 2 written: V3 R.0.D.2 = full B1 (kerbs + raised fill) but the shoulder hangs off the median
   kerb (point 1 = the median edge at road level), as InfraWorks chains median -> curb -> lanes; V4
   R.0.C.2 = kerbs, no fill, shoulder off the kerb. Same geometry; only the attachment parent changes.
+- Round 2 (lanetest, 5 Nov ~20:50): V4 R.0.C.2 (median kerbs, no fill, shoulder off the kerb) reads 2 + 2
+  lanes at every arm, body rebuilt (90 strips), the arm continues the road's lanes into the roundabout.
+  V3 R.0.D.2 (kerbs + raised fill as a Sidewalk on the median) still 0 lanes. Cause: a Sidewalk piece on
+  the median (InfraWorks seems to take a sidewalk as the carriageway edge). Plan: the raised median is
+  drawn by the kerbs themselves (each kerb half the median wide, 150 mm upstand, flat top); test V5 on
+  R.0.D.2 in the copy, then change `buildSection`.
