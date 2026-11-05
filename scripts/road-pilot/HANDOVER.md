@@ -546,3 +546,10 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   recorded), one road edit per merged road so InfraWorks rebuilds it and creates the centre junction,
   `model:intersections --roundabout <id> --icd 40.4 --island 24.0 --apron 0.975 --lanes 1
   --lane-width 7.225`, then the island toggle (24.1 -> 24.0) in the roundel Stack.
+- Roundabout arms vs Parsons' roads (5 Nov): on the divided roads (B1 / C1: R.0.D.2, R.0.C.2) InfraWorks
+  reads 0 lanes, 0 median, 0 lane width at every arm (also on R.0.D.1's T junctions earlier), so it
+  builds a generic arm (no median, the standard's footpath); on A2 (R.2.F.3) it reads 1 + 1 lanes of
+  3.3. Our B1/C1/C2 section writes a 0.4 m shy strip as a Lane beside the median (3 "lanes" a side
+  while the road says 2) and the raised median fill as Sidewalk pieces on the median; InfraWorks' own
+  "Four Lane Divided with Sloped Asphalt Median & Curb & Gutter" has only real lanes on the median's
+  curb. Hypothesis to test on one road: write the shy strip as a Shoulder component.
