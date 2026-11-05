@@ -622,3 +622,7 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   (pit 135: 1.74 / 0.95 %, good ones down to 0.008 %). Open: 3 of 21 crossings on divided roads
   (106, 161, 298) build with surfaces dropping to 0; next cheap test: "Extend into Intersection" off in
   the junction's Stack; else raise with Autodesk with the evidence.
+- "Extend into Intersection" off (and Yield Line off) on junction 298: same pit. Search stopped: an
+  InfraWorks build problem at 3 of 21 divided-road crossings (106, 161, 298), not explained by the
+  data. Proposed: delete 298 and 161 as a cosmetic workaround (they come back on a road edit), report
+  to Autodesk with the evidence, continue with RA-3..RA-7 (106 is replaced by RA-3's roundabout).
