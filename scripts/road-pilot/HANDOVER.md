@@ -501,3 +501,7 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   centre); prune now removes intersection bodies too. Dry run on the model: 181 body rows, 7 blend
   heights 680.4-683.7, each 0.000 m from its road. The Stack field keeps 2 decimals: apron 0.975
   typed was saved as 0.97 (ICD 40.39).
+- Written (5 Nov ~14:45, model closed; copy before in the session scratchpad): 181 orphan body rows
+  removed, blend heights 9: 683.62 / 683.33 / 682.73 / 683.65, 41: 681.08 / 680.41 / 682.97, both
+  roundabouts 40.4 / 24.0 / 0.975 / 7.225 exactly; 0 orphans, 0 dangling, integrity ok. The bodies
+  rebuild after one roundel edit each (island 24.1 then 24.0: exact at 2 decimals).
