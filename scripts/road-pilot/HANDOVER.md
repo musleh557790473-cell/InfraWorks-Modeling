@@ -581,3 +581,9 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   InfraWorks' "Four Lane Divided ..." hangs them off its median curbs); V2 R.0.D.2 = our B1 without the
   `classification` tags (InfraWorks' assemblies have none). Written to ROADS.MANUAL_STYLE only; the user
   rebuilds each (Grading Limit toggle), then the junction arms' LANES are read.
+- Test round 1 (lanetest, 5 Nov ~20:40): V1 (R.0.C.2 without median kerbs and fill) -> every junction
+  arm reads 4 lanes (2 each way); roundabout median 4.8 (4.0 + 2 x 0.4 shoulder). V2 (no
+  classification) -> still 0. Cause: the kerbs / fill on the median with the lanes hung off the median.
+  Round 2 written: V3 R.0.D.2 = full B1 (kerbs + raised fill) but the shoulder hangs off the median
+  kerb (point 1 = the median edge at road level), as InfraWorks chains median -> curb -> lanes; V4
+  R.0.C.2 = kerbs, no fill, shoulder off the kerb. Same geometry; only the attachment parent changes.
