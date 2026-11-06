@@ -177,7 +177,7 @@ export interface RoundaboutSpec {
  * builds the roundabout (junction 41: 8.2 written, 7.225 after the rebuild, 4 Nov 2026), so only the
  * circle, island and apron can be chosen.
  */
-export const IW_ROUNDABOUT_STANDARD = { EXTERNAL_STANDARD_GUID: "4bfa64b5-07ca-4a15-8413-79dab6124e1d", STANDARD_NAME: "FHWA 2010: Rural Double Lane Roundabout", STANDARD_SOURCE: "Pool", laneWidth: 7.225 } as const;
+export const IW_ROUNDABOUT_STANDARD = { EXTERNAL_STANDARD_GUID: "4bfa64b5-07ca-4a15-8413-79dab6124e1d", STANDARD_NAME: "FHWA 2010: Rural Double Lane Roundabout", STANDARD_SOURCE: "Pool", laneWidth: 7.225, laneWidths: [7.225, 7.275] } as const;
 
 const pt3 = (x: number, y: number, z: number) => { const b = Buffer.alloc(32); b.writeUInt32LE(1, 0); b.writeUInt32LE(1, 4); b.writeDoubleLE(x, 8); b.writeDoubleLE(y, 16); b.writeDoubleLE(z, 24); return b; };
 /** FGF polygon, XY, one ring (as InfraWorks stores INTERSECTIONS / ROUNDABOUTS boxes). */
@@ -212,7 +212,7 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
   if (!i) throw new Error(`no intersection ${intersectionId}`);
   const guid = String(i.GUID);
   for (const [k, v] of Object.entries(spec)) if (!(Number(v) > 0)) throw new Error(`roundabout ${intersectionId}: ${k} missing`);
-  if (spec.lanes !== 1 || Math.abs(spec.laneWidth - IW_ROUNDABOUT_STANDARD.laneWidth) > 0.001) throw new Error(`roundabout ${intersectionId}: ${spec.lanes} x ${spec.laneWidth} m lanes; InfraWorks keeps the standard's one lane of ${IW_ROUNDABOUT_STANDARD.laneWidth} m`);
+  if (![1, 2].includes(spec.lanes) || Math.abs(spec.laneWidth - IW_ROUNDABOUT_STANDARD.laneWidth) > 0.001) throw new Error(`roundabout ${intersectionId}: ${spec.lanes} x ${spec.laneWidth} m lanes; InfraWorks keeps the standard's one lane of ${IW_ROUNDABOUT_STANDARD.laneWidth} m`);
   const sum = roundaboutDiameter(spec);
   if (Math.abs(sum - spec.inscribedCircleDiameter) > 0.01) throw new Error(`roundabout ${intersectionId}: island ${spec.islandDiameter} + 2 x apron ${spec.apronWidth} + 2 x ${spec.lanes} x lane ${spec.laneWidth} = ${sum.toFixed(2)} m, not the circle ${spec.inscribedCircleDiameter} m`);
   const existing = db.prepare("select GUID from ROUNDABOUTS where FK_PARENT_GUID = ?").get(guid) as Row | undefined;
@@ -225,18 +225,21 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
     .sort((p, q) => q.b - p.b);
   const index = new Map(order.map((a, k) => [a.g, k + 1]));
   const h = spec.inscribedCircleDiameter / 2;
-  const laneDetails = JSON.stringify({ version: "1.0.0", lanes: Array.from({ length: spec.lanes }, (_, k) => ({ id: k + 1, width: spec.laneWidth })) });
+  const laneDetails = JSON.stringify({ version: "1.0.0", lanes: IW_ROUNDABOUT_STANDARD.laneWidths.slice(0, spec.lanes).map((width, k) => ({ id: k + 1, width })) });
   db.exec("savepoint roundabout");
   try {
     if (existing) {
       // a roundabout already: its sizes are replaced, the rest (arms, standard) stays
-      db.prepare(`update ROUNDABOUTS set GEOMETRY = ?, LANES = ?, LANE_DETAILS = ?, ISLAND_DIAMETER = ?, APRON_WIDTH = ?, INSCRIBED_CIRCLE_DIAMETER = ? where GUID = ?`)
-        .run(boxBlob(cx - h, cy - h, cx + h, cy + h), spec.lanes, laneDetails, spec.islandDiameter, spec.apronWidth, spec.inscribedCircleDiameter, String(existing.GUID));
+      db.prepare(`update ROUNDABOUTS set GEOMETRY = ?, LANES = ?, LANE_DETAILS = ?, ISLAND_DIAMETER = ?, APRON_WIDTH = ?, INSCRIBED_CIRCLE_DIAMETER = ?,
+        EXTERNAL_STANDARD_GUID = ?, STANDARD_NAME = ?, STANDARD_SOURCE = ? where GUID = ?`)
+        .run(boxBlob(cx - h, cy - h, cx + h, cy + h), spec.lanes, laneDetails, spec.islandDiameter, spec.apronWidth, spec.inscribedCircleDiameter,
+          IW_ROUNDABOUT_STANDARD.EXTERNAL_STANDARD_GUID, IW_ROUNDABOUT_STANDARD.STANDARD_NAME, IW_ROUNDABOUT_STANDARD.STANDARD_SOURCE, String(existing.GUID));
       db.prepare("update INTERSECTIONS set INTERSECTION_TYPE = 1 where GUID = ?").run(guid);
       // InfraWorks widens the ring to two lanes once the approaches read two lanes each way (it set 2 at
       // the yield line on every divided-road arm; Al Qairawan 9 and 41, 6 Nov 2026): the arms take the
       // ring's lane count again
-      db.prepare("update INTERSECTION_ARMS set ENTRY_LANES_AT_YIELD = ?, EXIT_LANES_AT_YIELD = ? where FK_PARENT_GUID = ?").run(spec.lanes, spec.lanes, guid);
+      // a two-lane ring keeps the arms' lanes as InfraWorks set them (2 on the divided roads, 1 on the others)
+      if (spec.lanes === 1) db.prepare("update INTERSECTION_ARMS set ENTRY_LANES_AT_YIELD = ?, EXIT_LANES_AT_YIELD = ? where FK_PARENT_GUID = ?").run(spec.lanes, spec.lanes, guid);
       db.exec("release roundabout");
       return index;
     }
@@ -247,7 +250,7 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
       pt3(0, 0, 0), spec.lanes, laneDetails,
       spec.islandDiameter, spec.apronWidth, spec.inscribedCircleDiameter);
     db.prepare("update INTERSECTIONS set INTERSECTION_TYPE = 1 where GUID = ?").run(guid);
-    for (const [g, k] of index) db.prepare("update INTERSECTION_ARMS set ARM_INDEX = ?, ENTRY_LANES_AT_YIELD = 1, EXIT_LANES_AT_YIELD = 1, STATUS = 0 where GUID = ?").run(k, g);
+    for (const [g, k] of index) db.prepare(spec.lanes === 1 ? "update INTERSECTION_ARMS set ARM_INDEX = ?, ENTRY_LANES_AT_YIELD = 1, EXIT_LANES_AT_YIELD = 1, STATUS = 0 where GUID = ?" : "update INTERSECTION_ARMS set ARM_INDEX = ?, STATUS = 0 where GUID = ?").run(k, g);
     db.exec("release roundabout");
   } catch (e) {
     db.exec("rollback to roundabout; release roundabout");
@@ -261,7 +264,9 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
  * 42.45 shown, though 40.4 was stored). Sizes that do not add up are not written.
  */
 export function roundaboutDiameter(s: Pick<RoundaboutSpec, "islandDiameter" | "apronWidth" | "lanes" | "laneWidth">): number {
-  return s.islandDiameter + 2 * s.apronWidth + 2 * s.lanes * s.laneWidth;
+  // the ring lanes are the standard's (7.225, then 7.275: InfraWorks junctions 9 and 41, 6 Nov 2026)
+  const widths = s.laneWidth === IW_ROUNDABOUT_STANDARD.laneWidth ? IW_ROUNDABOUT_STANDARD.laneWidths.slice(0, s.lanes) : Array(s.lanes).fill(s.laneWidth);
+  return s.islandDiameter + 2 * s.apronWidth + 2 * widths.reduce((a, b) => a + b, 0);
 }
 /** Height of a 3D polyline at the point nearest to (x, y), interpolated along the nearest segment. */
 function levelAt(line: number[][], x: number, y: number): { z: number; d: number } {

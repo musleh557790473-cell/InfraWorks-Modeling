@@ -286,3 +286,28 @@ test("a roundabout arm that would reach the next junction on its road ends 25 m 
   assert.ok(Math.abs(b.readDoubleLE(8) + 45) < 1e-6 && Math.abs(b.readDoubleLE(24) - 699.55) < 1e-6, "45 m west of the centre, at the road's level");
   assert.equal(n(db, "select BLEND_POINT_ENTRY_OFFSET n from INTERSECTION_ARMS where GUID='east'"), 80.8);
 });
+test("a two-lane ring as InfraWorks builds it with two-lane approaches: 24 + 2 x 0.975 + 2 x (7.225 + 7.275) = 54.95 (AICC, 6 Nov 2026)", () => {
+  assert.equal(Math.round(roundaboutDiameter({ islandDiameter: 24, apronWidth: 0.975, lanes: 2, laneWidth: 7.225 }) * 1000) / 1000, 54.95);
+  const db = new DatabaseSync(":memory:");
+  db.exec(`
+    create table ROADS (ID integer primary key, GUID text, NAME text, FK_PARENT_GUID text, GEOMETRY blob);
+    create table INTERSECTIONS (ID integer primary key, GUID text, REFERENCE_POINTS blob, INTERSECTION_TYPE integer);
+    create table INTERSECTION_ARMS (ID integer primary key, GUID text, FK_PARENT_GUID text, FK_ASSET_GUID text, APPROACH_DIRECTION_MATCHES_ASSET integer,
+      ARM_INDEX integer, ENTRY_LANES_AT_YIELD integer, EXIT_LANES_AT_YIELD integer, STATUS integer);
+    create table ROUNDABOUTS (ID integer primary key, GUID text, GEOMETRY blob, FK_PARENT_TABLE text, FK_PARENT_GUID text, EXTERNAL_STANDARD_GUID text, STANDARD_NAME text,
+      STANDARD_SOURCE text, LOCATION_OFFSET blob, LANES integer, LANE_DETAILS text, ISLAND_DIAMETER real, APRON_WIDTH real, INSCRIBED_CIRCLE_DIAMETER real,
+      TILTED_PLANE_BEARING real, TILTED_PLANE_CROSSFALL real, STATUS integer);
+  `);
+  db.prepare("insert into ROADS (GUID, NAME, FK_PARENT_GUID, GEOMETRY) values ('ra', 'A', 'cd-A', ?), ('rb', 'B', 'cd-B', ?)").run(lineBlob([[-100, 0, 0], [100, 0, 0]]), lineBlob([[0, 0, 0], [0, 100, 0]]));
+  const rp = Buffer.alloc(32); rp.writeUInt32LE(1, 0); rp.writeUInt32LE(1, 4);
+  db.prepare("insert into INTERSECTIONS (ID, GUID, REFERENCE_POINTS, INTERSECTION_TYPE) values (140, 'j', ?, 0)").run(rp);
+  db.exec(`insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, APPROACH_DIRECTION_MATCHES_ASSET, ENTRY_LANES_AT_YIELD) values
+    ('w', 'j', 'cd-A', 1, 2), ('e', 'j', 'cd-A', 0, 2), ('n', 'j', 'cd-B', 0, 1)`);
+  writeRoundabout(db, 140, { inscribedCircleDiameter: 54.95, islandDiameter: 24, apronWidth: 0.975, lanes: 2, laneWidth: 7.225 });
+  assert.equal(String((db.prepare("select LANE_DETAILS d from ROUNDABOUTS").get() as { d: string }).d), '{"version":"1.0.0","lanes":[{"id":1,"width":7.225},{"id":2,"width":7.275}]}');
+  // the user picked another standard in InfraWorks; written again: back to the standard the sizes were set for
+  db.exec("update ROUNDABOUTS set STANDARD_NAME = 'FHWA 2010: Urban Single Lane Roundabout', EXTERNAL_STANDARD_GUID = 'ea0caa79-bc7a-4d45-90d3-bbfc6e713ed1'");
+  writeRoundabout(db, 140, { inscribedCircleDiameter: 54.95, islandDiameter: 24, apronWidth: 0.975, lanes: 2, laneWidth: 7.225 });
+  assert.equal(String((db.prepare("select STANDARD_NAME s from ROUNDABOUTS").get() as { s: string }).s), "FHWA 2010: Rural Double Lane Roundabout");
+  assert.deepEqual((db.prepare("select ENTRY_LANES_AT_YIELD y from INTERSECTION_ARMS order by GUID").all() as { y: number }[]).map((r) => r.y), [2, 1, 2], "InfraWorks' arm lanes kept");
+});

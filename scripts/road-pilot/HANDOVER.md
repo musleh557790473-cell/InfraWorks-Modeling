@@ -671,3 +671,11 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   rebuild. No Autodesk help topic for setting lanes at the yield line (only arm length, yield-line
   position). Parsons' one-lane 8.2 m ring / 40.4 m ICD cannot be built with 2-lane approaches; to
   decide with the user / Autodesk / Parsons (question 15).
+- AICC decision (6 Nov): an acceptable InfraWorks model comes first; where it must differ from Parsons,
+  record the deviation and why (`parsons-deviations.md`, D1-D10), after trying every other option.
+  Roundabouts: InfraWorks' two-lane ring (standard Rural Double Lane, 7.225 + 7.275), island 24.0,
+  apron 0.975, ICD 54.95 (writeRoundabout accepts 1 or 2 lanes, sets the standard on a rewrite, keeps
+  InfraWorks' yield lanes on a 2-lane ring). Written on 9, 41, 106, 125, 136, 140 and, as a test, 233
+  (RA-7, road ends only). `--shorten-arms`: 17 arms shortened to 25 m before the next junction.
+  0 dangling, integrity ok. R.6.F.1 (at 125) still has our body. Next: rebuild R.6.F.1, island toggle
+  on the 7, then check bodies, levels, lanes and whether 233 builds.

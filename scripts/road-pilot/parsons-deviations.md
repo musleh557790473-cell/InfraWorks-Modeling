@@ -1,0 +1,24 @@
+# Al Qairawan road model: where the InfraWorks model differs from Parsons' drawings
+
+Rule (AICC, 6 Nov 2026): the model must be an acceptable InfraWorks model. Where InfraWorks cannot
+build Parsons' design as drawn, every other option is tried first; a deviation is the last resort and
+is recorded here with its reason. Open questions to Parsons: `parsons-questions.md`.
+
+Sources: ROD-DWG-10200 (layout, edges), ROD-DWG-40000 (profiles), ROD-DWG-30000 (typical sections),
+the grading LandXML. Model: `C:\IW\Al Qairawan Roads (Parsons 6 junctions).sqlite`.
+
+| # | Item | Parsons | Model | Why | Options tried first | Parsons question |
+|---|---|---|---|---|---|---|
+| D1 | Roads at roundabout centres | Every approach road ends at the centre (two names per straight line) | Straight pairs joined into one road: R.0.C.2 (+R.0.C.1), R.0.D.2 (+R.0.D.1), R.2.F.3 (+R.1.F.2), R.0.D.15 (+R.0.D.14), R.0.D.12 (+R.0.D.13, R.0.D.10), R.0.D.4 (+R.0.D.3), R.0.C.4 (+R.0.C.3). Plan, profile and section as drawn; Parsons' names and stations in each road's Description | InfraWorks does not build a junction made of road ends only ("Intersection not supported"), so no roundabout | Roads kept separate and written back after the roundabout was built: InfraWorks dropped the roundabout (5 Nov) | 12 |
+| D2 | Roundabout ring | One lane, ring 8.2 m (island r 12.0 to outer edge r 20.2), ICD 40.4 m | Two lanes (7.225 + 7.275 m, InfraWorks standard "FHWA 2010: Rural Double Lane"), island 24.0, apron 0.975, ICD 54.95 m | InfraWorks sets each arm's lanes at the yield line from the approaching road and sizes the ring from the widest arm; Parsons' approaches are divided roads with 2 lanes each way, so InfraWorks always builds 2 ring lanes and recomputes them on every rebuild. Possibly an inconsistency in the drawings themselves: 2 + 2 divided approaches feeding a single-lane 8.2 m ring | One lane written in the file (overwritten on rebuild); standard "Urban Single Lane" (also 2 lanes of 7.0 m, ICD 54); no Autodesk help topic sets the lanes at the yield line | 15 |
+| D3 | Roundabout apron | Not drawn | 0.975 m | Needed by InfraWorks; ring 8.2 m - one 7.225 m lane keeps both drawn edges | Apron 2.0 inside the island; standard lane cannot be 8.2 m | 15 |
+| D4 | Roundabout arm length | Not drawn | Shortened to 25 m before the next junction where InfraWorks' default arm (about 77-81 m) would reach it | "Invalid roundabout geometry - intersections overlap" (RA-5) | Default arms | 15 |
+| D5 | RA-7 | Roundabout at the meeting of R.0.B.1 (C2), R.0.C.4 (C1), R.0.D.5 (B1) | Roundabout written on the junction of road ends (233), being tested; ordinary junction if InfraWorks rejects it | No straight pair: three roads at three angles with three sections, so no road can pass through without changing the design | Joining straight pairs (none); a roundabout on the junction of road ends to be tried | 13 |
+| D6 | RA-3 centre level | R.0.D.9 ends at 687.859, R.0.D.11 starts at 688.000 (0.141 m step); R.0.D.14 / R.0.D.15 meet at 687.982 | R.0.D.14 + R.0.D.15 passes through; the two others end at the roundabout as drawn | The tool refuses to join roads with a level step | - | 14 |
+| D7 | Median of B1 / C1 / C2 | Median raised 150 mm with upstand kerbs, 0.4 m strip by the kerb | Same geometry; the raised median is drawn by the kerbs themselves (each half the median wide) and the 0.4 m strip is a Shoulder component | With a sidewalk-type fill on the median InfraWorks read no lanes on these roads, so junctions and roundabout arms had no lanes | Strip as Lane; fill as Sidewalk (tested on a copy, 5 Nov) | none (no change to the design) |
+| D8 | Kerb return radii | 10 m local, 12 m, 20 m roundabout entries (-RD_Edges arcs) | InfraWorks' defaults (mostly 9 m) | Not written yet (next step) | - | - |
+| D9 | Three junctions (106, 135/299, 161/298) | Ordinary crossings | Surface drops to elevation 0 (pits); 135 and 161 deleted as a workaround and re-created by InfraWorks | InfraWorks build problem, not explained by the data; reported to Autodesk (`autodesk-report-junction-pits.md`) | Road rebuilds, design vehicle change, fresh creation, Extend into Intersection off | - |
+| D10 | R.9.G.6, R.9.G.7 | Not typed in the drawing | A1 (AICC decision 4 Nov) | No section in the drawing | - | yes (earlier list) |
+
+Not deviations (Parsons' data, modelled as drawn, raised as questions): R.1.G.24 starts 0.535 m below
+loop R.1.G.23; R.3.G.1 stands 5 m above the grading surface over its first 100 m.
