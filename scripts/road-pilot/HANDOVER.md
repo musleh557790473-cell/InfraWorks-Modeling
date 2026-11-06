@@ -654,3 +654,12 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   InfraWorks' default arm (blend point) is ~77-81 m, the next junctions on its arms are at 70 / 80 m.
   Same risk on RA-3 (78-82 m) and RA-4 (63 m). Proposed: arm length = distance to the next junction on
   that road - 25 m, capped at the default (a modelling value, not Parsons data); to agree.
+- 6 Nov: RA-6 (140) built on the ground after R.12.E.1 was rebuilt, but InfraWorks widened it to 2 ring
+  lanes again (14.5 m, ICD 54.95): its standard "FHWA 2010: Rural Double Lane Roundabout" follows the
+  2-lane approaches. InfraWorks' US_1400.atj (Resources\Standards\Roads\Roundabouts, zlib) offers
+  "FHWA 2010: Mini Roundabout" (aad8fad5-4647-4306-a768-6206c9237828), "FHWA 2010: Urban Single Lane
+  Roundabout" (ea0caa79-bc7a-4d45-90d3-bbfc6e713ed1), "FHWA 2010: Urban Double Lane Spiral Marking
+  Roundabout" (c097f781-629f-4e24-b66b-4363fe03aa78). Next: the user picks Urban Single Lane in the
+  Stack's Standard drop-down on 140 (Autodesk "To convert an intersection to a roundabout"); then read
+  what InfraWorks stores and write it with the sizes and arms for all six.
+  `shortenArms` (`--shorten-arms`, gap 25 m, test) ready, not yet applied.

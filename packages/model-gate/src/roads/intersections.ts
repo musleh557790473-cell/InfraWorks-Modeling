@@ -408,3 +408,59 @@ export function deleteIntersection(db: DatabaseSync, id: number): number {
   } catch (e) { db.exec("rollback to deljunction; release deljunction"); throw e; }
   return n;
 }
+/** Station of the point of a 3D polyline nearest to (x, y), and its distance. */
+function stationOn(line: number[][], x: number, y: number): { s: number; d: number } {
+  let s = 0, best = { s: 0, d: Infinity };
+  for (let i = 0; i + 1 < line.length; i++) {
+    const a = line[i]!, b = line[i + 1]!, dx = b[0]! - a[0]!, dy = b[1]! - a[1]!, L = Math.hypot(dx, dy);
+    const t = Math.max(0, Math.min(1, ((x - a[0]!) * dx + (y - a[1]!) * dy) / (L * L || 1)));
+    const d = Math.hypot(a[0]! + t * dx - x, a[1]! + t * dy - y);
+    if (d < best.d) best = { s: s + t * L, d };
+    s += L;
+  }
+  return best;
+}
+/** Point (x, y, z) of a 3D polyline at a station. */
+function pointAt(line: number[][], s: number): [number, number, number] {
+  let acc = 0;
+  for (let i = 0; i + 1 < line.length; i++) {
+    const a = line[i]!, b = line[i + 1]!, L = Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!);
+    if (acc + L >= s || i + 2 === line.length) { const t = L ? Math.max(0, Math.min(1, (s - acc) / L)) : 0; return [a[0]! + t * (b[0]! - a[0]!), a[1]! + t * (b[1]! - a[1]!), a[2]! + t * (b[2]! - a[2]!)]; }
+    acc += L;
+  }
+  const e = line[line.length - 1]!; return [e[0]!, e[1]!, e[2]!];
+}
+
+/** Arm length InfraWorks gives the one-lane roundabout here when it has room (Al Qairawan 9, 41, 140: 76.9-81.1 m). */
+export const IW_DEFAULT_ARM = 76.9;
+
+/**
+ * Shortens roundabout arms that would run into the next junction on the same road ("Invalid roundabout
+ * geometry - intersections overlap", Al Qairawan RA-5, 6 Nov 2026: arms of ~80 m, neighbours at 70 and
+ * 80 m). The arm's blend point moves to the next junction minus `gap` metres along the road, at the
+ * road's own level there; arms with room keep their length. The length is a modelling setting, not
+ * design data (AICC decision, 6 Nov 2026: gap 25 m). Returns the arms changed.
+ */
+export function shortenArms(db: DatabaseSync, gap = 25, opts: { dry?: boolean } = {}): { id: number; arm: number; road: string; next: number; length: number }[] {
+  const js = db.prepare("select ID id, GUID g, REFERENCE_POINTS rp from INTERSECTIONS").all() as Row[];
+  const at = new Map(js.map((j) => { const b = Buffer.from(j.rp as Uint8Array); return [String(j.g), { id: Number(j.id), x: b.readDoubleLE(8), y: b.readDoubleLE(16) }]; }));
+  const out: { id: number; arm: number; road: string; next: number; length: number }[] = [];
+  const arms = db.prepare(`select i.GUID ig, a.GUID g, a.ARM_INDEX ix, a.FK_ASSET_GUID road, a.APPROACH_DIRECTION_MATCHES_ASSET d, a.BLEND_POINT_ENTRY_OFFSET o, r.NAME n, r.GEOMETRY geom
+    from INTERSECTIONS i join INTERSECTION_ARMS a on a.FK_PARENT_GUID = i.GUID join ROADS r on r.FK_PARENT_GUID = a.FK_ASSET_GUID where i.INTERSECTION_TYPE = 1 order by i.ID, a.ARM_INDEX`).all() as Row[];
+  if (!opts.dry) db.exec("savepoint arms");
+  try {
+    for (const a of arms) {
+      const line = parseFgf(Buffer.from(a.geom as Uint8Array)).points as number[][], c = at.get(String(a.ig))!, s0 = stationOn(line, c.x, c.y).s, up = Boolean(a.d);
+      const others = (db.prepare("select distinct FK_PARENT_GUID p from INTERSECTION_ARMS where FK_ASSET_GUID = ? and FK_PARENT_GUID <> ?").all(String(a.road), String(a.ig)) as Row[])
+        .map((o) => at.get(String(o.p))!).map((o) => stationOn(line, o.x, o.y)).filter((o) => o.d < 2 && (up ? o.s < s0 : o.s > s0)).map((o) => Math.abs(o.s - s0));
+      if (!others.length) continue;
+      const next = Math.min(...others), want = next - gap, current = a.o == null ? IW_DEFAULT_ARM : Number(a.o);
+      if (want >= current) continue;
+      if (!(want > 10)) throw new Error(`intersection ${c.id} arm ${a.ix} (${a.n}): next junction ${next.toFixed(1)} m away, no room for an arm`);
+      out.push({ id: c.id, arm: Number(a.ix), road: String(a.n), next, length: want });
+      if (!opts.dry) db.prepare("update INTERSECTION_ARMS set BLEND_POINT_ENTRY_OFFSET = ?, BLEND_POINT_ENTRY = ? where GUID = ?").run(want, pt3(...pointAt(line, up ? s0 - want : s0 + want)), String(a.g));
+    }
+    if (!opts.dry) db.exec("release arms");
+  } catch (e) { if (!opts.dry) db.exec("rollback to arms; release arms"); throw e; }
+  return out;
+}

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { armsFromRoads, danglingLinks, deleteIntersection, fixBlendLevels, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, splitLinks, writeRoundabout } from "../src/roads/intersections.js";
+import { armsFromRoads, danglingLinks, deleteIntersection, fixBlendLevels, shortenArms, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, splitLinks, writeRoundabout } from "../src/roads/intersections.js";
 import { lineBlob, removeRoad } from "../src/roads/write.js";
 
 /** Roads A, B, C and a deleted ring R (its definition is gone), with InfraWorks-style rows. */
@@ -265,4 +265,24 @@ test("a junction is deleted with its arms, regions and body, the others untouche
   assert.equal(n(db, "select count(*) n from INTERSECTION_ARMS where FK_PARENT_GUID='tee'"), 0);
   assert.equal(n(db, "select count(*) n from PRIMITIVES where FK_PARENT_GUID='cross'"), 1);
   assert.throws(() => deleteIntersection(db, id), /no intersection/);
+});
+test("a roundabout arm that would reach the next junction on its road ends 25 m before it, at the road's level (RA-5)", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`
+    create table ROADS (ID integer primary key, GUID text, NAME text, FK_PARENT_GUID text, GEOMETRY blob);
+    create table INTERSECTIONS (ID integer primary key, GUID text, REFERENCE_POINTS blob, INTERSECTION_TYPE integer);
+    create table INTERSECTION_ARMS (ID integer primary key, GUID text, FK_PARENT_GUID text, FK_ASSET_GUID text, ARM_INDEX integer,
+      APPROACH_DIRECTION_MATCHES_ASSET integer, BLEND_POINT_ENTRY_OFFSET real, BLEND_POINT_ENTRY blob);
+  `);
+  // road west -> east rising 1 %, roundabout at x = 0, junctions at x = -70 (west) and x = +200 (east)
+  db.prepare("insert into ROADS (GUID, NAME, FK_PARENT_GUID, GEOMETRY) values ('r', 'R.0.D.4', 'cd', ?)").run(lineBlob([[-300, 0, 697], [300, 0, 703]]));
+  const rp = (x: number) => { const b = Buffer.alloc(32); b.writeUInt32LE(1, 0); b.writeUInt32LE(1, 4); b.writeDoubleLE(x, 8); b.writeDoubleLE(700 + x / 100, 24); return b; };
+  db.prepare("insert into INTERSECTIONS (ID, GUID, REFERENCE_POINTS, INTERSECTION_TYPE) values (136, 'rb', ?, 1), (142, 'w', ?, 0), (137, 'e', ?, 0)").run(rp(0), rp(-70), rp(200));
+  db.exec(`insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, ARM_INDEX, APPROACH_DIRECTION_MATCHES_ASSET, BLEND_POINT_ENTRY_OFFSET) values
+    ('west', 'rb', 'cd', 1, 1, 80.8), ('east', 'rb', 'cd', 2, 0, 80.8), ('jw', 'w', 'cd', 1, 1, null), ('je', 'e', 'cd', 1, 0, null)`);
+  const set = shortenArms(db);
+  assert.deepEqual(set.map((s) => [s.arm, Math.round(s.next), Math.round(s.length)]), [[1, 70, 45]], "only the west arm, the east one has room");
+  const b = Buffer.from((db.prepare("select BLEND_POINT_ENTRY b from INTERSECTION_ARMS where GUID='west'").get() as { b: Uint8Array }).b);
+  assert.ok(Math.abs(b.readDoubleLE(8) + 45) < 1e-6 && Math.abs(b.readDoubleLE(24) - 699.55) < 1e-6, "45 m west of the centre, at the road's level");
+  assert.equal(n(db, "select BLEND_POINT_ENTRY_OFFSET n from INTERSECTION_ARMS where GUID='east'"), 80.8);
 });
