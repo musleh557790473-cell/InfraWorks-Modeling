@@ -679,3 +679,12 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   (RA-7, road ends only). `--shorten-arms`: 17 arms shortened to 25 m before the next junction.
   0 dangling, integrity ok. R.6.F.1 (at 125) still has our body. Next: rebuild R.6.F.1, island toggle
   on the 7, then check bodies, levels, lanes and whether 233 builds.
+- 6 Nov, after the island toggles: RA-7 (233) builds as a roundabout on a junction of road ends (all
+  3 roads end at the centre) - so with readable divided roads the D1 merges may not be needed any more
+  (to test later on one roundabout). 106 built with one side unconnected (R.0.D.9 arm blend at 0),
+  233 on a wall (2 blend points at 0): blend heights set. My `--shorten-arms` (25 m before the next
+  junction) was harmful: "insufficient space for arm lengths, or arm radii" on 125 / 140 (InfraWorks
+  had already shortened 140's arms itself to 49.8-66.9 and it was fine); 9, 41, 140 arms restored from
+  the copy taken before. InfraWorks rewrites arm lengths on rebuild (125, 136: 84.4 m, overlapping
+  neighbours at 63-80 m). 125 had switched itself to Urban Double Lane (ICD 60): rewritten Rural Double
+  54.95. Do not use --shorten-arms; next for 125 / 136: drag the arm grip by hand.
