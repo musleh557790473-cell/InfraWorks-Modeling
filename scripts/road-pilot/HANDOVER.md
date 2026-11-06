@@ -694,3 +694,7 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   from 45 to 64.6), the next junctions are at 70 m (142, on R.0.D.4) and 63 m (124, on R.0.D.12).
   Tried: default arms, shortened arms, Urban Single Lane. Last options: Mini Roundabout standard, else
   an ordinary junction (deviation D11).
+- Mini Roundabout on 125 (user, 6 Nov ~14:00): stored "FHWA 2010: Mini Roundabout", 2 lanes, ICD 30,
+  island null, apron 2; still "insufficient space for arm lengths, or arm radii"; body 55 strips.
+  136: type 1, Rural Double 54.95, body 1 strip (never built), so it cannot be picked in the canvas
+  (select it with Select By Filter on Intersections, ID = 136). Handed over to a new session.
