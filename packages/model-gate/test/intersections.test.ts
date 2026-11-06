@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { armsFromRoads, danglingLinks, deleteIntersection, fixBlendLevels, shortenArms, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, splitLinks, writeRoundabout } from "../src/roads/intersections.js";
+import { armRoom, armsFromRoads, boxBlob, danglingLinks, deleteIntersection, fixBlendLevels, shortenArms, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, splitLinks, writeRoundabout } from "../src/roads/intersections.js";
 import { lineBlob, removeRoad } from "../src/roads/write.js";
 
 /** Roads A, B, C and a deleted ring R (its definition is gone), with InfraWorks-style rows. */
@@ -285,6 +285,39 @@ test("a roundabout arm that would reach the next junction on its road ends 25 m 
   const b = Buffer.from((db.prepare("select BLEND_POINT_ENTRY b from INTERSECTION_ARMS where GUID='west'").get() as { b: Uint8Array }).b);
   assert.ok(Math.abs(b.readDoubleLE(8) + 45) < 1e-6 && Math.abs(b.readDoubleLE(24) - 699.55) < 1e-6, "45 m west of the centre, at the road's level");
   assert.equal(n(db, "select BLEND_POINT_ENTRY_OFFSET n from INTERSECTION_ARMS where GUID='east'"), 80.8);
+});
+test("a roundabout arm must end before the next junction's body; where InfraWorks' shortest arm reaches it there is no room (RA-5 arm 3: 64.6 m, 299's body from 66.7)", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`
+    create table ROADS (ID integer primary key, GUID text, NAME text, FK_PARENT_GUID text, GEOMETRY blob);
+    create table INTERSECTIONS (ID integer primary key, GUID text, REFERENCE_POINTS blob, GEOMETRY blob, INTERSECTION_TYPE integer);
+    create table INTERSECTION_ARMS (ID integer primary key, GUID text, FK_PARENT_GUID text, FK_ASSET_GUID text, ARM_INDEX integer,
+      APPROACH_DIRECTION_MATCHES_ASSET integer, BLEND_POINT_ENTRY_OFFSET real, ENTRY_LANES_AT_YIELD integer);
+  `);
+  // R.0.D.4 west -> east through the roundabout at x = 0; junction 142 at +70 (body +-13.3), 180 at -127 (body +-15)
+  db.prepare("insert into ROADS (GUID, NAME, FK_PARENT_GUID, GEOMETRY) values ('r', 'R.0.D.4', 'cd', ?)").run(lineBlob([[-300, 0, 690], [300, 0, 690]]));
+  const rp = (x: number) => { const b = Buffer.alloc(32); b.writeUInt32LE(1, 0); b.writeUInt32LE(1, 4); b.writeDoubleLE(x, 8); b.writeDoubleLE(690, 24); return b; };
+  db.prepare("insert into INTERSECTIONS (ID, GUID, REFERENCE_POINTS, GEOMETRY, INTERSECTION_TYPE) values (136, 'rb', ?, ?, 1), (142, 'e', ?, ?, 0), (180, 'w', ?, ?, 0)")
+    .run(rp(0), boxBlob(-85, -60, 85, 60), rp(70), boxBlob(70 - 13.3, -13.3, 70 + 13.3, 13.3), rp(-127), boxBlob(-127 - 15, -15, -127 + 15, 15));
+  db.exec(`insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, ARM_INDEX, APPROACH_DIRECTION_MATCHES_ASSET, BLEND_POINT_ENTRY_OFFSET, ENTRY_LANES_AT_YIELD) values
+    ('a2', 'rb', 'cd', 2, 1, 84.4, 2), ('a4', 'rb', 'cd', 4, 0, 55.6, 2), ('je', 'e', 'cd', 1, 0, null, 1), ('jw', 'w', 'cd', 1, 1, null, 1)`);
+  // the shortest arm InfraWorks accepts is only known where it was measured: 64.6 m for arm 4 here
+  const r = armRoom(db, { minArm: { "136:4": 64.6 } });
+  assert.deepEqual(r.map((a) => [a.arm, a.nextId, Math.round(a.next * 10) / 10, Math.round(a.edge * 10) / 10, a.minArm, Math.round(a.room * 10) / 10, a.status]), [
+    [2, 180, 127, 112, null, 27.6, "fits"],
+    [4, 142, 70, 56.7, 64.6, -7.9, "no room before the next junction"],
+  ]);
+  // the same arm with InfraWorks' default 84.4 m blend and the junction at 80 m (body from 66.7): the arm overlaps it
+  db.prepare("update INTERSECTIONS set REFERENCE_POINTS = ?, GEOMETRY = ? where ID = 142").run(rp(80), boxBlob(80 - 13.3, -13.3, 80 + 13.3, 13.3));
+  db.exec("update INTERSECTION_ARMS set BLEND_POINT_ENTRY_OFFSET = null where GUID = 'a4'");
+  const a = armRoom(db, { minArm: { "136:4": 64.6 } }).find((x) => x.arm === 4)!;
+  assert.equal(a.blend, 76.9);
+  assert.equal(Math.round(a.room * 10) / 10, 2.1, "66.7 - 64.6");
+  assert.equal(a.status, "arm overlaps the next junction");
+  // shortened to the minimum it fits; without a measured minimum only the overlap rule applies
+  db.exec("update INTERSECTION_ARMS set BLEND_POINT_ENTRY_OFFSET = 64.6 where GUID = 'a4'");
+  assert.equal(armRoom(db, { minArm: { "136:4": 64.6 } }).find((x) => x.arm === 4)!.status, "fits");
+  assert.equal(armRoom(db).find((x) => x.arm === 4)!.minArm, null);
 });
 test("a two-lane ring as InfraWorks builds it with two-lane approaches: 24 + 2 x 0.975 + 2 x (7.225 + 7.275) = 54.95 (AICC, 6 Nov 2026)", () => {
   assert.equal(Math.round(roundaboutDiameter({ islandDiameter: 24, apronWidth: 0.975, lanes: 2, laneWidth: 7.225 }) * 1000) / 1000, 54.95);

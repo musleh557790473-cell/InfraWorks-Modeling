@@ -2,7 +2,7 @@
 import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
-import { armsFromRoads, danglingLinks, deleteIntersection, fixBlendLevels, shortenArms, pruneDanglingIntersections, writeRoundabout } from "./roads/intersections.js";
+import { IW_MIN_ARM_SEEN, armRoom, armsFromRoads, danglingLinks, deleteIntersection, fixBlendLevels, shortenArms, pruneDanglingIntersections, writeRoundabout } from "./roads/intersections.js";
 import { removeRoad } from "./roads/write.js";
 
 const USAGE = `
@@ -14,6 +14,10 @@ model-intersections - InfraWorks intersections in a closed model, written in pla
 --delete-junctions 135,161: delete those junctions (rows and body) so InfraWorks builds them afresh.
 --shorten-arms [--arm-gap 25]: roundabout arms that would reach the next junction on their road end that
 many metres before it (InfraWorks: "intersections overlap").
+--arm-room [--arm-min 136:3=64.6,...]: for every roundabout arm, the room before the body of the next
+junction on the road; with the shortest length InfraWorks accepts for an arm (measured in its Stack:
+its "Inner Zone Of Influence Radius"), reports arms that cannot fit at all (read-only). Known minima
+(Al Qairawan, 6 Nov 2026) are used unless --arm-min is given.
 --arms-from-roads: roundabout arms built without lanes get the lanes, lane width and median of their road.
 Roundabout blend points InfraWorks left at height 0 get the road's level (always).
 --roundabout turns that intersection into a roundabout as InfraWorks stores one (sizes from the
@@ -60,6 +64,10 @@ function main(argv: string[]): number {
         const idx = writeRoundabout(db, Number(ra), { inscribedCircleDiameter: num("--icd"), islandDiameter: num("--island"), apronWidth: num("--apron"), lanes: num("--lanes"), laneWidth: num("--lane-width") });
         void idx;
         say(`roundabout on intersection ${ra}: ${idx.size} arms, ICD ${flag("--icd")} m, island ${flag("--island")} m, apron ${flag("--apron")} m, ${flag("--lanes")} x ${flag("--lane-width")} m`);
+      }
+      if (args.includes("--arm-room")) {
+        const minArm = flag("--arm-min") ? Object.fromEntries(flag("--arm-min")!.split(",").map((p) => { const [k, v] = p.split("="); return [k!, Number(v)]; })) : IW_MIN_ARM_SEEN;
+        for (const a of armRoom(db, { minArm })) say(`arm room: roundabout ${a.id} arm ${a.arm} (${a.road}) blend ${a.blend.toFixed(1)} m; next junction ${a.nextId} at ${a.next.toFixed(1)} m, its body from ${a.edge.toFixed(1)} m; shortest arm ${a.minArm ?? "unknown"} -> room ${a.room.toFixed(1)} m: ${a.status}`);
       }
       if (args.includes("--arms-from-roads")) for (const a of armsFromRoads(db)) say(`arm: intersection ${a.id} arm ${a.arm} (${a.road}) -> ${a.lanes} + ${a.lanes} lanes of ${a.laneWidth} m, median ${a.median} m`);
       if (args.includes("--shorten-arms")) for (const a of shortenArms(db, Number(flag("--arm-gap") ?? 25))) say(`arm shortened: roundabout ${a.id} arm ${a.arm} (${a.road}) -> ${a.length.toFixed(1)} m (next junction ${a.next.toFixed(1)} m)`);

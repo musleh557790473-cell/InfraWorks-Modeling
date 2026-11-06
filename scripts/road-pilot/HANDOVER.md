@@ -698,3 +698,54 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   island null, apron 2; still "insufficient space for arm lengths, or arm radii"; body 55 strips.
   136: type 1, Rural Double 54.95, body 1 strip (never built), so it cannot be picked in the canvas
   (select it with Select By Filter on Intersections, ID = 136). Handed over to a new session.
+
+## Session 7 (6 Nov 2026, evening): why RA-4 / RA-5 do not build
+
+- InfraWorks' own log (`%APPDATA%\Autodesk\Autodesk InfraWorks\logs\AIW_26.0_2026-11-06_13-*.log`)
+  names the rule behind both Stack messages: `RoundaboutManager.cpp(397): [Create Roundabout Fail]
+  The blend point offset is less than Inner Zone Of Influence Radius`, then `update arm for arm N
+  failed`. The roundabout engine is Autodesk Vehicle Tracking (`VehicleTrackingRoundabout.cpp`); the
+  standards are its `.atj` files: the pool `C:\ProgramData\Autodesk\InfraWorks\Resources\Standards\
+  Roads\Roundabouts\US_1400.atj` (FHWA 2000 and 2010 series; GB_1400 TD16/07 Normal / Compact, TD54/07
+  Mini, GEN_1400 Single / Dual Lane sit beside it), copied per standard into
+  `<model>.files\unver\Content\Standards\Roundabouts\<EXTERNAL_STANDARD_GUID>.atj` (zlib after a 122-byte
+  header, Savoy binary; the ICD / island / apron edits are saved there as new GUIDs). Autodesk
+  Vehicle Tracking 2026 is installed on this laptop (its Roundabout Standard Editor makes custom
+  standards; not tried).
+- What the arm lengths did (`.files` history, `armhist` in the session scratchpad): 13:12 our
+  `--shorten-arms` wrote 125: 38.06 / 55.31, 136: 55.0 / 45.0 / 55.0. 13:32 InfraWorks raised 136 arm 3
+  (S, R.0.D.12) 55.0 -> 64.60, reset arm 4 (E, R.0.D.4) 45 -> 84.42 (default), kept arm 1 (N) 55.0;
+  125's arms went to ARM_INDEX -1 (fail) and the standard to Urban Double. 13:51: 125 arm 2 (N)
+  38.06 -> 46.57, arm 3 (SW) 55.31 -> 64.27; 136 arm 4 84.42 -> 55.60 (junction 142's body starts at
+  56.7). So the minimum is per arm (two arms of the same straight B1 road: N <= 55.0, S 64.6) and not
+  stored anywhere; InfraWorks lengthens a too-short arm to it. It also renumbers ARM_INDEX itself.
+- Rules in code (`armRoom`, `--arm-room [--arm-min 136:3=64.6,...]`, `IW_MIN_ARM_SEEN`, test): an arm's
+  blend point must end before the next junction's body (INTERSECTIONS.GEOMETRY box: InfraWorks' own
+  shortening stops there, 140 arm 3 49.8 vs 50.1, 9 arm 3 51.6 vs 49.8, 136 arm 4 55.6 vs 56.7), and
+  not nearer than the arm's minimum. Report on the working model: 125 arm 2 needs 46.6, junction
+  124's body starts at 43.8 (-2.8 m); 125 arm 3 needs 64.3, 120's body at 61.0 (-3.3 m); 136 arm 3
+  64.6 vs 299's body at 66.7 (+2.1 m); 136 arm 4 55.6 vs 56.7 (+1.1 m). 140 arm 1 sits 3.8 m inside
+  134's box and still builds, so the box is a guide within a few metres, not the exact test.
+  No "[Create Roundabout Fail]" after 13:51 in the logs; 136 has not been rebuilt since its arms got
+  these values (body still 1 strip): first thing to try is one more island toggle on 136.
+- Checked and ruled out: the model's roads at 125 and 136 match Parsons' centrelines (R.0.D.12 runs
+  through RA-4 on a continuous r 250 curve, R.0.D.15 arrives on r 400, R.6.F.1 leaves on r 400; at
+  RA-5 all four arms are straight at 0 / 90 / 180 / 270, R.0.D.3 straight 48.1 m then r 150); the
+  centres equal the drawn island circles (r 12.0); Parsons' profiles are the same pattern at every
+  roundabout (PVIs at 12 and 20.2 m, the 2 % ring crossfall); the neighbouring junctions' bodies are
+  normal (18-28 m from their centres, 299 included). Parsons' entries are 7.3 m wide between the
+  median nose and the outer kerb (2 lanes, no flare, kerb returns r 20), so a one-lane approach is not
+  in the drawings. The angle between arms 3 and 4 of RA-4 is 61.5 deg (the others 81-113).
+- Autodesk help: "To modify roundabout geometry" (InfraWorks-RoadsandHighways
+  GUID-5E5E1D95-F78E-4A03-A2E2-D97C8AB77EB5): select the roundabout, click an arm, drag its vertical
+  grip = blend point, the Stack shows Arm Length; Standard drop-down in the roundabout Stack. Roads
+  Tutorial 3 Exercise 3 (2016 tutorials GUID-E1D905F9-9CE9-4966-867E-CA1430F6E9F6): where there is
+  not enough space, pick a smaller standard (Urban Compact) then shorten the arms by their grips.
+  Civil 3D "Roundabout Standard Editor: Arm Geometry: Splitter ETW Construction"
+  (GUID-E5D615CE-26AF-4F74-A697-7C0418A4D174): the arm geometry a standard carries (construction
+  triangle length / width, entry and exit radii and taper radii, as ratios of the inscribed radius).
+- Next (user, in InfraWorks): (1) island toggle on 136 as it is; (2) on 136 and 125 type 30 in every
+  arm's Arm Length, toggle the island, read the lengths InfraWorks sets (= each arm's minimum) and
+  what the Standard drop-down lists (US only, or GB / GEN too); (3) the same on "FHWA 2000: Urban
+  Compact Roundabout". Then decide: custom standard with Parsons' radii (Vehicle Tracking 2026),
+  or deviation D11.

@@ -440,6 +440,77 @@ function pointAt(line: number[][], s: number): [number, number, number] {
 export const IW_DEFAULT_ARM = 76.9;
 
 /**
+ * Shortest arms InfraWorks 2026 has accepted on a two-lane FHWA 2010 Rural Double Lane roundabout fed
+ * by 2 + 2 divided roads (Al Qairawan, 6 Nov 2026), by "intersection:arm": the lengths it raised ours
+ * to when they were too short (136 arm 3: 55.0 -> 64.6; 125 arm 2: 38.06 -> 46.57; 125 arm 3: 55.31 ->
+ * 64.27), and the shortest it chose itself on roundabouts that built (140 arm 3: 49.8). Its log names
+ * the rule: "[Create Roundabout Fail] The blend point offset is less than Inner Zone Of Influence
+ * Radius" (RoundaboutManager.cpp), then "update arm for arm N failed". The radius comes from the
+ * Vehicle Tracking engine (standard, lanes, road) per arm and is not stored in the model, so it is
+ * only known where it was measured; `armRoom` takes such measurements.
+ */
+export const IW_MIN_ARM_SEEN: Readonly<Record<string, number>> = { "136:3": 64.6, "125:2": 46.57, "125:3": 64.27, "140:3": 49.8 };
+
+export interface ArmRoom {
+  id: number;
+  arm: number;
+  road: string;
+  /** BLEND_POINT_ENTRY_OFFSET, or InfraWorks' default when null */
+  blend: number;
+  /** next junction on this road beyond the arm, and its centre's distance along the road */
+  nextId: number;
+  next: number;
+  /** where that junction's body (INTERSECTIONS.GEOMETRY box) begins, along the road from the centre */
+  edge: number;
+  /** the arm's shortest length InfraWorks accepts, where measured (`minArm` option); else null */
+  minArm: number | null;
+  /** edge - minArm (or edge - blend when the minimum is not known): what is left before the next junction's body */
+  room: number;
+  status: "fits" | "arm overlaps the next junction" | "no room before the next junction";
+}
+
+/**
+ * Room for each roundabout arm before the next junction on its road.
+ *
+ * Two rules seen on Al Qairawan (6 Nov 2026): (1) the blend point may not reach the next junction's
+ * body ("Invalid roundabout geometry - intersections overlap"); when InfraWorks shortens an arm itself
+ * it stops near that junction's GEOMETRY box (140 arm 3: 49.8 m, box at 50.1; 9 arm 3: 51.6, box at
+ * 49.8; 136 arm 4: 55.6, box at 56.7); (2) the blend point may not be nearer than the arm's inner zone
+ * of influence, which InfraWorks enforces by lengthening the arm (`IW_MIN_ARM_SEEN`; "insufficient
+ * space for arm lengths, or arm radii" in the Stack). Where that minimum reaches the box, no arm length
+ * fits: RA-5 (136) arm 3 needs 64.6 m, junction 299's body starts at 66.7; RA-4 (125) arm 2 needs
+ * 46.6, junction 124's body starts at 43.8. `minArm` holds the measured minima by "intersection:arm".
+ */
+export function armRoom(db: DatabaseSync, opts: { minArm?: Readonly<Record<string, number>> } = {}): ArmRoom[] {
+  const js = db.prepare("select ID id, GUID g, REFERENCE_POINTS rp, GEOMETRY geom from INTERSECTIONS").all() as Row[];
+  const at = new Map(js.map((j) => {
+    const b = Buffer.from(j.rp as Uint8Array);
+    const box = j.geom ? (parseFgf(Buffer.from(j.geom as Uint8Array)).points as number[][]) : [];
+    return [String(j.g), { id: Number(j.id), x: b.readDoubleLE(8), y: b.readDoubleLE(16), box }];
+  }));
+  const out: ArmRoom[] = [];
+  const arms = db.prepare(`select i.GUID ig, a.ARM_INDEX ix, a.FK_ASSET_GUID road, a.APPROACH_DIRECTION_MATCHES_ASSET d, a.BLEND_POINT_ENTRY_OFFSET o, r.NAME n, r.GEOMETRY geom
+    from INTERSECTIONS i join INTERSECTION_ARMS a on a.FK_PARENT_GUID = i.GUID join ROADS r on r.FK_PARENT_GUID = a.FK_ASSET_GUID
+    where i.INTERSECTION_TYPE = 1 order by i.ID, a.ARM_INDEX`).all() as Row[];
+  for (const a of arms) {
+    const line = parseFgf(Buffer.from(a.geom as Uint8Array)).points as number[][], c = at.get(String(a.ig))!, s0 = stationOn(line, c.x, c.y).s, up = Boolean(a.d);
+    const side = (s: number) => (up ? s < s0 : s > s0);
+    const others = (db.prepare("select distinct FK_PARENT_GUID p from INTERSECTION_ARMS where FK_ASSET_GUID = ? and FK_PARENT_GUID <> ?").all(String(a.road), String(a.ig)) as Row[])
+      .map((o) => at.get(String(o.p))!).map((o) => ({ o, st: stationOn(line, o.x, o.y) })).filter((x) => x.st.d < 2 && side(x.st.s))
+      .sort((p, q) => Math.abs(p.st.s - s0) - Math.abs(q.st.s - s0));
+    if (!others.length) continue;
+    const nxt = others[0]!, next = Math.abs(nxt.st.s - s0);
+    // the body box's nearest corner on the arm's side of the roundabout centre
+    const corners = nxt.o.box.map((p) => stationOn(line, p[0]!, p[1]!).s).filter(side).map((s) => Math.abs(s - s0));
+    const edge = corners.length ? Math.min(...corners) : next;
+    const blend = a.o == null ? IW_DEFAULT_ARM : Number(a.o), minArm = opts.minArm?.[`${c.id}:${a.ix}`] ?? null, room = edge - (minArm ?? blend);
+    const status: ArmRoom["status"] = minArm != null && minArm > edge ? "no room before the next junction" : blend > edge ? "arm overlaps the next junction" : "fits";
+    out.push({ id: c.id, arm: Number(a.ix), road: String(a.n), blend, nextId: nxt.o.id, next, edge, minArm, room, status });
+  }
+  return out;
+}
+
+/**
  * Shortens roundabout arms that would run into the next junction on the same road ("Invalid roundabout
  * geometry - intersections overlap", Al Qairawan RA-5, 6 Nov 2026: arms of ~80 m, neighbours at 70 and
  * 80 m). The arm's blend point moves to the next junction minus `gap` metres along the road, at the
