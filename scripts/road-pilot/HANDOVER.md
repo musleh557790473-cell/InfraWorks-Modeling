@@ -688,3 +688,9 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   the copy taken before. InfraWorks rewrites arm lengths on rebuild (125, 136: 84.4 m, overlapping
   neighbours at 63-80 m). 125 had switched itself to Urban Double Lane (ICD 60): rewritten Rural Double
   54.95. Do not use --shorten-arms; next for 125 / 136: drag the arm grip by hand.
+- 6 Nov 13:40: built and accepted by the user: RA-1 (9), RA-2 (41), RA-3 (106), RA-6 (140), RA-7 (233),
+  all 2-lane Rural Double, island 24.0, apron 0.975, ICD ~55. Not built: RA-5 (136) and RA-4 (125),
+  "intersections overlap": InfraWorks' minimum arm for a 2-lane ring is ~64.6 m (it raised 136 arm 3
+  from 45 to 64.6), the next junctions are at 70 m (142, on R.0.D.4) and 63 m (124, on R.0.D.12).
+  Tried: default arms, shortened arms, Urban Single Lane. Last options: Mini Roundabout standard, else
+  an ordinary junction (deviation D11).
