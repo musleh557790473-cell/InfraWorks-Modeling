@@ -663,3 +663,11 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   Stack's Standard drop-down on 140 (Autodesk "To convert an intersection to a roundabout"); then read
   what InfraWorks stores and write it with the sizes and arms for all six.
   `shortenArms` (`--shorten-arms`, gap 25 m, test) ready, not yet applied.
+- Urban Single Lane on 140 (6 Nov): InfraWorks stored STANDARD ea0caa79-..., source "Pool", but replaced
+  the sizes with its defaults (ICD 54.0, apron 4.0, island 18.0) and made the ring 2 lanes of 7.0
+  (LANE_DETAILS), because it set ENTRY/EXIT_LANES_AT_YIELD 2 on the three divided-road arms. Rule:
+  InfraWorks takes each arm's lanes at the yield line from the approaching road (now 2 + 2 on B1/C1)
+  and the ring follows the widest arm, whatever the standard; it rewrites what we store on every
+  rebuild. No Autodesk help topic for setting lanes at the yield line (only arm length, yield-line
+  position). Parsons' one-lane 8.2 m ring / 40.4 m ICD cannot be built with 2-lane approaches; to
+  decide with the user / Autodesk / Parsons (question 15).
