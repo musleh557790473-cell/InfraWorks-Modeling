@@ -976,3 +976,33 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   657 regions, 6 roundabouts (9, 41, 106, 140, 233 Rural Double Lane 54.95 / 55.05; 308 Urban Compact
   48.0), 0 orphans, integrity ok. **Roundabout work closed.** Next: D8 (kerb return radii 10 / 12 /
   20 m from the drawing on the ordinary junctions), then the Autodesk report goes out.
+
+## Session 8 (7 Nov 2026, night): D8 kerb return radii
+
+- Model: 657 INTERSECTION_REGIONS, one per junction corner; CURB_RETURN_TYPE 2 (radius) on 643 with
+  CURB_RETURN_RADIUS 9 (513), 11 (100), 12 (14), 10 (10), 15, 18, 6; type 4 (taper, offset 0.8,
+  ratio 8) on 14; INPUT_CURB_RETURN_TYPE -1 and MANUALLY_CHANGED 0 everywhere (nothing ever edited in
+  the Stack). Rule checked on all 634 regions of the plain junctions: the corner (centroid of the
+  region geometry) lies in the wedge between the incoming arm (before the centre along its road when
+  SAME_DIRECTION_AS_INCOMING_ASSET) and the outgoing arm (after the centre when
+  SAME_DIRECTION_AS_OUTGOING_ASSET); 634 of 634 within 30 degrees of the bisector.
+- Drawing: 1269 arcs on -RD_Edges (LWPOLYLINE bulges), 981 of them r < 40 m sweeping > 30 degrees;
+  the kerb return of a corner is the arc whose centre bears within 35 degrees of the corner from the
+  junction centre and lies within 35 m of it (on the divided roads the centre is 20-30 m out). Fillets
+  of r 1 m and arcs under 20 degrees are skipped. REFERENCE_POINTS is a MultiPoint on some junctions
+  (51, 300, 303): read through parseFgf (`junctionCentre`), not at byte 8 (the earlier scratch scripts
+  showed those centres as x = 0).
+- model-gate: `packages/model-gate/src/roads/curb-returns.ts` (`kerbArcs`, `junctionCentre`,
+  `curbReturnsFromDrawing`), CLI `--curb-returns <10200.dxf> [--junctions ...]`, 3 tests (56 in all).
+  Written values: CURB_RETURN_RADIUS = drawn, CURB_RETURN_TYPE 2, INPUT_CURB_RETURN_TYPE 2,
+  MANUALLY_CHANGED 1 (assumed to be what the Stack writes for a user-set radius; to confirm).
+  Dry run on the working copy: 634 corners on 294 junctions, 600 to set (10 m x447, 12 m x141,
+  11 m x10, 15 m x2), 11 already the drawn value, 22 without a drawn arc (listed; 309's four among
+  them: the drawing has a roundabout there), 1 compound (232: 14 / 13.9).
+- Written on junctions 2 and 13 only (copy `backup-before-kerbs-2-13`) as the InfraWorks test.
+- Next (user, working copy): open; select junction 13 (R.1.F.4 x R.1.F.1) and junction 2; Stack >
+  Turning Zone: do the radii read 12 (13) and 10 (2) instead of 9 / 11; Grading Limit toggle on
+  R.1.F.1 and on one road of 2; do they survive the rebuild (Autodesk "About Intersections": select a
+  Turning Zone to view and modify its attributes in the Stack). If yes: write all 600; if InfraWorks
+  resets them, try INPUT_CURB_RETURN_TYPE -1 / MANUALLY_CHANGED 0 with the radius alone, else D8 stays
+  a deviation.

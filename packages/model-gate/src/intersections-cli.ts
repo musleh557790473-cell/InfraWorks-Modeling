@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
+import { readDxfBlock } from "@infraworks/domain";
+
+import { curbReturnsFromDrawing } from "./roads/curb-returns.js";
 import { IW_ARM_CLAMP_SEEN, IW_ROUNDABOUT_STANDARDS, armRoom, armsFromRoads, danglingLinks, deleteIntersection, fixBlendLevels, healZeroedArms, shortenArms, pruneDanglingIntersections, writeRoundabout, type RoundaboutStandard } from "./roads/intersections.js";
 import { removeRoad } from "./roads/write.js";
 
@@ -19,6 +22,9 @@ limits it to those roundabouts (and gives their unset arms the default length). 
 was 14.4 m on RA-5 (7 Nov 2026).
 --heal-arms 309: arms InfraWorks zeroed in a failed build (offset 0, no lanes at the yield line) get
 their lanes, widths and median back (from an arm of the same road on a built roundabout, else the road).
+--curb-returns <ROD-DWG-10200 .dxf> [--layout-block "Xref Road Layout Al Qairawan"] [--junctions 13,22]:
+every junction corner gets the kerb return radius the designer drew there (the -RD_Edges arc in that
+corner); corners without a drawn arc keep InfraWorks' radius and are listed.
 --arm-room [--arm-clamp 136:3=64.6,...] [--standard ...]: for every roundabout arm, the room before the
 body of the next junction on the road, the longest arm InfraWorks allows there where measured (the
 clamp; known ones from Al Qairawan, 6-7 Nov 2026, unless --arm-clamp is given) and, with --standard,
@@ -78,6 +84,17 @@ function main(argv: string[]): number {
         for (const a of armRoom(db, { clamp, standard: standardFlag })) say(`arm room: roundabout ${a.id} arm ${a.arm} (${a.road}) blend ${a.blend.toFixed(1)} m; next junction ${a.nextId} at ${a.next.toFixed(1)} m, its body from ${a.edge.toFixed(1)} m; InfraWorks' clamp ${a.clamp ?? "unknown"}; room ${a.room.toFixed(1)} m: ${a.status}${a.standard ? `; ${standardFlag}: ${a.standard}` : ""}`);
       }
       if (args.includes("--arms-from-roads")) for (const a of armsFromRoads(db)) say(`arm: intersection ${a.id} arm ${a.arm} (${a.road}) -> ${a.lanes} + ${a.lanes} lanes of ${a.laneWidth} m, median ${a.median} m`);
+      if (flag("--curb-returns")) {
+        const layout = readDxfBlock(readFileSync(flag("--curb-returns")!, "latin1"), flag("--layout-block") ?? "Xref Road Layout Al Qairawan");
+        const only = flag("--junctions")?.split(",").map(Number);
+        const res = curbReturnsFromDrawing(db, layout, { only });
+        const by = (s: string) => res.filter((r) => r.status === s);
+        const hist = new Map<number, number>();
+        for (const r of by("set")) hist.set(r.drawn!, (hist.get(r.drawn!) ?? 0) + 1);
+        say(`kerb returns: ${res.length} corners on ${new Set(res.map((r) => r.id)).size} junctions; set ${by("set").length} (${[...hist].sort((a, b) => b[1] - a[1]).map(([r, n]) => `${r} m x${n}`).join(", ")}), already drawn value ${by("unchanged").length}, no drawn arc ${by("no drawn arc").length}, ambiguous ${by("ambiguous").length}`);
+        for (const r of by("no drawn arc")) say(`  no drawn arc: junction ${r.id} region ${r.region} (corner ${r.corner.toFixed(0)} deg; InfraWorks ${r.was})`);
+        for (const r of by("ambiguous")) say(`  ambiguous: junction ${r.id} region ${r.region}: ${r.drawn} m taken, also drawn ${r.others.join(" / ")} (InfraWorks ${r.was})`);
+      }
       if (flag("--heal-arms")) for (const a of healZeroedArms(db, flag("--heal-arms")!.split(",").map(Number))) say(`arm healed: roundabout ${a.id} arm ${a.arm} (${a.road}) -> ${a.yieldLanes} lanes at the yield line, width ${a.width}, median ${a.median} (from ${a.from})`);
       if (args.includes("--shorten-arms")) for (const a of shortenArms(db, Number(flag("--arm-gap") ?? 25), { only: flag("--arm-ids")?.split(",").map(Number) })) say(`arm shortened: roundabout ${a.id} arm ${a.arm} (${a.road}) -> ${a.length.toFixed(1)} m (next junction ${a.next.toFixed(1)} m)`);
       const fixed = fixBlendLevels(db);
