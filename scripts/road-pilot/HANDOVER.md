@@ -929,3 +929,9 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   roundabout geometry"), save; then Grading Limit toggles on R.6.G.18, R.8.G.2, R.9.G.5 bring 142,
   137, 299 back; whether the roundabout survives their return is the test (308 lives with 124's box
   overlapping its own).
+- 7 Nov ~21:45 (user: "do it, but on a new copy"): trial copy `C:\IW\Al Qairawan Roads (Parsons 7 RA5
+  trial).sqlite` + `.files` (robocopy, 2339 entries, identical); the working copy `(Parsons 6
+  junctions)` is untouched (301 intersections, 7 roundabouts). In the trial copy:
+  `--delete-junctions 142,137,299,309` (60 + 60 + 82 + 11 rows): 297 intersections, 916 arms, 645
+  regions, 6 roundabouts, 0 dangling, integrity ok, nothing within 80 m of the RA-5 centre. If the
+  trial succeeds, the same steps are repeated on the working copy (or the trial copy becomes it).
