@@ -778,7 +778,27 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   scratchpad `backup-before-delete-308-309`): `--delete-junctions 308,309` (11 + 9 rows) plus the
   5 orphan rows (`pruneDanglingIntersections` now covers ROUNDABOUTS, commit e9b7d96); file back to
   299 intersections, 923 arms, 651 regions, 5 roundabouts, integrity ok, max ID 307.
-- Next (user, in InfraWorks, one roundabout per session): Grading Limit toggle on R.0.D.12 again,
-  convert the RA-5 centre junction alone, save, close; verify the file (`--arm-room`, sizes), write
-  24.0 / 0.975 back if it built. Then RA-4: Standard drop-down list (screenshot), "FHWA 2000: Urban
-  Compact Roundabout", then Mini; if neither builds, custom standard (Vehicle Tracking 2026) or D11.
+- 7 Nov 15:38-15:46 (user): model opened (InfraWorks repaired a "transient state" of both `.files`
+  Git repos: the previous session was not closed cleanly), Grading Limit toggle on R.0.D.12 twice
+  (15:40, 15:45): 308 (RA-4) and 309 (RA-5) created again as plain intersections, 308 with a full body
+  (76 primitives). Junction Type > Roundabout on 309: **InfraWorks crashed** at 15:46:33, right after
+  the log line "Junction Standard loaded from .../US_1400.atj". Dump `%LOCALAPPDATA%\Temp\InfraWorks_error.dmp`
+  (2.5 MB, copy in the session scratchpad `dump\`), read with `scripts/road-pilot/minidump.cjs`
+  (minidump streams, no debugger): exception 0xC0000005 (read of address 0) in
+  `AIM_RoadsApp.dll+0xf8be5`, thread 32432 (UI thread), frames AIM_UIPlatform > AIM_Platform >
+  AIM_RoadsApp > AIM_ModelRoad / AIM_ModelCore > FdoWrap / AIM_CoreAPI (the database layer). No WER
+  record, no Application-log event. The file afterwards held exactly the rows of the locked session:
+  309 INTERSECTION_TYPE 1 without a ROUNDABOUTS row, ROUNDABOUTS 8 with an empty parent GUID, arms
+  968-971 with an empty parent and InfraWorks' shortened lengths (R.0.D.12 65.6 both ways, R.0.D.4
+  55.6 towards 142 and 73.5 towards 180), STATUS 1. So the locked-table errors of 14:54 and this crash
+  are the same failure in RA-5's conversion; InfraWorks writes the roundabout row and the arms before
+  it sets their parent, and dies in between. Cleaned 15:55 (model closed; copy in the scratchpad
+  `backup-after-crash-1546`): `--delete-junctions 309` (9 rows + 5 orphans); 308 kept as a plain
+  intersection. File: 300 intersections, 927 arms, 655 regions, 5 roundabouts, integrity ok.
+- Next (user, in InfraWorks, one action per session, save and close after each):
+  (1) RA-4 first, no crash there: select 308, Junction Type > Roundabout (expect the warning), then
+  the Standard drop-down: screenshot of the list, pick "FHWA 2000: Urban Compact Roundabout", then
+  Mini if needed; screenshots; save, close; I read the file. (2) RA-5 once more in a fresh session:
+  Grading Limit toggle on R.0.D.4 (not R.0.D.12), convert the new centre junction. A second crash at
+  the same offset makes it Autodesk's bug for RA-5: report with the dump (as
+  `autodesk-report-junction-pits.md`) and decide D11 (ordinary junction) or wait for a fix.
