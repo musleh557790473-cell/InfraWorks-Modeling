@@ -944,3 +944,14 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   the local roads themselves (R.6.G.18, R.8.G.2, R.9.G.5, R.10.G.2; `--delete-roads`, rewritten later
   with `model:roads --only`) would give a conversion with no neighbour at all. The crash address is
   identical in all three dumps.
+- 7 Nov ~22:00 (user: "delete the roads temporarily"), trial copy only (copy in the scratchpad
+  `backup-trial-before-delete-roads`): `--delete-roads R.6.G.18,R.8.G.2,R.9.G.5,R.10.G.2
+  --delete-junctions 311`: 4 roads (209 rows), 311, and the 16 junctions left on one road (130, 131,
+  132, 134, 143, 144, 178, 179, 187, 231, 232, 253, 278, 309, 310, 312) with 651 body rows; 284
+  intersections, 877 arms, 231 roads, 0 dangling, integrity ok; nearest junction to the RA-5 centre
+  is now 180 at 125 m. To restore: `model:roads ... --only R.6.G.18,R.8.G.2,R.9.G.5,R.10.G.2` then a
+  Grading Limit toggle on each (InfraWorks recreates the 16 junctions).
+- Next (user, trial copy): Grading Limit toggle on R.0.D.4 (the centre cross comes back, no neighbour
+  nearer than 125 m), Junction Type > Roundabout. A crash now = general for a cross of two through
+  roads (D12 + Autodesk report). Built = Standard > Urban Compact, save, close; then the roads are
+  rewritten and the roundabout watched as the neighbours return.
