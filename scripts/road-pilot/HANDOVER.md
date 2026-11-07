@@ -912,3 +912,20 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   close. If "intersections overlap" again: the overlap rule of the rebuild path is not about the arm
   length at all; then either a deviation (to be designed: the only geometric freedom is the arm
   lengths, already used) or D12.
+- 7 Nov 21:16-21:26 (user): still "Invalid roundabout geometry - intersections overlap" with the
+  60 / 50 m arms, no body. File: InfraWorks kept the lengths (60.0 / 76.9 / 60.0 / 50.5; it only
+  rewrote R.0.D.4's median to 2.0 and renumbered the arms), wrote 309's INTERSECTIONS box as
+  128.8 x 120.0 m (the arms' extent), 1 primitive. Row-by-row diff against 308 (built by InfraWorks)
+  shows no field missing in ours (ROUNDABOUTS, arms, regions all alike); 308's own box overlaps
+  124's by 2 m and it builds. So the rebuild path's "overlap" is neither the arm length nor the boxes;
+  it refuses this roundabout as soon as junctions 142 (70.5 m, R.0.D.4 x R.6.G.18), 137 (80 m,
+  R.0.D.12 x R.8.G.2) and 299 (80 m, R.0.D.12 x R.9.G.5 / R.10.G.2) are that close.
+  Next idea, InfraWorks' own tools only: remove those three junctions (and 309) in the file
+  (`--delete-junctions 142,137,299,309`; InfraWorks recreates each when its local road is edited),
+  then in InfraWorks: Grading Limit toggle on R.0.D.4 (309 comes back as a cross with no junction
+  nearer than 180 at 126 m), Stack > Roundabout (nothing to clamp: if it still crashes, the crash is
+  general for a cross of two through roads -> D12 and an Autodesk report), Standard > Urban Compact,
+  shorten the two R.0.D.12 arms and the east R.0.D.4 arm by their grips to ~60 / 50 m ("To modify
+  roundabout geometry"), save; then Grading Limit toggles on R.6.G.18, R.8.G.2, R.9.G.5 bring 142,
+  137, 299 back; whether the roundabout survives their return is the test (308 lives with 124's box
+  overlapping its own).
