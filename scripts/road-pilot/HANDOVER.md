@@ -883,3 +883,18 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   ending there, as 308); screenshot; Junction Type > Roundabout, then Standard > FHWA 2000: Urban
   Compact; screenshots; save, close. Then I write island 24.0 (`--roundabout <id> --icd 48 --island 24
   --apron 0 --lanes 2 --lane-width 6 --standard urban-compact`) and the user toggles the island.
+- 7 Nov 20:31-20:35 (user): R.0.D.3 and R.0.D.4 built (90 / 75 primitives), the centre junction came
+  back as 309, a plain cross of R.0.D.12 (through), R.0.D.3 and R.0.D.4 (ending there) - and
+  **"Intersection not supported"**: no body (1 primitive), the Roundabout thumbnail does nothing. Log:
+  `IntersectionCommonInfo.cpp(1596): warn: failed to get road parameters` x4 on every rebuild, a
+  line never seen in any log since 4 Nov. 308 has two road ends too (R.6.F.1, R.0.D.15, at 61.5 deg)
+  and is supported, so what InfraWorks refuses is two road ends meeting end to end (collinear) at a
+  crossing - the same reason the four road ends of the original RA-5 / 136 were "not supported" (D1).
+  RA-5's geometry (two straight roads crossing at right angles) therefore has no supported topology
+  in InfraWorks 2026.0.2.119 other than two through roads, where the Stack conversion crashes and the
+  file route reports "intersections overlap" at InfraWorks' own clamped lengths (65.6 / 55.6).
+  Not yet tried: the file route with shorter arms (60 / 50 m: 6.7 m clear of the neighbours' boxes,
+  still above the 47.57 m Urban Compact is known to build at) on the merged cross; it costs merging
+  R.0.D.3 + R.0.D.4 again, deleting 309, one road edit, the roundabout written, one more road edit.
+  Else D12: RA-5 as the ordinary junction InfraWorks builds (with Parsons' roads R.0.D.3 / R.0.D.4
+  merged again or as drawn, whichever InfraWorks supports), and an Autodesk report with both dumps.
