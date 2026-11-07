@@ -189,7 +189,9 @@ export interface RoundaboutSpec {
  * 4 Nov 2026), so only the circle, island and apron can be chosen. "rural-double" is what the Stack
  * picks on conversion (junction 4, 4 Nov 2026); "urban-compact" is the one whose arm geometry fits
  * where the neighbouring junctions are close (RA-4 / 308 built with it, 7 Nov 2026: ICD 42.0, island
- * 18.0, no apron, 2 lanes of 6 m).
+ * 18.0, no apron, 2 lanes of 6 m). Parsons' 8.2 m lane written on it (`keepLaneWidth`) came back as
+ * 6.0 m on opening and the ring as 2 x 6 m after the next rebuild (island 24.0 kept, ICD 48.0), so on
+ * this standard too only the island (and apron) can be chosen.
  */
 export const IW_ROUNDABOUT_STANDARDS = {
   "rural-double": { EXTERNAL_STANDARD_GUID: "4bfa64b5-07ca-4a15-8413-79dab6124e1d", STANDARD_NAME: "FHWA 2010: Rural Double Lane Roundabout", STANDARD_SOURCE: "Pool", laneWidth: 7.225, laneWidths: [7.225, 7.275] },

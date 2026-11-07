@@ -820,8 +820,14 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   24.0 --apron 0 --lanes 1 --lane-width 8.2 --standard urban-compact --keep-lane-width`, i.e.
   Parsons' ring as drawn; the arms' lanes at yield set to 1 (InfraWorks set 2 back on RA-1 / RA-2;
   expected here too). Deviation D11 (RA-4 on Urban Compact) recorded; D4 rewritten with the clamp rule.
-- Next (user): open, select 308, Stack: do the sizes read 40.4 / 24.0 / 0 and does the ring show one
-  lane; Grading Limit toggle on R.6.F.1 (the short arm) to force a rebuild; screenshot of the Stack
-  and the ring; save, close. Then I read what InfraWorks kept (8.2 or 6 m, 1 or 2 lanes) and close
-  D11. RA-5 after that: Grading Limit toggle on R.0.D.4, convert; if it crashes again, note the
-  offset in the dump (`minidump.cjs`) and decide.
+- 7 Nov ~19:10 (user): on opening, the Roundel of 308 read ICD 36.00, apron 0, island 24.00, Total
+  Width of Lanes 6.0: InfraWorks replaced the written 8.2 m lane by the standard's 6.0 m at once.
+  After the Grading Limit toggle on R.6.F.1: ICD 48.0, island 24.0, apron 0, lanes 12.0 m = 2 x 6 m
+  (the 2 + 2 divided approaches set the ring to two lanes again, as D2). Final RA-4: Urban Compact,
+  island 24.0 (Parsons' r 12), no apron, 2 x 6.0 m, ICD 48.0 (outer edge r 24.0 against the drawn
+  20.2; the five Rural Double roundabouts stand at 27.5). D11 closed on that. To write it again:
+  `--roundabout 308 --icd 48 --island 24 --apron 0 --lanes 2 --lane-width 6 --standard urban-compact`.
+- Next: RA-5 in its own session: Grading Limit toggle on R.0.D.4, convert the new centre junction;
+  if it builds, Standard > Urban Compact at once (its arms towards 142 / 299 are clamped to 55.6 /
+  65.6, under Rural Double's need); if it crashes again, note the offset in the dump
+  (`minidump.cjs`) and decide D12 (ordinary junction) or an Autodesk report.
