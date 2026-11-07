@@ -510,8 +510,10 @@ export const IW_DEFAULT_ARM = 76.9;
  */
 export const IW_ARM_CLAMP_SEEN: Readonly<Record<string, number>> = {
   "136:3": 64.6, "136:4": 55.6, "125:2": 47.57, "125:3": 64.27, "308:2": 47.57, "308:3": 64.27, "140:1": 55.8, "140:3": 49.8,
-  // RA-5 as 309 (7 Nov 2026, the arms InfraWorks wrote before it crashed): R.0.D.12 both ways 65.6, R.0.D.4 towards 142 55.6
-  "309:1": 65.6, "309:3": 65.6, "309:4": 55.6,
+  // RA-5 as 309 (7 Nov 2026, the arms InfraWorks wrote before it crashed): R.0.D.12 both ways 65.6 (towards 299 and
+  // 137), R.0.D.4 towards 142 55.6; numbered as writeRoundabout numbers them after the merge back (arm 1 R.0.D.4
+  // towards 180, 2 R.0.D.12 towards 299, 3 R.0.D.4 towards 142, 4 R.0.D.12 towards 137)
+  "309:2": 65.6, "309:3": 55.6, "309:4": 65.6,
 };
 /** @deprecated the measured lengths are InfraWorks' maxima before the next junction, not minima: `IW_ARM_CLAMP_SEEN` */
 export const IW_MIN_ARM_SEEN = IW_ARM_CLAMP_SEEN;

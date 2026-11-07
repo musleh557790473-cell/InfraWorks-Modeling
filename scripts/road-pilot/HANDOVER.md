@@ -898,3 +898,17 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   R.0.D.3 + R.0.D.4 again, deleting 309, one road edit, the roundabout written, one more road edit.
   Else D12: RA-5 as the ordinary junction InfraWorks builds (with Parsons' roads R.0.D.3 / R.0.D.4
   merged again or as drawn, whichever InfraWorks supports), and an Autodesk report with both dumps.
+- 7 Nov ~21:05, user's decision: one last file-route trial, and a deviation from Parsons' drawing is
+  allowed if it solves it, recorded with its reasons. Model closed, copy in the scratchpad
+  `backup-before-merge-back-r0d4`: `--merge R.0.D.4=R.0.D.3+R.0.D.4` again (1436.094 m, 17 PVIs, B1;
+  25 links moved, R.0.D.3's 132 rows deleted), 309 is the two-through cross again (arms R.0.D.12 x 2,
+  R.0.D.4 x 2). Then `--roundabout 309 --icd 48 --island 24 --apron 0 --lanes 2 --lane-width 6
+  --standard urban-compact --heal-arms 309 --shorten-arms --arm-gap 20 --arm-ids 309`: arms numbered
+  1 R.0.D.4 towards 180 (76.9), 2 R.0.D.12 towards 299 (60.0), 3 R.0.D.4 towards 142 (50.5), 4 R.0.D.12
+  towards 137 (60.0), all 6.7 m clear of the neighbours' boxes, yield lanes 2 / 2, widths 3.3, median
+  2.0 / 1.2, points on the road at its level. File: 301 intersections, 930 arms, 7 roundabouts,
+  integrity ok, 0 orphans. (`IW_ARM_CLAMP_SEEN` keys for 309 renumbered.)
+- Next (user): open, Grading Limit toggle on R.0.D.4 only; screenshots of 309 and the Stack; save,
+  close. If "intersections overlap" again: the overlap rule of the rebuild path is not about the arm
+  length at all; then either a deviation (to be designed: the only geometric freedom is the arm
+  lengths, already used) or D12.
