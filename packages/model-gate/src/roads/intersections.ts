@@ -421,6 +421,34 @@ export function armsFromRoads(db: DatabaseSync, opts: { dry?: boolean } = {}): {
   return out;
 }
 /**
+ * Arms InfraWorks zeroed when a roundabout failed to build ("intersections overlap" on 309, 7 Nov 2026:
+ * blend offset 0, blend point at the origin, 0 lanes at the yield line, entry / exit width 0, median 0)
+ * get their fields back: the lanes at the yield line from the arm's blend-point lanes, the widths and
+ * median from an arm of the same road on a roundabout InfraWorks did build (308 on R.0.D.12: 3.3 /
+ * 3.3 / 2.0), else from the road's own section. The blend point itself is `shortenArms`' job. Returns
+ * the arms set.
+ */
+export function healZeroedArms(db: DatabaseSync, ids: readonly number[], opts: { dry?: boolean } = {}): { id: number; arm: number; road: string; yieldLanes: number; width: number; median: number; from: string }[] {
+  const out: { id: number; arm: number; road: string; yieldLanes: number; width: number; median: number; from: string }[] = [];
+  for (const id of ids) {
+    const i = db.prepare("select GUID g from INTERSECTIONS where ID = ?").get(id) as Row | undefined;
+    if (!i) throw new Error(`no intersection ${id}`);
+    const arms = db.prepare(`select a.GUID g, a.ARM_INDEX ix, a.FK_ASSET_GUID road, a.BLEND_POINT_ENTRY_OFFSET o, a.ENTRY_LANES_AT_YIELD y, a.BLEND_POINT_ENTRY_LANES el, a.BLEND_POINT_EXIT_LANES xl,
+      a.BLEND_POINT_ENTRY_WIDTH w, r.NAME n, r.MANUAL_STYLE ms from INTERSECTION_ARMS a join ROADS r on r.FK_PARENT_GUID = a.FK_ASSET_GUID where a.FK_PARENT_GUID = ? order by a.ARM_INDEX`).all(String(i.g)) as Row[];
+    for (const a of arms) {
+      if (!(Number(a.o ?? 0) === 0 && Number(a.y ?? 0) === 0)) continue;
+      const sib = db.prepare(`select a.BLEND_POINT_ENTRY_WIDTH w, a.BLEND_POINT_EXIT_WIDTH xw, a.BLEND_POINT_MEDIAN_WIDTH m, i.ID id from INTERSECTION_ARMS a join INTERSECTIONS i on i.GUID = a.FK_PARENT_GUID
+        where a.FK_ASSET_GUID = ? and a.FK_PARENT_GUID <> ? and i.INTERSECTION_TYPE = 1 and a.BLEND_POINT_ENTRY_OFFSET > 0 and a.BLEND_POINT_ENTRY_WIDTH > 0 order by i.ID desc`).get(String(a.road), String(i.g)) as Row | undefined;
+      const s = sib ? { width: Number(sib.w), exitWidth: Number(sib.xw), median: Number(sib.m), from: `roundabout ${sib.id}` } : (() => { const r = roadSectionOf(String(a.ms)); return { width: r.laneWidth, exitWidth: r.laneWidth, median: r.median, from: `road ${a.n}` }; })();
+      const el = Number(a.el ?? 0) || 1, xl = Number(a.xl ?? 0) || 1;
+      out.push({ id, arm: Number(a.ix), road: String(a.n), yieldLanes: el, width: s.width, median: s.median, from: s.from });
+      if (!opts.dry) db.prepare(`update INTERSECTION_ARMS set ENTRY_LANES_AT_YIELD = ?, EXIT_LANES_AT_YIELD = ?, BLEND_POINT_ENTRY_WIDTH = ?, BLEND_POINT_EXIT_WIDTH = ?, BLEND_POINT_MEDIAN_WIDTH = ?, STATUS = 0 where GUID = ?`)
+        .run(el, xl, s.width, s.exitWidth, s.median, String(a.g));
+    }
+  }
+  return out;
+}
+/**
  * Deletes one intersection with its arms, regions, roundabout row and body, so that InfraWorks creates
  * it afresh where the roads meet the next time one of them is edited (Al Qairawan junctions 106, 135,
  * 161: built while a road still had our body, they kept a surface dropping to height 0 through every
@@ -582,9 +610,10 @@ export function shortenArms(db: DatabaseSync, gap = 25, opts: { dry?: boolean; o
       if (opts.only && !opts.only.includes(c.id)) continue;
       const others = (db.prepare("select distinct FK_PARENT_GUID p from INTERSECTION_ARMS where FK_ASSET_GUID = ? and FK_PARENT_GUID <> ?").all(String(a.road), String(a.ig)) as Row[])
         .map((o) => at.get(String(o.p))!).map((o) => stationOn(line, o.x, o.y)).filter((o) => o.d < 2 && (up ? o.s < s0 : o.s > s0)).map((o) => Math.abs(o.s - s0));
-      if (!others.length) continue;
-      const next = Math.min(...others), want = next - gap, current = a.o == null ? IW_DEFAULT_ARM : Number(a.o);
-      if (want >= current) continue;
+      // an offset of 0 is what InfraWorks leaves after a failed build (309, 7 Nov 2026): unset, like null
+      const unset = a.o == null || Number(a.o) === 0, current = unset ? IW_DEFAULT_ARM : Number(a.o);
+      const next = others.length ? Math.min(...others) : Infinity, want = Math.min(next - gap, unset ? IW_DEFAULT_ARM : Infinity);
+      if (want >= current && !(unset && opts.only)) continue;
       if (!(want > 10)) throw new Error(`intersection ${c.id} arm ${a.ix} (${a.n}): next junction ${next.toFixed(1)} m away, no room for an arm`);
       out.push({ id: c.id, arm: Number(a.ix), road: String(a.n), next, length: want });
       if (!opts.dry) db.prepare("update INTERSECTION_ARMS set BLEND_POINT_ENTRY_OFFSET = ?, BLEND_POINT_ENTRY = ? where GUID = ?").run(want, pt3(...pointAt(line, up ? s0 - want : s0 + want)), String(a.g));

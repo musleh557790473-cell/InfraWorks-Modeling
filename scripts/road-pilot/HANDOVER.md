@@ -847,3 +847,15 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   makes InfraWorks build the body as it did for 41 and 9; screenshots; save, close. If InfraWorks
   crashes on that too, RA-5 cannot be a roundabout in this release: D12 (ordinary junction, as
   Parsons' cross) and an Autodesk report with both dumps.
+- 7 Nov ~20:00 (user): opened; 309 shows as Roundabout (Urban Compact, 48.0 / 0.0 / 24.0) but with no
+  body and the toast "Invalid roundabout geometry - intersections overlap"; the roundel cannot be
+  picked (nothing drawn). The file afterwards: InfraWorks had zeroed all four arms (offset 0, blend
+  point at the origin, 0 lanes at the yield line, widths and median 0): with no blend points it used
+  its default 76.9 m and found the neighbours at 70 / 80 m, and unlike the Stack conversion this
+  rebuild path does not clamp. Written 20:20 (model closed, copy `backup-before-arms-309`):
+  `--heal-arms 309 --shorten-arms --arm-gap 14.4 --arm-ids 309`: yield lanes 2 / 2, widths 3.3,
+  median 2.0 (R.0.D.12, from 308) / 1.2 (R.0.D.4, from the road section), blend offsets 65.6 / 76.9 /
+  65.6 / 55.6 with their points on the road at its level. `--arm-room --standard urban-compact`: all
+  four fit, builds. model-gate commits 624fc72 and the next: `--arm-ids`, `--heal-arms`, 53 tests.
+- Next (user): open, select R.0.D.4, Grading Limit 5.0 -> 5.1 -> 5.0 so InfraWorks rebuilds 309 with
+  the arms as written; screenshots of the roundabout and the Stack; save, close.

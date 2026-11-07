@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { armRoom, armsFromRoads, boxBlob, danglingLinks, deleteIntersection, fixBlendLevels, shortenArms, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, splitLinks, writeRoundabout } from "../src/roads/intersections.js";
+import { armRoom, armsFromRoads, boxBlob, danglingLinks, deleteIntersection, fixBlendLevels, healZeroedArms, shortenArms, pruneDanglingIntersections, readJunctions, repointLinks, roundaboutDiameter, splitLinks, writeRoundabout } from "../src/roads/intersections.js";
 import { lineBlob, removeRoad } from "../src/roads/write.js";
 
 /** Roads A, B, C and a deleted ring R (its definition is gone), with InfraWorks-style rows. */
@@ -188,6 +188,36 @@ test("the circle InfraWorks shows is island + 2 x apron + 2 x lanes (junctions 4
   assert.equal(roundaboutDiameter({ islandDiameter: 18, apronWidth: 0, lanes: 2, laneWidth: 6, standard: "urban-compact" }), 42, "RA-4 as InfraWorks built it on Urban Compact");
   assert.equal(Math.round(roundaboutDiameter({ islandDiameter: 24, apronWidth: 0, lanes: 1, laneWidth: 8.2, standard: "urban-compact", keepLaneWidth: true }) * 10) / 10, 40.4, "Parsons' ring kept as drawn");
 });
+test("arms zeroed by a failed build get their lanes, widths and median back from a built roundabout on the same road, else the road (309, 7 Nov 2026)", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`
+    create table ROADS (ID integer primary key, GUID text, NAME text, FK_PARENT_GUID text, MANUAL_STYLE text);
+    create table INTERSECTIONS (ID integer primary key, GUID text, INTERSECTION_TYPE integer);
+    create table INTERSECTION_ARMS (ID integer primary key, GUID text, FK_PARENT_GUID text, FK_ASSET_GUID text, ARM_INDEX integer, BLEND_POINT_ENTRY_OFFSET real,
+      ENTRY_LANES_AT_YIELD integer, EXIT_LANES_AT_YIELD integer, BLEND_POINT_ENTRY_LANES integer, BLEND_POINT_EXIT_LANES integer,
+      BLEND_POINT_ENTRY_WIDTH real, BLEND_POINT_EXIT_WIDTH real, BLEND_POINT_MEDIAN_WIDTH real, STATUS integer);
+  `);
+  const style = (lanes: number, w: number, med: number) => JSON.stringify({ componentStyle: JSON.stringify({ references: [
+    ...[...Array(lanes)].map(() => ({ def: "x/Lane", paramOverrides: [{ name: "LeftSideFactor", value: -1 }, { name: "Width", value: w }] })),
+    ...[...Array(lanes)].map(() => ({ def: "x/Lane", paramOverrides: [{ name: "LeftSideFactor", value: 1 }, { name: "Width", value: w }] })),
+    { def: "x/Sloped Median", paramOverrides: [{ name: "Width", value: med }] }] }) });
+  db.prepare("insert into ROADS (GUID, NAME, FK_PARENT_GUID, MANUAL_STYLE) values ('r12', 'R.0.D.12', 'cd-12', ?), ('r4', 'R.0.D.4', 'cd-4', ?)").run(style(2, 3.65, 2), style(2, 3.5, 1.5));
+  db.exec("insert into INTERSECTIONS (ID, GUID, INTERSECTION_TYPE) values (308, 'j308', 1), (309, 'j309', 1)");
+  db.exec(`insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, ARM_INDEX, BLEND_POINT_ENTRY_OFFSET, ENTRY_LANES_AT_YIELD, EXIT_LANES_AT_YIELD, BLEND_POINT_ENTRY_LANES, BLEND_POINT_EXIT_LANES, BLEND_POINT_ENTRY_WIDTH, BLEND_POINT_EXIT_WIDTH, BLEND_POINT_MEDIAN_WIDTH, STATUS) values
+    ('b2', 'j308', 'cd-12', 2, 47.57, 2, 2, 2, 2, 3.3, 3.3, 2, 0),
+    ('z1', 'j309', 'cd-12', 1, 0, 0, 0, 2, 2, 0, 0, 0, 0),
+    ('z2', 'j309', 'cd-4', 2, 0, 0, 0, 2, 2, 0, 0, 0, 0),
+    ('ok', 'j309', 'cd-4', 3, 55.6, 2, 2, 2, 2, 3.3, 3.3, 2, 0)`);
+  const dry = healZeroedArms(db, [309], { dry: true });
+  assert.deepEqual(dry.map((a) => [a.arm, a.yieldLanes, a.width, a.median, a.from]), [[1, 2, 3.3, 2, "roundabout 308"], [2, 2, 3.5, 1.5, "road R.0.D.4"]]);
+  assert.equal(n(db, "select ENTRY_LANES_AT_YIELD n from INTERSECTION_ARMS where GUID = 'z1'"), 0, "dry: nothing written");
+  healZeroedArms(db, [309]);
+  const row = (g: string) => { const r = db.prepare("select ENTRY_LANES_AT_YIELD y, EXIT_LANES_AT_YIELD x, BLEND_POINT_ENTRY_WIDTH w, BLEND_POINT_MEDIAN_WIDTH m from INTERSECTION_ARMS where GUID = ?").get(g) as { y: number; x: number; w: number; m: number }; return [r.y, r.x, r.w, r.m]; };
+  assert.deepEqual(row("z1"), [2, 2, 3.3, 2]);
+  assert.deepEqual(row("z2"), [2, 2, 3.5, 1.5]);
+  assert.equal(n(db, "select BLEND_POINT_ENTRY_OFFSET n from INTERSECTION_ARMS where GUID = 'ok'"), 55.6, "a sound arm is left alone");
+  assert.throws(() => healZeroedArms(db, [999]), /no intersection 999/);
+});
 test("the FHWA 2000 Urban Compact standard (RA-4 / 308, 7 Nov 2026): no apron, 6 m lanes, Parsons' 8.2 m only as a trial", () => {
   const db = new DatabaseSync(":memory:");
   db.exec(`
@@ -332,6 +362,11 @@ test("a roundabout arm that would reach the next junction on its road ends 25 m 
     ('west', 'rb', 'cd', 1, 1, 80.8), ('east', 'rb', 'cd', 2, 0, 80.8), ('jw', 'w', 'cd', 1, 1, null), ('je', 'e', 'cd', 1, 0, null)`);
   assert.deepEqual(shortenArms(db, 25, { only: [999] }), [], "limited to other roundabouts: nothing touched");
   assert.deepEqual(shortenArms(db, 14.4, { dry: true, only: [136] }).map((s) => [s.arm, Math.round(s.length * 10) / 10]), [[1, 55.6]], "InfraWorks' own clamp on RA-5: the centre minus 14.4");
+  // arms InfraWorks zeroed in a failed build (309, 7 Nov 2026): 0 is unset; with `only` the arm with room gets the default too
+  db.exec("update INTERSECTION_ARMS set BLEND_POINT_ENTRY_OFFSET = 0 where FK_PARENT_GUID = 'rb'");
+  assert.deepEqual(shortenArms(db, 14.4, { dry: true }).map((s) => [s.arm, Math.round(s.length * 10) / 10]), [[1, 55.6]], "without `only`: just the clamped arm");
+  assert.deepEqual(shortenArms(db, 14.4, { dry: true, only: [136] }).map((s) => [s.arm, Math.round(s.length * 10) / 10]), [[1, 55.6], [2, 76.9]]);
+  db.exec("update INTERSECTION_ARMS set BLEND_POINT_ENTRY_OFFSET = 80.8 where FK_PARENT_GUID = 'rb'");
   const set = shortenArms(db);
   assert.deepEqual(set.map((s) => [s.arm, Math.round(s.next), Math.round(s.length)]), [[1, 70, 45]], "only the west arm, the east one has room");
   const b = Buffer.from((db.prepare("select BLEND_POINT_ENTRY b from INTERSECTION_ARMS where GUID='west'").get() as { b: Uint8Array }).b);

@@ -2,7 +2,7 @@
 import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
-import { IW_ARM_CLAMP_SEEN, IW_ROUNDABOUT_STANDARDS, armRoom, armsFromRoads, danglingLinks, deleteIntersection, fixBlendLevels, shortenArms, pruneDanglingIntersections, writeRoundabout, type RoundaboutStandard } from "./roads/intersections.js";
+import { IW_ARM_CLAMP_SEEN, IW_ROUNDABOUT_STANDARDS, armRoom, armsFromRoads, danglingLinks, deleteIntersection, fixBlendLevels, healZeroedArms, shortenArms, pruneDanglingIntersections, writeRoundabout, type RoundaboutStandard } from "./roads/intersections.js";
 import { removeRoad } from "./roads/write.js";
 
 const USAGE = `
@@ -15,7 +15,10 @@ model-intersections - InfraWorks intersections in a closed model, written in pla
 --delete-junctions 135,161: delete those junctions (rows and body) so InfraWorks builds them afresh.
 --shorten-arms [--arm-gap 25] [--arm-ids 309]: roundabout arms that would reach the next junction on
 their road end that many metres before its centre (InfraWorks: "intersections overlap"); --arm-ids
-limits it to those roundabouts. InfraWorks' own clamp was 14.4 m on RA-5 (7 Nov 2026).
+limits it to those roundabouts (and gives their unset arms the default length). InfraWorks' own clamp
+was 14.4 m on RA-5 (7 Nov 2026).
+--heal-arms 309: arms InfraWorks zeroed in a failed build (offset 0, no lanes at the yield line) get
+their lanes, widths and median back (from an arm of the same road on a built roundabout, else the road).
 --arm-room [--arm-clamp 136:3=64.6,...] [--standard ...]: for every roundabout arm, the room before the
 body of the next junction on the road, the longest arm InfraWorks allows there where measured (the
 clamp; known ones from Al Qairawan, 6-7 Nov 2026, unless --arm-clamp is given) and, with --standard,
@@ -75,6 +78,7 @@ function main(argv: string[]): number {
         for (const a of armRoom(db, { clamp, standard: standardFlag })) say(`arm room: roundabout ${a.id} arm ${a.arm} (${a.road}) blend ${a.blend.toFixed(1)} m; next junction ${a.nextId} at ${a.next.toFixed(1)} m, its body from ${a.edge.toFixed(1)} m; InfraWorks' clamp ${a.clamp ?? "unknown"}; room ${a.room.toFixed(1)} m: ${a.status}${a.standard ? `; ${standardFlag}: ${a.standard}` : ""}`);
       }
       if (args.includes("--arms-from-roads")) for (const a of armsFromRoads(db)) say(`arm: intersection ${a.id} arm ${a.arm} (${a.road}) -> ${a.lanes} + ${a.lanes} lanes of ${a.laneWidth} m, median ${a.median} m`);
+      if (flag("--heal-arms")) for (const a of healZeroedArms(db, flag("--heal-arms")!.split(",").map(Number))) say(`arm healed: roundabout ${a.id} arm ${a.arm} (${a.road}) -> ${a.yieldLanes} lanes at the yield line, width ${a.width}, median ${a.median} (from ${a.from})`);
       if (args.includes("--shorten-arms")) for (const a of shortenArms(db, Number(flag("--arm-gap") ?? 25), { only: flag("--arm-ids")?.split(",").map(Number) })) say(`arm shortened: roundabout ${a.id} arm ${a.arm} (${a.road}) -> ${a.length.toFixed(1)} m (next junction ${a.next.toFixed(1)} m)`);
       const fixed = fixBlendLevels(db);
       for (const f of fixed) say(`blend point height: intersection ${f.id} arm ${f.arm} -> ${f.z.toFixed(3)} (road ${f.off.toFixed(3)} m away)`);
