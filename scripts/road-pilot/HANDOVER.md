@@ -757,3 +757,28 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   ROUNDABOUTS rows, bodies). Next: one edit on R.0.D.12 (through both centres) so InfraWorks creates
   the two centre junctions again, then Junction Type > Roundabout in the Stack on each, with
   InfraWorks' own arm lengths and sizes; our sizes (24.0 / 0.975) are written back only if it builds.
+- 7 Nov 14:53-14:57, fresh build (user): Grading Limit 5.0 -> 5.1 -> 5.0 on R.0.D.12 created the two
+  centre junctions again as 308 (RA-4) and 309 (RA-5), plain intersections without a warning. 308 ->
+  Roundabout: "Invalid roundabout geometry - insufficient space for arm lengths, or arm radii", ICD /
+  island 0.0. Log (`AIW_26.0_2026-11-07_14-50-55`): the same two lines as for 125, "blend point offset
+  is less than Inner Zone Of Influence Radius" for arms 2 and 3, and the same lengths InfraWorks chose:
+  R.0.D.15 64.27 m (junction 120's body at 61.0, -3.3), R.0.D.12 towards 124 47.57 m (body at 43.8,
+  -3.8); R.6.F.1 and R.0.D.12 towards 128 at the default 73.5 with room. So the old rows were not the
+  cause: the per-arm minimum comes from the standard's approach geometry (Civil 3D "Roundabout
+  Standard Editor: Arm Geometry: Approach", GUID-46861A10-F553-4648-9B72-53027B4D5E72: Deviation
+  Offset, Final Straight Section, Transition Arc Radius, Design Speed, each with Min / Max / Default).
+  Then 12 x "database table is locked" (FDO wrap, same thread, 11 s after the failure): the updates
+  of ROUNDABOUTS 8, arms 960-963 and INTERSECTIONS 308 (GEOMETRY, dates) did not persist, hence
+  Termination Date 17-Sep-1752 in the Stack and ARM_INDEX -1. The user then converted 309 as well:
+  no "Create Roundabout Fail" line for it, but its write failed the same way and left ROUNDABOUTS 9
+  and arms 968-971 with an empty parent GUID; the lengths InfraWorks chose for RA-5 fit the room
+  (R.0.D.12 towards 299: 65.6 vs body 66.7; R.0.D.4 towards 142: 55.6 vs 56.7; towards 180: 73.5),
+  so RA-5 is expected to build in a clean session. Never seen before 7 Nov (0 "table is locked" in
+  all logs since 1 Nov). Cleaned 7 Nov ~15:30 after the user closed the model (copy in the session
+  scratchpad `backup-before-delete-308-309`): `--delete-junctions 308,309` (11 + 9 rows) plus the
+  5 orphan rows (`pruneDanglingIntersections` now covers ROUNDABOUTS, commit e9b7d96); file back to
+  299 intersections, 923 arms, 651 regions, 5 roundabouts, integrity ok, max ID 307.
+- Next (user, in InfraWorks, one roundabout per session): Grading Limit toggle on R.0.D.12 again,
+  convert the RA-5 centre junction alone, save, close; verify the file (`--arm-room`, sizes), write
+  24.0 / 0.975 back if it built. Then RA-4: Standard drop-down list (screenshot), "FHWA 2000: Urban
+  Compact Roundabout", then Mini; if neither builds, custom standard (Vehicle Tracking 2026) or D11.
