@@ -330,6 +330,8 @@ test("a roundabout arm that would reach the next junction on its road ends 25 m 
   db.prepare("insert into INTERSECTIONS (ID, GUID, REFERENCE_POINTS, INTERSECTION_TYPE) values (136, 'rb', ?, 1), (142, 'w', ?, 0), (137, 'e', ?, 0)").run(rp(0), rp(-70), rp(200));
   db.exec(`insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, ARM_INDEX, APPROACH_DIRECTION_MATCHES_ASSET, BLEND_POINT_ENTRY_OFFSET) values
     ('west', 'rb', 'cd', 1, 1, 80.8), ('east', 'rb', 'cd', 2, 0, 80.8), ('jw', 'w', 'cd', 1, 1, null), ('je', 'e', 'cd', 1, 0, null)`);
+  assert.deepEqual(shortenArms(db, 25, { only: [999] }), [], "limited to other roundabouts: nothing touched");
+  assert.deepEqual(shortenArms(db, 14.4, { dry: true, only: [136] }).map((s) => [s.arm, Math.round(s.length * 10) / 10]), [[1, 55.6]], "InfraWorks' own clamp on RA-5: the centre minus 14.4");
   const set = shortenArms(db);
   assert.deepEqual(set.map((s) => [s.arm, Math.round(s.next), Math.round(s.length)]), [[1, 70, 45]], "only the west arm, the east one has room");
   const b = Buffer.from((db.prepare("select BLEND_POINT_ENTRY b from INTERSECTION_ARMS where GUID='west'").get() as { b: Uint8Array }).b);

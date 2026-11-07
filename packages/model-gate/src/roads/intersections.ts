@@ -564,9 +564,12 @@ export function armRoom(db: DatabaseSync, opts: { clamp?: Readonly<Record<string
  * geometry - intersections overlap", Al Qairawan RA-5, 6 Nov 2026: arms of ~80 m, neighbours at 70 and
  * 80 m). The arm's blend point moves to the next junction minus `gap` metres along the road, at the
  * road's own level there; arms with room keep their length. The length is a modelling setting, not
- * design data (AICC decision, 6 Nov 2026: gap 25 m). Returns the arms changed.
+ * design data (AICC decision, 6 Nov 2026: gap 25 m). InfraWorks' own clamp on RA-5 (309, 7 Nov 2026)
+ * was the next junction's centre minus 14.4 m on both roads (65.6 at 80.0, 55.6 at 70.0), so a
+ * roundabout whose row was written in the file gets that gap, and `only` keeps every other
+ * roundabout's arms untouched (9 and 41 are not to be changed). Returns the arms changed.
  */
-export function shortenArms(db: DatabaseSync, gap = 25, opts: { dry?: boolean } = {}): { id: number; arm: number; road: string; next: number; length: number }[] {
+export function shortenArms(db: DatabaseSync, gap = 25, opts: { dry?: boolean; only?: readonly number[] } = {}): { id: number; arm: number; road: string; next: number; length: number }[] {
   const js = db.prepare("select ID id, GUID g, REFERENCE_POINTS rp from INTERSECTIONS").all() as Row[];
   const at = new Map(js.map((j) => { const b = Buffer.from(j.rp as Uint8Array); return [String(j.g), { id: Number(j.id), x: b.readDoubleLE(8), y: b.readDoubleLE(16) }]; }));
   const out: { id: number; arm: number; road: string; next: number; length: number }[] = [];
@@ -576,6 +579,7 @@ export function shortenArms(db: DatabaseSync, gap = 25, opts: { dry?: boolean } 
   try {
     for (const a of arms) {
       const line = parseFgf(Buffer.from(a.geom as Uint8Array)).points as number[][], c = at.get(String(a.ig))!, s0 = stationOn(line, c.x, c.y).s, up = Boolean(a.d);
+      if (opts.only && !opts.only.includes(c.id)) continue;
       const others = (db.prepare("select distinct FK_PARENT_GUID p from INTERSECTION_ARMS where FK_ASSET_GUID = ? and FK_PARENT_GUID <> ?").all(String(a.road), String(a.ig)) as Row[])
         .map((o) => at.get(String(o.p))!).map((o) => stationOn(line, o.x, o.y)).filter((o) => o.d < 2 && (up ? o.s < s0 : o.s > s0)).map((o) => Math.abs(o.s - s0));
       if (!others.length) continue;
