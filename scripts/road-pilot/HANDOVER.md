@@ -857,5 +857,17 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   median 2.0 (R.0.D.12, from 308) / 1.2 (R.0.D.4, from the road section), blend offsets 65.6 / 76.9 /
   65.6 / 55.6 with their points on the road at its level. `--arm-room --standard urban-compact`: all
   four fit, builds. model-gate commits 624fc72 and the next: `--arm-ids`, `--heal-arms`, 53 tests.
-- Next (user): open, select R.0.D.4, Grading Limit 5.0 -> 5.1 -> 5.0 so InfraWorks rebuilds 309 with
-  the arms as written; screenshots of the roundabout and the Stack; save, close.
+- 7 Nov 20:05-20:13 (user): Grading Limit toggle on R.0.D.4: 309 still "Invalid roundabout geometry -
+  intersections overlap", no ring, no arms, Termination Date 1752 again, the ground around the
+  centre a flat smear. The file afterwards: the arms kept our lengths (InfraWorks rewrote arm 2 to
+  76.9016 and R.0.D.4's median to 2.0, so it did read them), 1 primitive, no zeroing this time. So the
+  rebuild path refuses this roundabout at 65.6 / 55.6 m although the Stack path built 308 at 47.6 /
+  64.3 m inside its neighbours' boxes: the file route (RA-1 / RA-2) only works where the arms have
+  room; where they are clamped, only the Stack conversion builds, and that conversion crashes on a
+  cross of two through roads. Remaining before a deviation: give RA-5 the topology of 308 (one through
+  road + two road ends) by undoing the R.0.D.4 merge, as Parsons drew it (R.0.D.3 0+000-0+782.663,
+  R.0.D.4 0+782.663-1+436.094; centre at 782.7): `model:roads --split R.0.D.4=R.0.D.3+R.0.D.4` (dry
+  run passes), 309 deleted first; 10 junctions on R.0.D.4 (142, 176, 177, 180, 235, 237, 254, 257,
+  266, 274) keep their links on the part they lie on. Then InfraWorks builds R.0.D.3 / R.0.D.4 on a
+  Grading Limit toggle each, creates the centre junction (3 roads), Stack > Roundabout > Urban Compact.
+  Awaiting the user's decision (it narrows D1 for RA-5 towards the drawing).
