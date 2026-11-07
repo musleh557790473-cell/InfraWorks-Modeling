@@ -955,3 +955,17 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   nearer than 125 m), Junction Type > Roundabout. A crash now = general for a cross of two through
   roads (D12 + Autodesk report). Built = Standard > Urban Compact, save, close; then the roads are
   rewritten and the roundabout watched as the neighbours return.
+- 7 Nov 21:53 (user, trial copy, no junction nearer than 125 m): **fourth crash, same address**
+  `AIM_RoadsApp.dll+0xf8be5` (`dump\InfraWorks_error_4.dmp`). The crash is therefore not about the
+  neighbours: InfraWorks 2026.0.2.119 cannot convert this cross of two through roads at all.
+  **Closed as D12**: RA-5 stays the ordinary crossing InfraWorks builds (R.0.D.4 merged, as D1).
+  Working copy: `--delete-junctions 309` (the half roundabout row) so InfraWorks recreates the plain
+  cross on the next edit of R.0.D.4 (copy `backup-before-d12-309`). Report
+  `autodesk-report-roundabout-crash.md`; the four dumps and the day's logs copied to
+  `InfraWorks-Modeling-Data\reports\infraworks-roundabout-crash-2026-11-07`. The trial copy
+  `(Parsons 7 RA5 trial)` (four local roads removed) is kept only as the reproduction case for
+  Autodesk; the working copy remains `(Parsons 6 junctions)`.
+- Next (user, working copy): open, Grading Limit toggle on R.0.D.4 so the centre comes back as a
+  plain cross (expect no warning: that is how it was before 6 Nov), save, close; then the roundabout
+  work is done: RA-1, RA-2, RA-3, RA-6, RA-7 on Rural Double Lane (D2 / D3), RA-4 on Urban Compact
+  (D11), RA-5 an ordinary crossing (D12). Remaining from the plan: D8 kerb return radii.
