@@ -871,3 +871,15 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   266, 274) keep their links on the part they lie on. Then InfraWorks builds R.0.D.3 / R.0.D.4 on a
   Grading Limit toggle each, creates the centre junction (3 roads), Stack > Roundabout > Urban Compact.
   Awaiting the user's decision (it narrows D1 for RA-5 towards the drawing).
+- 7 Nov ~20:45, user's decision "اقسم": model closed, copy in the scratchpad `backup-before-split-r0d4`;
+  `--delete-junctions 309` (11 rows), then `model:roads ... --split R.0.D.4=R.0.D.3+R.0.D.4` (template
+  from `Parsons 2`): R.0.D.3 782.7 m (ROADS.ID 288, new definition bdf07a05, junctions 266, 274, 176,
+  177, 180: 22 links moved) and R.0.D.4 653.4 m (ROADS.ID 289, keeps its definition 409ab168, junctions
+  142, 254, 257, 235, 237), both B1 2 + 2, meeting at the RA-5 centre 658848.35 / 2748232.83 at
+  690.66 on both. 236 roads, 244 definitions, 300 intersections, 0 dangling, integrity ok; no junction
+  at the centre yet (InfraWorks creates it when R.0.D.3 / R.0.D.4 are built). D1 updated.
+- Next (user): open; Select By Filter Roads `NAME = 'R.0.D.3'`, Grading Limit 5.0 -> 5.1 -> 5.0; the
+  same on R.0.D.4; a plain cross appears at the RA-5 centre (R.0.D.12 through, R.0.D.3 and R.0.D.4
+  ending there, as 308); screenshot; Junction Type > Roundabout, then Standard > FHWA 2000: Urban
+  Compact; screenshots; save, close. Then I write island 24.0 (`--roundabout <id> --icd 48 --island 24
+  --apron 0 --lanes 2 --lane-width 6 --standard urban-compact`) and the user toggles the island.
