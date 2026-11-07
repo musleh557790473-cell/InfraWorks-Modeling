@@ -1006,3 +1006,15 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   Turning Zone to view and modify its attributes in the Stack). If yes: write all 600; if InfraWorks
   resets them, try INPUT_CURB_RETURN_TYPE -1 / MANUALLY_CHANGED 0 with the radius alone, else D8 stays
   a deviation.
+- 7 Nov ~22:50 (user): junction 13's Turning Zone reads Radius 12.00 (Simple Curve, turn angle
+  101.79) on opening and again after the Grading Limit toggle on R.1.F.1; junction 2 reads 10.00
+  before and after the toggle on R.12.G.3. So a radius written in the file with INPUT_CURB_RETURN_TYPE
+  2 and MANUALLY_CHANGED 1 is kept by InfraWorks. (The yellow jagged wall by junction 2 is the known
+  site-edge terrain issue, not the junction.) Written on everything (copy `backup-before-kerbs-all`):
+  596 more corners set (600 with 2 and 13), 15 already the drawn value, 22 without a drawn arc left,
+  232's compound corner 14 m. Regions now: 10 m 447, 12 m 141, 11 m 10, 15 m 2 as drawn; the 13
+  former taper corners (type 4) are simple curves now, their old offset / taper values left in the
+  row unused. Integrity ok. D8 closed; the 22 corners go to Parsons as question 16.
+- Next (user): open the working copy, spot-check a few junctions' Turning Zones (e.g. 4, 12, 60, 232),
+  save, close. Then the Autodesk report (`autodesk-report-roundabout-crash.md`) goes out, and the
+  branch waits for "ادمج".
