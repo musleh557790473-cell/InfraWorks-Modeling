@@ -9,7 +9,8 @@
   "bin": {
     "model-gate": "./dist/cli.js",
     "model-names": "./dist/names-cli.js",
-    "model-roads": "./dist/roads-cli.js"
+    "model-roads": "./dist/roads-cli.js",
+    "model-intersections": "./dist/intersections-cli.js"
   },
   "exports": {
     ".": {
@@ -24,6 +25,7 @@
     "gate": "tsx src/cli.ts",
     "names": "tsx src/names-cli.ts",
     "roads": "tsx src/roads-cli.ts",
+    "intersections": "tsx src/intersections-cli.ts",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {

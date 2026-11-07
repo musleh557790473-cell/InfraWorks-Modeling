@@ -20,6 +20,36 @@ import type { RoadPlan, XYZ } from "./plan.js";
 
 type Row = Record<string, unknown>;
 
+/**
+ * Replaces only a road's section (componentStyle and lane counts in its MANUAL_STYLE); its other style
+ * settings, geometry, body, GUIDs and junction links stay. InfraWorks builds the new section when the
+ * road is next edited. Returns false when there is no road of that name.
+ */
+export function restyleRoad(db: DatabaseSync, name: string, sec: Section): boolean {
+  const r = db.prepare("select GUID, MANUAL_STYLE m from ROADS where NAME=?").get(name) as Row | undefined;
+  if (!r) return false;
+  const s = JSON.parse(String(r.m));
+  s.componentStyle = JSON.stringify(sec.componentStyle);
+  s.lanes = { ...s.lanes, countForward: sec.lanes, countBackward: sec.lanes };
+  db.prepare("update ROADS set MANUAL_STYLE=? where GUID=?").run(JSON.stringify(s, null, "\t"), String(r.GUID));
+  return true;
+}
+
+/**
+ * Deletes a road by name: its definition, constraints, start/end locations, reference system and
+ * body. These are the only rows that point at a road (checked on Al Qairawan's 7 rings), besides
+ * intersection links: clear those after with pruneDanglingIntersections. Returns the rows removed.
+ */
+export function removeRoad(db: DatabaseSync, name: string): number {
+  let n = 0;
+  for (const r of db.prepare("select GUID, FK_PARENT_GUID from ROADS where NAME=?").all(name) as Row[]) {
+    for (const t of ["PRIMITIVES", "TERRAIN_OPERATIONS"]) n += Number(db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(String(r.GUID)).changes);
+    for (const t of ["H_CONSTRAINTS", "V_CONSTRAINTS", "CONSTRAINED_DEF_GEOM_LOCATIONS", "CONSTRAINED_DEF_RPSYSTEMS", "ROADS"]) n += Number(db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(String(r.FK_PARENT_GUID)).changes);
+    n += Number(db.prepare("delete from CONSTRAINED_DEFINITIONS where GUID=?").run(String(r.FK_PARENT_GUID)).changes);
+  }
+  return n;
+}
+
 const ptBlob = (x: number, y: number) => { const b = Buffer.alloc(32); b.writeUInt32LE(1, 0); b.writeUInt32LE(1, 4); b.writeDoubleLE(x, 8); b.writeDoubleLE(y, 16); return b; };
 const pt3Blob = (x: number, y: number, z: number) => { const b = ptBlob(x, y); b.writeDoubleLE(z, 24); return b; };
 export const lineBlob = (pts: readonly (readonly number[])[]) => {
@@ -45,16 +75,22 @@ export class RoadWriter {
   private readonly tCD: Row; private readonly tRoad: Row; private readonly tH: Row; private readonly tV: Row;
   private readonly tLoc: Row[]; private readonly tRps: Row; private readonly tPrim: Row[]; private readonly tTop: Row[];
 
-  constructor(private readonly db: DatabaseSync, private readonly template: string) {
-    const one = (q: string, ...a: string[]) => { const r = this.all(q, ...a)[0]; if (!r) throw new Error(`template ${template}: nothing for "${q}"`); return r; };
+  /**
+   * src: where the template road is read (default the model itself). Once InfraWorks has rebuilt the
+   * template road in the working model its rows are InfraWorks' own (R.6.E.1, 6 Nov 2026: 4 terrain
+   * operations instead of 5), so the template is read from the base model the roads were written from.
+   */
+  constructor(private readonly db: DatabaseSync, private readonly template: string, src: DatabaseSync = db) {
+    const from = (q: string, ...a: string[]) => { const s = src.prepare(q); s.setReadBigInts(true); return s.all(...a) as Row[]; };
+    const one = (q: string, ...a: string[]) => { const r = from(q, ...a)[0]; if (!r) throw new Error(`template ${template}: nothing for "${q}"`); return r; };
     this.tCD = one("select * from CONSTRAINED_DEFINITIONS where GUID=?", template);
     this.tRoad = one("select * from ROADS where FK_PARENT_GUID=?", template);
     this.tH = one("select * from H_CONSTRAINTS where FK_PARENT_GUID=? and CONSTRAINT_TYPE=3", template);
     this.tV = one("select * from V_CONSTRAINTS where FK_PARENT_GUID=? and CONSTRAINT_TYPE=15", template);
-    this.tLoc = this.all("select * from CONSTRAINED_DEF_GEOM_LOCATIONS where FK_PARENT_GUID=? order by TYPE", template);
+    this.tLoc = from("select * from CONSTRAINED_DEF_GEOM_LOCATIONS where FK_PARENT_GUID=? order by TYPE", template);
     this.tRps = one("select * from CONSTRAINED_DEF_RPSYSTEMS where FK_PARENT_GUID=?", template);
-    this.tPrim = this.all("select * from PRIMITIVES where FK_PARENT_GUID=?", String(this.tRoad.GUID));
-    this.tTop = this.all("select * from TERRAIN_OPERATIONS where FK_PARENT_GUID=?", String(this.tRoad.GUID));
+    this.tPrim = from("select * from PRIMITIVES where FK_PARENT_GUID=?", String(this.tRoad.GUID));
+    this.tTop = from("select * from TERRAIN_OPERATIONS where FK_PARENT_GUID=?", String(this.tRoad.GUID));
   }
 
   private all(q: string, ...a: string[]): Row[] {
@@ -74,12 +110,8 @@ export class RoadWriter {
 
   /** Delete a road (definition, constraints, body). */
   remove(name: string) {
-    for (const r of this.all("select GUID, FK_PARENT_GUID from ROADS where NAME=?", name)) {
-      if (r.FK_PARENT_GUID === this.template) throw new Error(`${name} is the template road`);
-      for (const t of ["PRIMITIVES", "TERRAIN_OPERATIONS"]) this.db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(String(r.GUID));
-      for (const t of ["H_CONSTRAINTS", "V_CONSTRAINTS", "CONSTRAINED_DEF_GEOM_LOCATIONS", "CONSTRAINED_DEF_RPSYSTEMS", "ROADS"]) this.db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(String(r.FK_PARENT_GUID));
-      this.db.prepare("delete from CONSTRAINED_DEFINITIONS where GUID=?").run(String(r.FK_PARENT_GUID));
-    }
+    if (this.all("select GUID from ROADS where NAME=? and FK_PARENT_GUID=?", name, this.template).length) throw new Error(`${name} is the template road`);
+    removeRoad(this.db, name);
   }
 
   private styleOf(sec: Section | null): Row {
@@ -99,7 +131,7 @@ export class RoadWriter {
    * rows as read when this writer was made, so the result does not depend on this refresh.
    */
   refreshTemplate(plan: RoadPlan, sec: Section | null) {
-    this.db.exec("BEGIN");
+    this.db.exec("SAVEPOINT road_write");
     try {
       const road = this.tRoad, guid = String(road.GUID), rps = String(this.tRps.GUID);
       for (const t of ["PRIMITIVES", "TERRAIN_OPERATIONS"]) this.db.prepare(`delete from ${t} where FK_PARENT_GUID=?`).run(guid);
@@ -108,22 +140,45 @@ export class RoadWriter {
       this.db.prepare("update ROADS set GEOMETRY=? where GUID=?").run(lineBlob(plan.line), guid);
       if (sec) this.db.prepare("update ROADS set MANUAL_STYLE=?, MAX_SPEED=? where GUID=?").run(String(style.MANUAL_STYLE), Number(style.MAX_SPEED), guid);
       this.db.prepare("update CONSTRAINED_DEF_RPSYSTEMS set GEOMETRY=? where GUID=?").run(lineBlob(plan.line), rps);
-      this.db.exec("COMMIT");
+      this.db.exec("RELEASE road_write");
     } catch (e) {
-      this.db.exec("ROLLBACK");
+      this.db.exec("ROLLBACK TO road_write; RELEASE road_write");
       throw e;
     }
   }
 
-  /** Write a road (a road of that name is replaced). Unclassified roads (sec null) keep the template section. */
+  /**
+   * Intersection rows that point at a road (InfraWorks' INTERSECTION_ARMS / INTERSECTION_REGIONS).
+   * They hold the road's CONSTRAINED_DEFINITIONS GUID (all 385 links in Al Qairawan), not ROADS.GUID.
+   */
+  intersectionLinks(definitionGuid: string): number {
+    let n = 0;
+    for (const [t, cols] of [["INTERSECTION_ARMS", ["FK_ASSET_GUID"]], ["INTERSECTION_REGIONS", ["FK_INCOMING_ASSET_GUID", "FK_OUTGOING_ASSET_GUID"]]] as const) {
+      try { n += Number((this.db.prepare(`select count(*) n from ${t} where ${cols.map((c) => `${c}=?`).join(" or ")}`).get(...cols.map(() => definitionGuid)) as { n: number | bigint }).n); }
+      catch { /* a model without that table */ }
+    }
+    return n;
+  }
+
+  /**
+   * Write a road (a road of that name is replaced). Unclassified roads (sec null) keep the template section.
+   * A replaced road keeps its ROADS and CONSTRAINED_DEFINITIONS GUIDs: InfraWorks' intersections point
+   * at a road's definition GUID (INTERSECTION_ARMS.FK_ASSET_GUID, INTERSECTION_REGIONS incoming /
+   * outgoing; 44 roads in Al Qairawan), and a new GUID would leave them pointing at nothing. A road
+   * InfraWorks split into pieces (RA-1 after a rebuild) is refused when a piece other than the first
+   * carries intersections.
+   */
   write(plan: RoadPlan, sec: Section | null) {
     const { name, H, pvis, total, line } = plan;
     if (this.isTemplate(name)) { this.refreshTemplate(plan, sec); return; }
-    this.db.exec("BEGIN");
+    const old = this.all("select GUID, FK_PARENT_GUID from ROADS where NAME=? order by ID", name);
+    const linked = old.slice(1).filter((r) => this.intersectionLinks(String(r.FK_PARENT_GUID)) > 0);
+    if (linked.length) throw new Error(`${name}: ${old.length} rows, and ${linked.length} piece(s) besides the first carry intersections; not replaced`);
+    this.db.exec("SAVEPOINT road_write");
     try {
-      if (this.exists(name)) this.remove(name);
+      if (old.length) this.remove(name);
       const style = this.styleOf(sec);
-      const gCD = randomUUID(), gRoad = randomUUID(), gRps = randomUUID();
+      const gCD = old[0] ? String(old[0].FK_PARENT_GUID) : randomUUID(), gRoad = old[0] ? String(old[0].GUID) : randomUUID(), gRps = randomUUID();
       const start = line[0]!, end = line[line.length - 1]!;
       this.insert("CONSTRAINED_DEFINITIONS", this.tCD, { GUID: gCD, NAME: name, FK_DEFAULT_ASSET_GUID: gRoad, REFERENCE_POINT: pt3Blob(...start) });
       this.insert("ROADS", this.tRoad, { GUID: gRoad, NAME: name, FK_PARENT_GUID: gCD, GEOMETRY: lineBlob(line), ...style });
@@ -167,9 +222,9 @@ export class RoadWriter {
       const staleHash = Buffer.from(Buffer.from(this.tRps.JSON_RANGE_HASH as Uint8Array).toString("utf8").replace(/"Value": "[0-9A-F]{32}"/g, `"Value": "${"0".repeat(32)}"`), "utf8");
       this.insert("CONSTRAINED_DEF_RPSYSTEMS", this.tRps, { GUID: gRps, FK_PARENT_GUID: gCD, GEOMETRY: lineBlob(line), LENGTH_2D: total, JSON_RANGE_HASH: staleHash });
       this.insertBody(gRoad, String(this.tRps.GUID), gRps, line, sec);
-      this.db.exec("COMMIT");
+      this.db.exec("RELEASE road_write");
     } catch (e) {
-      this.db.exec("ROLLBACK");
+      this.db.exec("ROLLBACK TO road_write; RELEASE road_write");
       throw e;
     }
   }

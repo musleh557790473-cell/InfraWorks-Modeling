@@ -23,7 +23,7 @@ export const SECTION_TYPES: Record<SectionType, { kind: "local" | "collector"; r
   C2: { kind: "collector", row: 36, median: 4.0, sidewalk: 8.7 },
 };
 const LANE = 3.3, SHY = 0.4, KERB_W = 0.3, XFALL = 0.02, SW_FALL = 0.02;
-const MAT: Record<string, string> = { lane: "x7F7F7FFF", shy: "x7F7F7FFF", kerb: "xB0B0B0FF", sidewalk: "x909090FF", median: "xA0A0A0FF" };
+const MAT: Record<string, string> = { lane: "x7F7F7FFF", shy: "x7F7F7FFF", kerb: "xB0B0B0FF", "median kerb": "xA0A0A0FF", sidewalk: "x909090FF", median: "xA0A0A0FF" };
 const ORIGIN = 4294967295;
 
 type Params = Record<string, number>;
@@ -37,9 +37,11 @@ const DEF: Record<string, (p: Params) => XY[]> = {
     const s = p.LeftSideFactor ?? 1, W = p.Width ?? 0.225, Dp = p.Depth ?? 0.45, Db = p.DepthBelow ?? 0.3, H = Dp - Db;
     return [[0, -Db], [0, 0], [0, H], [s * W, H], [s * W, H - (p.BackHeight ?? 0)], [s * W, -Db]];
   },
+  // same shape as a Lane; InfraWorks does not count it as a traffic lane
+  Shoulder: (p) => { const s = p.LeftSideFactor ?? 1, W = p.Width!, Y = p.Slope! * W, D = p.Depth ?? 0.2; return [[0, 0], [s * W, Y], [s * W, Y - D], [0, -D]]; },
   "Sloped Median": (p) => { const h = p.Width! / 2, G = (p.Slope ?? -0.03) * h, D = p.Depth ?? 0.2; return [[-h, 0], [0, G], [h, 0], [h, -D], [0, G - D], [-h, -D]]; },
 };
-const TOP: Record<string, number[]> = { Lane: [0, 1], Sidewalk: [0, 1], Curb: [2, 3], "Sloped Median": [0, 1, 2] };
+const TOP: Record<string, number[]> = { Lane: [0, 1], Shoulder: [0, 1], Sidewalk: [0, 1], Curb: [2, 3], "Sloped Median": [0, 1, 2] };
 
 export interface SectionPart { role: string; id: number; material: string; crossSection: [number, number, number?][] }
 export interface Section {
@@ -82,13 +84,16 @@ export function buildSection(type: SectionType, opts: { fall?: "right" | "left" 
       // one-way crossfall across both lanes (falls to the right of the chainage direction when f = 1)
       lastC = add("Lane", { ...L, Width: LANE, Slope: (side < 0 ? XFALL : -XFALL) * f, Depth: 0.2 }, { point: 0, ex_comp: ORIGIN, ex_point: ORIGIN }, "lane");
     } else {
-      // median: flat base at the profile level, then on each edge an upstand kerb facing the lanes and
-      // a raised fill to the centre, top 150 mm above the lanes
+      // median: flat base at the profile level, raised 150 mm by the kerbs themselves: each kerb is half
+      // the median wide (upstand facing the lanes, flat top to the centre). The road hangs off the kerb's
+      // face (median -> kerb -> lanes, as InfraWorks' own divided assemblies). A raised fill drawn as a
+      // Sidewalk on the median made InfraWorks read no lanes at all (junction arms without lanes, Al
+      // Qairawan test copy, 5 Nov 2026: with this layout every arm reads 2 + 2 lanes).
       if (side < 0) add("Sloped Median", { Width: T.median!, Slope: 0, Depth: 0.2 }, null, "median");
       const inward: Params = side < 0 ? {} : { LeftSideFactor: -1 }, edgePt = side < 0 ? 0 : 2;
-      const mk = add("Curb", { ...inward, Width: KERB_W }, { point: 1, ex_comp: 0, ex_point: edgePt }, "kerb");
-      add("Sidewalk", { ...inward, Width: T.median! / 2 - KERB_W, Slope: 0, Depth: 0.15 }, { point: 0, ex_comp: mk, ex_point: 4 }, "median");
-      lastC = add("Lane", { ...L, Width: SHY, Slope: -XFALL, Depth: 0.2 }, { point: 0, ex_comp: 0, ex_point: edgePt }, "shy");
+      const mk = add("Curb", { ...inward, Width: T.median! / 2 }, { point: 1, ex_comp: 0, ex_point: edgePt }, "median kerb");
+      // the 0.4 m strip by the median kerb is a Shoulder (written as a Lane it made 3 lanes a side)
+      lastC = add("Shoulder", { ...L, Width: SHY, Slope: -XFALL, Depth: 0.2 }, { point: 0, ex_comp: mk, ex_point: 1 }, "shy");
       lastC = add("Lane", { ...L, Width: LANE, Slope: -XFALL, Depth: 0.2 }, { point: 0, ex_comp: lastC, ex_point: 1 }, "lane");
       lastC = add("Lane", { ...L, Width: LANE, Slope: -XFALL, Depth: 0.2 }, { point: 0, ex_comp: lastC, ex_point: 1 }, "lane");
     }
@@ -146,7 +151,7 @@ function assemble(comps: Comp[], o: { type: Section["type"]; kind: Section["kind
   const bound = [...hi.values()].sort((a, b) => a[0] - b[0]);
   const references = placed.map((c) => ({
     def: `ComponentDefinition/${c.def}`, material: MAT[c.role], description: c.role,
-    classification: c.role === "sidewalk" ? "Sidewalk" : c.role === "kerb" ? "Curb" : c.role === "median" ? "Greenspace" : "Roadway",
+    classification: c.role === "sidewalk" ? "Sidewalk" : c.role === "kerb" || c.role === "median kerb" ? "Curb" : c.role === "median" ? "Greenspace" : "Roadway",
     ...(c.attach ? { attachment: c.attach } : {}),
     paramOverrides: Object.entries(c.params).map(([name, value]) => ({ name, value })),
   }));
@@ -217,10 +222,42 @@ export interface SectionClass {
   type: SectionType | null;
   oneSided?: true;
   mixed?: true;
+  /** type set by an AICC decision (applySectionDecisions), not read from the drawing */
+  decided?: true;
   votes: Record<string, number>;
   samples: number;
   oneSidedSamples: number;
   edge: string | null;
+}
+
+/**
+ * "R.9.G.6=A1,R.9.G.7=A1" as a road -> type map. Only Parsons' typical section types are accepted.
+ */
+export function parseSectionDecisions(text: string): Record<string, SectionType> {
+  const out: Record<string, SectionType> = {};
+  for (const item of text.split(",").map((s) => s.trim()).filter(Boolean)) {
+    const m = item.match(/^(.+)=([A-Z]\d)$/);
+    if (!m || !(m[2]! in SECTION_TYPES)) throw new Error(`section decision "${item}": expected <road>=<${Object.keys(SECTION_TYPES).join("|")}>`);
+    out[m[1]!.trim()] = m[2] as SectionType;
+  }
+  return out;
+}
+
+/**
+ * Section types set by decision for roads the drawing does not type (R.9.G.6: centreline off the
+ * middle of its edges by up to 1.8 m; R.9.G.7: a widening on one side; both A1 at their ends, ROW
+ * 15 m; AICC chose A1 on 4 Nov 2026). A road the drawing already types is not overridden.
+ * Returns the decisions applied and those refused.
+ */
+export function applySectionDecisions(sections: Record<string, SectionClass>, decisions: Record<string, SectionType>): { applied: string[]; refused: string[] } {
+  const applied: string[] = [], refused: string[] = [];
+  for (const [name, type] of Object.entries(decisions)) {
+    const s = sections[name];
+    if (!s) { refused.push(`${name}: not a road of the layout`); continue; }
+    if (s.type && s.type !== type) { refused.push(`${name}: the drawing types it ${s.type}`); continue; }
+    if (!s.type) { s.type = type; s.decided = true; applied.push(`${name}=${type}`); }
+  }
+  return { applied, refused };
 }
 
 /**

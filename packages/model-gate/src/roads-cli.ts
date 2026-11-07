@@ -4,13 +4,17 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import {
-  assemblePvis, buildAlignments, buildRoundaboutSection, buildSection, classifySections, crossfallSides, loadLandXmlSurface, measureRoundabouts, orientRoads,
+  applySectionDecisions, assemblePvis, buildAlignments, buildRoundaboutSection, parseSectionDecisions, buildSection, classifySections, crossfallSides, loadLandXmlSurface, measureRoundabouts, orientRoads,
   readDxfBlock, readProfileViews, type NamedStart, type Section,
 } from "@infraworks/domain";
 
 import { junctionSteps, levelProblems, roadRows } from "./roads/checks.js";
 import { planRoad } from "./roads/plan.js";
-import { RoadWriter } from "./roads/write.js";
+import { repointLinks, splitLinks } from "./roads/intersections.js";
+import { parseFgf } from "@infraworks/imx-gate";
+import { mergeRoads, missingDrawnRoads, parseMerges, partsDescription, setDescription } from "./roads/merge.js";
+import { roadsToWrite } from "./roads/select.js";
+import { RoadWriter, removeRoad, restyleRoad } from "./roads/write.js";
 
 const USAGE = `
 model-roads - Parsons roads as InfraWorks component roads, written into a model (closed in InfraWorks)
@@ -20,6 +24,19 @@ model-roads - Parsons roads as InfraWorks component roads, written into a model 
       [--package <roads package road_centerline (no extension)>] [--out-dir <folder for the JSON results>]
       [--layout-block "Xref Road Layout Al Qairawan"] [--profiles-block "Xref Al Qairawan Profiles"]
       [--surface-name "Al_Qairawan_Mass Grading"] [--only R.6.E.1,R.6.F.1] [--dry]
+      [--section R.9.G.6=A1,R.9.G.7=A1]   (AICC decisions for roads the drawing does not type)
+      [--merge R.0.C.2=R.0.C.1+R.0.C.2]   (join roads that continue each other into one road, named
+                                  after one of them; only these are written, the others are deleted
+                                  and their intersection links moved to the joined road)
+      [--template-from <base model.sqlite>]   (read the template road there: once InfraWorks rebuilt it
+                                  in the working model its rows no longer fit)
+      [--record-merges R.0.D.2=R.0.D.1+R.0.D.2]   (record the drawn parts of a merge written earlier)
+      [--restyle divided | R.0.C.2,R.0.D.2]   (replace only the section of those roads, "divided" = every
+                                  B1 / C1 / C2 road; InfraWorks builds it when the road is next edited)
+      [--split R.0.C.2=R.0.C.1+R.0.C.2]   (undo a merge: write the roads again as the drawing has
+                                  them and move each junction link to the part it lies on)
+      [--roundabouts-as-roads]   (write RA rings as closed roads; by default they are left to
+                                  InfraWorks as intersections of the roads through their centres)
 
 Reads the profiles (FG line, PVI and curve labels), chains each road's centreline (its length must
 equal its profile length), checks every road's direction against the grading surface and the levels at
@@ -72,6 +89,12 @@ function main(argv: string[]): number {
     const or = orientRoads(al.roads, pv.roads, surface);
     say(`direction: ${or.reversed.length} reversed (${or.reversed.join(" ")}); loops re-started: ${or.restarted.map((r) => r.name).join(" ") || "none"}`);
     const sections = classifySections(layout, al.roads);
+    const decisions = flag("--section");
+    if (decisions) {
+      const d = applySectionDecisions(sections, parseSectionDecisions(decisions));
+      say(`section decisions: ${d.applied.join(" ") || "none applied"}${d.refused.length ? `; refused: ${d.refused.join("; ")}` : ""}`);
+      if (d.refused.length) throw new Error("a --section decision was refused (see above)");
+    }
     const xfall = crossfallSides(al.roads, sections, surface);
     const ra = measureRoundabouts(layout, al.roads);
     const raOf = new Map(ra.roundabouts.map((r) => [r.name, r]));
@@ -94,15 +117,99 @@ function main(argv: string[]): number {
       w("road-report.txt", [...al.report, "", ...pv.issues.map((i) => `PVI ${i}`), "", ...or.report].join("\n") + "\n");
       say(`results: ${outDir}`);
     }
+    const merges = parseMerges(flag("--merge") ?? "").map((m) => {
+      const parts = m.parts.map((n) => {
+        const a = al.roads.find((r) => r.name === n), v = pv.roads[n];
+        if (!a || !v) throw new Error(`--merge: no alignment or profile for ${n}`);
+        return { al: a, pv: v };
+      });
+      const t = new Set(m.parts.map((n) => `${sections[n]?.type}/${xfall[n]?.side}/${xfall[n]?.fall}`));
+      if (t.size > 1) throw new Error(`--merge ${m.name}: the roads have different sections or crossfall (${[...t].join(", ")})`);
+      const r = mergeRoads(m.name, parts);
+      say(`merge ${m.name} = ${m.parts.join(" + ")}: ${r.al.length.toFixed(3)} m, ${r.pv.length} PVIs, section ${sections[m.parts[0]!]?.type}`);
+      return { ...m, road: r };
+    });
+    const splits = parseMerges(flag("--split") ?? "");
+    for (const s of splits) for (const n of s.parts) if (!al.roads.find((r) => r.name === n) || !pv.roads[n]) throw new Error(`--split: no alignment or profile for ${n}`);
+    if (splits.length) say(`split: ${splits.map((s) => `${s.name} -> ${s.parts.join(" + ")}`).join(", ")}`);
     if (dry) return 0;
     if (existsSync(model.replace(/\.sqlite$/i, ".lock"))) throw new Error("the model is open in InfraWorks (its .lock is there): close it first");
     if (!existsSync(model)) throw new Error(`model not found: ${model}`);
     const db = new DatabaseSync(model, { enableDoubleQuotedStringLiterals: true } as ConstructorParameters<typeof DatabaseSync>[1]);
-    const writer = new RoadWriter(db, template!);
+    const tplFrom = flag("--template-from");
+    const writer = new RoadWriter(db, template!, tplFrom ? new DatabaseSync(tplFrom, { readOnly: true }) : db);
+    // --record-merges: a merge written earlier gets its parts recorded (no geometry is written)
+    for (const m of parseMerges(flag("--record-merges") ?? "")) {
+      const d = partsDescription(m.parts.map((n) => { const a = al.roads.find((r) => r.name === n); if (!a) throw new Error(`--record-merges: no alignment for ${n}`); return { name: n, length: a.length }; }));
+      const n = setDescription(db, m.name, d);
+      if (n !== 1) throw new Error(`--record-merges: ${n} roads named ${m.name}`);
+      say(`${m.name}: ${d}`);
+    }
+    const missing = () => missingDrawnRoads(db.prepare("select NAME, DESCRIPTION from ROADS").all() as { NAME: string; DESCRIPTION: string | null }[], al.roads.map((r) => r.name).filter((n) => !raOf.has(n)));
+    const restyle = flag("--restyle");
+    if (restyle) {
+      const names = restyle === "divided"
+        ? (db.prepare("select NAME from ROADS").all() as { NAME: string }[]).map((r) => r.NAME).filter((n) => ["B1", "C1", "C2"].includes(String(sections[n]?.type)))
+        : restyle.split(",").filter(Boolean);
+      db.exec("begin");
+      try {
+        for (const n of names) {
+          const sec = sectionOf(n);
+          if (!sec) throw new Error(`--restyle: no section for ${n}`);
+          if (!restyleRoad(db, n, sec)) throw new Error(`--restyle: no road ${n} in the model`);
+        }
+        db.exec("commit");
+      } catch (e) { db.exec("rollback"); throw e; }
+      say(`restyled ${names.length} road(s): ${names.join(" ")}`);
+      db.close();
+      return 0;
+    }
+    if (splits.length) {
+      db.exec("begin");
+      try {
+        for (const s of splits) {
+          const from = (db.prepare("select FK_PARENT_GUID g from ROADS where NAME=?").get(s.name) as { g: string } | undefined)?.g;
+          if (!from) throw new Error(`--split: no road ${s.name} in the model`);
+          for (const n of s.parts) writer.write(planRoad(al.roads.find((r) => r.name === n)!, pv.roads[n]!), sectionOf(n));
+          const parts = s.parts.map((n) => {
+            const r = db.prepare("select FK_PARENT_GUID g, GEOMETRY geom from ROADS where NAME=?").get(n) as { g: string; geom: Uint8Array };
+            return { guid: r.g, line: parseFgf(Buffer.from(r.geom)).points as number[][] };
+          });
+          const moved = splitLinks(db, from, parts);
+          say(`split ${s.name}: ${s.parts.map((n, k) => `${n} ${moved.get(parts[k]!.guid)} links moved`).join(", ")}`);
+        }
+        db.exec("commit");
+      } catch (e) { db.exec("rollback"); throw e; }
+      db.close();
+      return 0;
+    }
+    if (merges.length) {
+      db.exec("begin");
+      try {
+        for (const m of merges) {
+          writer.write(planRoad(m.road.al, m.road.pv), sectionOf(m.parts[0]!));
+          setDescription(db, m.name, partsDescription(m.parts.map((n) => ({ name: n, length: al.roads.find((r) => r.name === n)!.length }))));
+          const to = String((db.prepare("select FK_PARENT_GUID g from ROADS where NAME=?").get(m.name) as { g: string }).g);
+          for (const n of m.parts.filter((n) => n !== m.name)) {
+            const from = db.prepare("select FK_PARENT_GUID g from ROADS where NAME=?").get(n) as { g: string } | undefined;
+            const moved = from ? repointLinks(db, from.g, to) : 0;
+            const rows = removeRoad(db, n);
+            say(`  ${n}: ${moved} intersection links moved to ${m.name}, ${rows} rows deleted`);
+          }
+        }
+        db.exec("commit");
+      } catch (e) { db.exec("rollback"); throw e; }
+      say(`written ${merges.length} merged road(s)`);
+      const lost = missing();
+      say(lost.length ? `drawn roads missing from the model: ${lost.join(" ")}` : "every drawn road is in the model (as a road or a recorded part)");
+      db.close();
+      return 0;
+    }
     const failed: string[] = [];
     let written = 0;
-    for (const a of al.roads) {
-      if (only && !only.includes(a.name)) continue;
+    const choice = roadsToWrite(al.roads, new Set(raOf.keys()), { only, roundaboutsAsRoads: args.includes("--roundabouts-as-roads") });
+    if (choice.skipped.length) say(`not written: ${choice.skipped.map((s) => s.name).join(" ")} (roundabouts are InfraWorks intersections; --roundabouts-as-roads writes them as roads)`);
+    for (const a of choice.write) {
       try {
         const plan = planRoad(a, pv.roads[a.name] ?? []);
         writer.write(plan, sectionOf(a.name));

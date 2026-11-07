@@ -303,3 +303,718 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   invalidateModel, readRoadModel, getRoadID...), Intersections.updateIntersections, app.Regenerate.
   Next (user to approve): try a script rebuild on RA-2, then the closed roads, then all roads
   and updateIntersections, instead of writing junction rows ourselves.
+
+## Session 5 (4 Nov 2026, AYNLAP1201): checks that need no model
+
+- R.1.G.24 start on loop R.1.G.23, 0.535 m step: Parsons' data. Both profile views match their
+  printed PGL rows (within 1 mm); R.1.G.24's other end meets R.1.F.1 at 1.7 cm, so its direction and
+  profile are right. R.1.G.24 starts at 679.807 where R.1.G.23's profile gives 680.342 (the loop
+  stands a steady 0.73 m over the grading surface, R.1.G.24 only 0.02-0.36 m). No start of the loop
+  removes the step and still fits the surface (best fit 0.03 m leaves 0.53-0.61 m; the starts that
+  remove it fit at 0.33-0.37 m). To raise with Parsons, with R.3.G.1.
+- R.9.G.6 (107.5 m) and R.9.G.7 (136.4 m), still on the template section: both are one arc
+  (bulge -0.07) between E 658718-658848, N 2747930-2748029, ending on the road at E 658848.4.
+  R.9.G.6: ROW ~15 m, carriageway ~7 m (A1), but the drawn centreline is off the middle by up to
+  ~1.8 m (edges at -5.28 / +1.56 m at mid-length). R.9.G.7: A1 at both ends (ROW 15.1, carriageway
+  7.25 m), widening on one side to ~9.8 m (ROW 17.4 m) over its middle, a lay-by or parking bay.
+  rowclass finds no exact type width over enough samples. AICC decision (4 Nov 2026): A1, given
+  with `model:roads --section R.9.G.6=A1,R.9.G.7=A1` (`applySectionDecisions`: only untyped roads,
+  flagged `decided`). Crossfall from the surface: both fall right at 2 %. The A1 section stays
+  centred on the drawn centreline: up to ~1.8 m off the drawn edges on R.9.G.6, no widening on
+  R.9.G.7. Written to the working model with `--only R.9.G.6,R.9.G.7`: A1, 20 km/h.
+- Working model on AYNLAP1201 since 4 Nov 2026: the one from road-model-2026-11-03b.zip
+  (12 intersections, 41 arms, 34 regions, 109 links), moved to C:\IW under the usual name. The
+  previous local copy (49 intersections, edited in InfraWorks on the morning of 4 Nov) is kept as
+  `C:\IW\Al Qairawan Roads (Parsons 6 junctions) old-2026-11-04` until the new one is checked.
+- Scripting Console rebuild (`iw-road-probe.js`, `iw-road-rebuild.js`): `readRoadModel()` takes the
+  CONSTRAINED_DEFINITIONS.ID (RA-2: 299; ROADS.ID 280 returns false). RA-2 rebuilt with
+  readRoadModel, regenModel, saveUpdates, updateIntersections(extents, [], [299], [], true): the
+  last returned [] but the model went from 12 to 20 intersections (arms 41 -> 68, regions 34 -> 57);
+  RA-2 got InfraWorks' own body (21 strips, 11 grading rows, real range hash) and 6 arms, still one
+  row; 182 links, all resolve. The console ran the script twice (output printed twice).
+- Roundabouts the InfraWorks way (AICC, 4 Nov 2026): InfraWorks creates an intersection wherever
+  component roads cross; a roundabout is such an intersection converted to the roundabout type
+  (Autodesk help "To convert an intersection to a roundabout"; Inscribed Circle Diameter, apron
+  width, central circle diameter). The JS API has no call to change an intersection's type (the
+  Intersection object: setCurbReturnRadius, setDesignVehicle, widenings; Roundabout: deleteMe only).
+  model:roads no longer writes RA rings (`roadsToWrite`, `--roundabouts-as-roads` to force).
+- `iw-roundabouts.js` (delete RA-1, RA-3..RA-7, rebuild the 19 roads through their centres) called
+  updateIntersections(..., invalidate = true) per road: InfraWorks sat in "Regenerating full model /
+  Batch generating tiles" at 84 % for many minutes and the user cancelled. State after it (model
+  closed, 14:30): 244 roads (rings deleted; RA-2 kept: its 3 roads stop 3 m short of the centre),
+  20 intersections, 68 arms, 57 regions, 182 links of which 24 point at the deleted rings; the 19
+  through roads were NOT rebuilt (our bodies, no arms). Rule since then: time any script on one item
+  first and never be slower than by hand (`iw-rebuild-one.js`, invalidate = false, not run).
+  Decision: write intersections and roundabouts straight into the model file instead (new session).
+  Roads through each centre (CONSTRAINED_DEFINITIONS.ID): RA-1 R.0.D.2=46 R.1.F.2=185 R.2.F.3=73
+  R.0.D.1=274; RA-3 R.0.D.9=48 R.0.D.14=51 R.0.D.15=184 R.0.D.11=276; RA-4 R.6.F.1=23 R.0.D.10=49
+  R.0.D.12=50 R.0.D.15; RA-5 R.0.D.3=193 R.0.D.4=231 R.0.D.10 R.0.D.13=258; RA-6 R.0.C.3=192
+  R.0.C.4=230 R.12.E.1=272 R.0.D.13; RA-7 R.0.B.1=45 R.0.C.4 R.0.D.5=271. Roundabout size from the
+  drawn edges: outer r 20.2 (ICD 40.4 m), island r 12.0 (central circle 24.0 m), apron not given.
+- Intersections link to roads by the road's CONSTRAINED_DEFINITIONS GUID (all 385 links of the 49
+  intersections, 44 roads). The writer used to give a replaced road new GUIDs, which would have
+  left those links pointing at nothing (it never happened: the model with intersections came from
+  InfraWorks after the last full write). RoadWriter.write now keeps the road's and its definition's
+  GUIDs, and refuses a road InfraWorks split into pieces when a later piece carries intersections
+  (test: test/roads-write.test.ts, an in-memory model). After writing R.9.G.6/R.9.G.7: 385 links
+  resolve, 0 dangling; 250 roads, one row each.
+- Junction inventory from Parsons' layout (`junction-inventory.cjs <10200.dxf> <dry-run dir> <out>`,
+  for step c, before comparing with InfraWorks' INTERSECTIONS): 361 junctions, 310 T, 20 three-way,
+  5 four-way, 26 roundabout arm groups; 322 meet at 85-90 degrees, 20 under 45. Kerb return arcs on
+  -RD_Edges within 25 m: 10.0 m most (461), then 12.0 (165), 20.0 (76, roundabout entries), 0.5
+  (106, chamfers). Local T junctions mostly 10 m (12 m too); roundabout entries 20 m and 15 m.
+  Arcs are not yet assigned to single corners (a nearby bend or the next corner can be counted).
+- `parsons-questions.md`: the open questions for Parsons (levels, sections, crossfall sides,
+  utilities, Al Narjis), each with what AICC modelled meanwhile.
+
+## Session 6 (4 Nov 2026, AYNLAP1201): intersections in the model file
+
+- The working model holds 40 intersections, 128 arms, 98 regions (not 20/68/57): InfraWorks itself
+  added 20 (IDs 21-40, around R.10/R.14/R.0.D.5 and RA-7) at 15:33 ("Merged undo stack" in `.files`),
+  finishing the cancelled regeneration. 244 roads, 252 definitions (8 without a road, IDs 1, 11-15,
+  18, 19, NAME null).
+- `.files` history is readable: each InfraWorks commit stores tables as text rows under
+  `exploded/<TABLE>/<n>` (`git log`, `git show <c> -- exploded/INTERSECTION_ARMS`), so every edit
+  InfraWorks made can be diffed without opening the model. Only 5 commits touched intersections;
+  none removed an arm.
+- The 24 dangling links all point at ONE definition, RA-1's (`ce9d4a19-...`, ID 298 in the backup),
+  in intersections 7, 8, 10, 11 (each: a through road's 2 arms + RA-1's 2 arms, 4 regions). The
+  other rings had no intersections. Rule (Autodesk tutorial "Roads Tutorial 3 Exercise 1: Creating
+  Intersections": deleting a road, "the lower intersection disappears and the upper ... reverts to
+  ... a simple T-junction"): an intersection left with fewer than two roads goes with its arms and
+  regions; one still joining two roads is not guessed (listed for a rebuild). Code:
+  `packages/model-gate/src/roads/intersections.ts` (`pruneDanglingIntersections`), CLI
+  `pnpm model:intersections <model> [--dry]`, test `test/intersections.test.ts`. Dry run on the
+  working model: removes 7, 8, 10, 11 (left: R.1.F.2, R.0.D.2, R.0.D.1, R.2.F.3), keeps none.
+  Written to the closed working model (4 Nov, after 16:16): 36 intersections, 112 arms, 82 regions,
+  276 links, 0 dangling; InfraWorks' journal tables got the 4 / 16 / 16 deleted rows; integrity ok.
+  Not yet opened in InfraWorks after the write.
+- How InfraWorks stores an intersection (the 40 it built): INTERSECTIONS row with GEOMETRY = the
+  bounding box polygon, REFERENCE_POINTS = a 32-byte point blob, INTERSECTION_TYPE 0, DESIGN_VEHICLE
+  "P", MANUAL_CHANGES 0, style/model columns null. One arm per road direction leaving the junction
+  (a through road gives 2, APPROACH_DIRECTION_MATCHES_ASSET 0 and 1), LANES JSON per lane,
+  CENTER_TURN_LANES_COUNT -1. One region per kerb return between neighbouring arms of different roads
+  (T: 2, cross: 4, three roads: 3), CURB_RETURN_TYPE 2 (radius; 4 seen too), INPUT_CURB_RETURN_TYPE -1,
+  lane width 3.3, transitions 30 m / taper 6 / radii 10, 7.5, 20. CURB_RETURN_RADIUS is InfraWorks'
+  own (9.0 mostly, also 5-18, -1, 0.96), not Parsons' 10 / 12 / 20 m. ROUNDABOUTS exists, empty
+  (INSCRIBED_CIRCLE_DIAMETER, ISLAND_DIAMETER, APRON_WIDTH, LANES, STANDARD_NAME ...).
+- Already built at the centres: 9 at RA-1 (R.0.D.2, R.2.F.3, R.1.F.2, R.0.D.1), 19 at RA-2
+  (R.0.C.2, R.0.C.1, R.0.D.1), 23 at RA-7 (R.0.B.1, R.0.C.4, R.0.D.5).
+- Roundabout by hand (Autodesk "To convert an intersection to a roundabout": select it, Stack >
+  Junction Type thumbnail > Roundabout; "To modify roundabout geometry": select the roundel, drag the
+  grips or edit in the Stack). Next: the user converts intersection 9 (RA-1 centre) with ICD 40.4 m,
+  central circle 24.0 m, then the before/after diff from `.files`.
+- Restored (4 Nov, ~17:15, user's decision): the working model went through the cancelled script,
+  and InfraWorks logged "Model Repair: Git repo is in undo branch" at 15:33; every later open sat
+  10+ minutes regenerating (the document itself opened in under a minute: "is opened" in
+  `%APPDATA%\Autodesk\Autodesk InfraWorks\logs`). `C:\IW\Al Qairawan Roads (Parsons 6 junctions)`
+  is again road-model-2026-11-03b.zip: 250 roads (RA-1..RA-7 one row each), 12 intersections,
+  41 arms, 34 regions, 109 links, 0 dangling, integrity ok. The Session 6 cleanup above was on the
+  replaced file. Not in 03b: the 4 Nov write of R.9.G.6 / R.9.G.7 as A1 (redo with
+  `model:roads ... --section R.9.G.6=A1,R.9.G.7=A1 --only R.9.G.6,R.9.G.7`). Next: delete the rings in
+  the file (no script) with their intersections, test, then the roundabout by hand.
+- Rings deleted in the file (4 Nov, AICC: all 7): `pnpm model:intersections <model> --delete-roads
+  RA-1,RA-2,RA-3,RA-4,RA-5,RA-6,RA-7`: 223 rows, intersections 7, 8, 10, 11 removed. Working model now:
+  243 roads, 8 intersections, 25 arms, 18 regions, 61 links, 0 dangling, integrity ok. Intersection 9
+  (RA-1 centre: R.0.D.2, R.2.F.3, R.1.F.2, R.0.D.1) is kept for the roundabout trial. The other RA
+  centres have no intersection yet (their through roads were never rebuilt by InfraWorks).
+- InfraWorks rebuilds a road we wrote the first time it handles it (our range hash is zeroed): at
+  21:19 R.2.G.11 (grading FixedWidth -> FixedSlope, profile end moved < 1 mm) and 10 new T junctions;
+  21:22 R.0.D.1 after the user set its grading: its junctions incl. 41 at the RA-2 centre (R.0.C.2,
+  R.0.C.1, R.0.D.1). Junction 9 (RA-1 centre) was not rebuilt. Arms of the divided R.0.D roads carry
+  LANES `{"version": 1}` (no lanes) even on junctions InfraWorks just built: normal, not stale.
+- Roundabout conversion: junction 9 (4 arms, R.0.D.2 / R.0.D.1 divided) does not convert (the
+  Roundabout thumbnail does nothing; cause not known: space, per Roads Tutorial 3 Ex 3, or the
+  divided arms). Junction 4 (T, R.1.F.2 / R.1.F.1) converts. Diff (`.files` 6d846cb, revert 7282287):
+  INTERSECTIONS.INTERSECTION_TYPE 0 -> 1 and GEOMETRY grows to the roundabout's box; one ROUNDABOUTS
+  row (FK_PARENT_TABLE INTERSECTIONS, FK_PARENT_GUID the intersection, EXTERNAL_STANDARD_GUID,
+  STANDARD_NAME "FHWA 2010: Rural Double Lane Roundabout", STANDARD_SOURCE "Pool", LOCATION_OFFSET,
+  LANES 1, LANE_DETAILS width 7.225, ISLAND_DIAMETER 27, APRON_WIDTH 2, INSCRIBED_CIRCLE_DIAMETER 45.45,
+  TILTED_PLANE_* 0, STATUS 0); each arm gets ARM_INDEX 1..n, BLEND_POINT_ENTRY (+offset 73.5 m),
+  widths 3.3, ENTRY/EXIT_LANES_AT_YIELD 1, STATUS 0; regions unchanged. The body is InfraWorks':
+  PRIMITIVES / TERRAIN_OPERATIONS with FK_PARENT_TABLE INTERSECTIONS (37 strips, 4 grading rows),
+  and the two roads' bodies regenerated. Revert: type 0, ROUNDABOUTS row deleted, arm fields stay.
+  Rule in code: `readJunctions()` (test in `test/intersections.test.ts`).
+- Roundabout centres are made of road ends only (RA-1: R.0.D.2, R.2.F.3 start, R.1.F.2, R.0.D.1 end at
+  one point, z 683.390; RA-2: R.0.C.2, R.0.D.1 start, R.0.C.1 ends, z 681.825); no road passes through.
+  InfraWorks: junction 41 (RA-2) "Intersection not supported", junction 9 (RA-1) will not convert; the
+  converted junction 4 has a through road. Straight pairs: RA-1 R.0.D.2/R.0.D.1 and R.2.F.3/R.1.F.2,
+  RA-2 R.0.C.1/R.0.C.2 (R.0.D.1 the T). No Autodesk help topic for the warning or for joining roads.
+  Trial (AICC, 4 Nov): `model:roads ... --merge R.0.C.2=R.0.C.1+R.0.C.2` joins the pair as drawn
+  (`mergeRoads`: refuses a gap, reversed part, level step or curve at the joint), writes it under
+  R.0.C.2 (GUIDs kept), moves R.0.C.1's intersection links (`repointLinks`) and deletes R.0.C.1.
+  Dry run: 1231.277 m, 15 PVIs, C1. Naming to settle if it works (two Parsons names, one road).
+  Written (4 Nov ~21:52, model closed): R.0.C.2 = R.0.C.1 + R.0.C.2 (1231.277 m), 7 links moved,
+  R.0.C.1 deleted (70 rows): 242 roads, 37 intersections, 0 dangling, integrity ok; junction 41 now
+  R.0.C.2 < > and R.0.D.1 <, junction 39 R.0.D.16 on R.0.C.2. RoadWriter now uses savepoints so the
+  merge runs in one transaction. Next: the user converts 41 (ICD 40.4, island 24.0) in InfraWorks.
+- After the merge InfraWorks rebuilt junction 41 as a proper T (R.0.C.2 through, R.0.D.1 ending), but
+  the Roundabout thumbnail still does nothing. Likely space (not proven): InfraWorks' default
+  roundabout (FHWA 2010 Rural Double Lane, ICD 45.45) put junction 4's blend points 73.5 m out; the
+  nearest other junction is 99 m from 4, but 65.8 / 70.3 m from 9 (RA-1) and 76.6 m from 41 (RA-2).
+- Roundabout written into the file (AICC: apron 2.0 m, InfraWorks' default, not in Parsons'
+  drawings): `pnpm model:intersections <model> --roundabout 41 --icd 40.4 --island 24.0 --apron 2.0
+  --lanes 1 --lane-width 8.2` (`writeRoundabout`): INTERSECTION_TYPE 1, ROUNDABOUTS row (box = the
+  circle's square around REFERENCE_POINTS, InfraWorks' standard GUID from junction 4, LOCATION_OFFSET
+  0), arms numbered anticlockwise (checked: same numbers InfraWorks gave junction 4), one lane each
+  way at the yield line; blend points and body left to InfraWorks. Written 4 Nov ~22:15; model then
+  72 intersections, integrity ok. Not yet opened in InfraWorks.
+- Opened in InfraWorks (22:16): the Stack shows Roundabout 41 (Junction Type Roundabout, FHWA 2010
+  standard, island 24.0, apron 2.0, 3 arms) but Inscribed Circle Diameter 42.45 although 40.4 is
+  stored: InfraWorks shows island + 2 x apron + 2 x 7.225 (the standard's lane; junction 4: 27 + 4 +
+  14.45 = 45.45). Rule in code: `roundaboutDiameter`; writeRoundabout refuses sizes that do not add
+  up. The body was not rebuilt (the old T's 52 strips and 4 grading rows stay; blend offsets null).
+  Open: where the 2.0 m apron goes inside Parsons' 8.2 m ring (island 20.0 + apron to r 12, lane 8.2;
+  or island 24.0, lane 6.2), and the hand step that makes InfraWorks build the body.
+- AICC decision (4 Nov): the 2.0 m apron sits inside Parsons' island circle (r 12.0): InfraWorks island
+  20.0, apron 2.0, one lane 8.2 m (Parsons' ring width), ICD 40.4. Written to junction 41 (~22:40,
+  `--roundabout 41 --icd 40.4 --island 20.0 --apron 2.0 --lanes 1 --lane-width 8.2`), integrity ok.
+  Next: the user types 40.4 in the Stack's Inscribed Circle Diameter (Autodesk "To modify roundabout
+  geometry") to see whether InfraWorks builds the body and which lane width it keeps.
+- Roundabout 41 built (22:34-22:36): the user selected the roundel (Autodesk "To modify roundabout
+  geometry") and edited apron / island in its Stack (Inscribed Circle Diameter, Apron Width, Center
+  Island Diameter, Center Point Elevation 681.83 editable; Total Width of Lanes 7.225 read-only).
+  Only then did InfraWorks build the body (31 strips, 4 grading rows) and blend points (76.9 m).
+  Saved: ICD 40.45, island 22, apron 2, LANE_DETAILS rewritten to 7.225 (our 8.2 replaced). Rules in
+  code: the lane is the standard's 7.225 m (`IW_ROUNDABOUT_STANDARD.laneWidth`, other widths refused);
+  ICD = island + 2 x apron + 2 x 7.225. The body sits on a tall wall at the grading edge (yellow line),
+  the known site-edge terrain issue, not the roundabout.
+  Open: Parsons' ring is 8.2 m (r 12.0 to r 20.2) but the lane is 7.225, so apron = 0.975 if both
+  drawn edges are kept (island 24.0, ICD 40.4); apron 2.0 moves the island edge to r 10.975.
+- AICC decision (4 Nov, ~22:50): keep both of Parsons' drawn edges: island 24.0 (r 12.0), ICD 40.4
+  (r 20.2), lane 7.225 (the standard's), so apron = 8.2 - 7.225 = 0.975 m. Written to junction 41
+  (`--roundabout 41 --icd 40.4 --island 24.0 --apron 0.975 --lanes 1 --lane-width 7.225`); its body
+  is rebuilt by one roundel edit in the Stack. RA-1 merges dry run: R.0.D.2 = R.0.D.1 + R.0.D.2
+  (1085.545 m, B1), R.2.F.3 = R.1.F.2 + R.2.F.3 (807.596 m, A2); not written.
+- RA-1 written (4 Nov ~23:00, model closed): R.0.D.2 = R.0.D.1 + R.0.D.2 (22 links moved, R.0.D.1
+  deleted), R.2.F.3 = R.1.F.2 + R.2.F.3 (7 links moved, R.1.F.2 deleted); junction 9 is now two
+  through roads crossing, then `--roundabout 9 --icd 40.4 --island 24.0 --apron 0.975 --lanes 1
+  --lane-width 7.225` (4 arms). Model: 240 roads, 72 intersections, 514 links, 0 dangling, integrity
+  ok; roundabouts 9 and 41 both 40.4 / 24.0 / 0.975. Bodies need one roundel edit each in InfraWorks.
+  Merged names so far: R.0.C.2 (+R.0.C.1), R.0.D.2 (+R.0.D.1), R.2.F.3 (+R.1.F.2).
+- Deep wall under roundabouts 9 and 41 (4 Nov, ~23:10): their grading reached z 7-8 m. Causes:
+  (1) InfraWorks placed each arm's blend point on its road but at height 0.00 (9: 80.8 m out, 41:
+  76.9 m), so every arm graded down from ~683 to 0; junction 4, converted in the Stack, had real
+  heights (683.x). Fix: `fixBlendLevels` sets the road's 3D centreline level at that point (Parsons'
+  profile), position kept; run by every model:intersections. (2) my prune removed junctions 7, 8, 10,
+  11 but left their bodies (166 PRIMITIVES, 15 TERRAIN_OPERATIONS with cut-outs around the RA-1
+  centre); prune now removes intersection bodies too. Dry run on the model: 181 body rows, 7 blend
+  heights 680.4-683.7, each 0.000 m from its road. The Stack field keeps 2 decimals: apron 0.975
+  typed was saved as 0.97 (ICD 40.39).
+- Written (5 Nov ~14:45, model closed; copy before in the session scratchpad): 181 orphan body rows
+  removed, blend heights 9: 683.62 / 683.33 / 682.73 / 683.65, 41: 681.08 / 680.41 / 682.97, both
+  roundabouts 40.4 / 24.0 / 0.975 / 7.225 exactly; 0 orphans, 0 dangling, integrity ok. The bodies
+  rebuild after one roundel edit each (island 24.1 then 24.0: exact at 2 decimals).
+- Checked (5 Nov 14:47, after the user toggled each island 24.1 -> 24.0): the wall is gone. Grading
+  9: 683.0-683.9, 41: 680.7-683.2; no point below 600 (before 1428 / 1028); apron stays 0.975 (the
+  island toggle does not round it); 0 orphan bodies, 0 dangling. Remaining: a seam where a roundabout
+  arm meets a merged road InfraWorks has not rebuilt yet (R.0.D.2, R.2.F.3 still carry our body;
+  R.0.C.2 rebuilt, no seam). Next: one road edit each (Grading Limit 5.0 -> 5.1 -> 5.0, Autodesk
+  "To set the roadside grading method") so InfraWorks rebuilds them.
+- 5 Nov 15:00: Grading Limit 5.0 -> 5.1 -> 5.0 on R.0.D.2 and R.2.F.3 made InfraWorks rebuild both
+  (95 / 56 strips, real range hash). Roundabout 9 arm 4 blend point moved to 55.6 m and InfraWorks gave
+  it a real height (683.23) itself: blend heights come out as 0 only on roads still carrying our body.
+  Order for the next roundabouts: merge, let InfraWorks rebuild the roads (one road edit each), then
+  write the roundabout and toggle its island. Grading 9: 683.0-683.9, 41: 680.7-683.2; 0 dangling.
+- The "seam" at RA-1's north arm (R.0.D.2): no level step. At the blend point the road and the
+  roundabout arm centrelines are both 683.624; the face is the cut end of the B1 section (median,
+  kerbs, depth: 683.18-683.77) where InfraWorks switches from Parsons' 2+2 divided section to the
+  roundabout standard's one-lane arm without a taper. Open: how many entry lanes and what taper
+  Parsons draws at the RA entries (to check on 10200 with the kerb radii, step c).
+- Split test (5 Nov ~15:20, AICC: keep Parsons' roads if InfraWorks allows): `model:roads ... --split
+  R.0.C.2=R.0.C.1+R.0.C.2` writes the parts again as drawn and moves each junction link to the part it
+  lies on (`splitLinks`; at the joint, an arm approaching along the road goes to the part ending there).
+  Model: R.0.C.1 (39, 70 and 41's approaching arm) and R.0.C.2 (75, 76 and 41's leaving arm), 0
+  dangling, integrity ok; roundabout 41 row kept. Next: the user opens it, checks 41, then makes
+  InfraWorks rebuild R.0.C.1 (Grading Limit 5.0 -> 5.1 -> 5.0) and sees whether 41 stays a roundabout.
+- Split test result (5 Nov 16:06): after the user made InfraWorks rebuild R.0.C.1 (Grading Limit
+  toggle), roundabout 41 lost its body (1 strip, no grading; row and links kept): with R.0.C.1 and
+  R.0.C.2 only ending at the centre the junction is road ends only, which InfraWorks does not support.
+  Rule: every roundabout centre needs a road passing through it, so the approach roads stay merged.
+  Next (to agree): merge R.0.C.1 + R.0.C.2 again, rebuild, toggle the island; record Parsons' part
+  names and stations in each merged road's DESCRIPTION, and gate that every Parsons name is either a
+  road or a recorded part.
+- Re-merged (5 Nov ~16:20): R.0.C.2 = R.0.C.1 + R.0.C.2 again (11 links back); parts recorded in
+  ROADS.DESCRIPTION (`partsDescription`, `--record-merges` for merges written earlier): R.0.C.2,
+  R.0.D.2 (R.0.D.1 0+000-0+756.589, R.0.D.2 to 1+085.545), R.2.F.3 (R.1.F.2 0+000-0+440.093, R.2.F.3
+  to 0+807.596). `missingDrawnRoads`: every drawn road is in the model as a road or a recorded part.
+  0 dangling, integrity ok. Next: rebuild R.0.C.2 (Grading Limit toggle), then island toggle on 41.
+- RA-2 restored (5 Nov 16:17): R.0.C.2 rebuilt by InfraWorks (114 strips), island toggled; roundabout
+  41 40.4 / 24.0 / 0.975, grading 680.7-683.2; RA-1 683.0-683.9; all blend heights real; 0 orphans,
+  0 dangling. The DESCRIPTION records survive InfraWorks' rebuilds. RA-1 and RA-2 done.
+  Recipe for RA-3..RA-7 (each): merge the straight pairs through the centre (`--merge`, parts
+  recorded), one road edit per merged road so InfraWorks rebuilds it and creates the centre junction,
+  `model:intersections --roundabout <id> --icd 40.4 --island 24.0 --apron 0.975 --lanes 1
+  --lane-width 7.225`, then the island toggle (24.1 -> 24.0) in the roundel Stack.
+- Roundabout arms vs Parsons' roads (5 Nov): on the divided roads (B1 / C1: R.0.D.2, R.0.C.2) InfraWorks
+  reads 0 lanes, 0 median, 0 lane width at every arm (also on R.0.D.1's T junctions earlier), so it
+  builds a generic arm (no median, the standard's footpath); on A2 (R.2.F.3) it reads 1 + 1 lanes of
+  3.3. Our B1/C1/C2 section writes a 0.4 m shy strip as a Lane beside the median (3 "lanes" a side
+  while the road says 2) and the raised median fill as Sidewalk pieces on the median; InfraWorks' own
+  "Four Lane Divided with Sloped Asphalt Median & Curb & Gutter" has only real lanes on the median's
+  curb. Hypothesis to test on one road: write the shy strip as a Shoulder component.
+- Test (5 Nov ~16:45): the 0.4 m shy strip of B1/C1/C2 is now a Shoulder component (same shape as a
+  Lane; `sections.ts`, test "a divided road has exactly its lanes as Lane components"). Only R.0.C.2
+  rewritten (re-run of its merge: GUIDs, links, Parsons record kept). Next: InfraWorks rebuilds
+  R.0.C.2 (Grading Limit toggle) and roundabout 41 (island toggle); then read the arms' LANES /
+  BLEND_POINT_MEDIAN_WIDTH in the file.
+- Shoulder test result (5 Nov ~17:00): R.0.C.2 rebuilt by InfraWorks (102 strips) with the shy strip as
+  a Shoulder; roundabout 41's arms still read LANES 0, median 0, widths 0. Not the cause; the change is
+  kept (the strip is not a traffic lane). The road's Stack "Description" stayed empty with only
+  ROADS.DESCRIPTION set: `setDescription` now also writes CONSTRAINED_DEFINITIONS.DESCRIPTION (to check).
+  Open: why InfraWorks reads no lanes on our divided sections (B1/C1/C2). Next idea: a controlled test
+  with InfraWorks' own "Four Lane Divided with Sloped Asphalt Median & Curb & Gutter" layout.
+- Arms from roads written (5 Nov ~17:20, AICC: the arm meets the road as drawn until Parsons gives the
+  entries): R.0.D.2 rewritten with the Shoulder section (merge re-run; GUIDs, links kept); Parsons
+  records now also on CONSTRAINED_DEFINITIONS.DESCRIPTION for the 3 merged roads; `--arms-from-roads`:
+  9 arms 1, 3 and 41 arm 1 (R.0.D.2, B1) 2 + 2 x 3.3, median 1.2; 41 arms 2, 3 (R.0.C.2, C1) 2 + 2 x
+  3.3, median 4.0; yield 1 lane. 0 dangling, integrity ok. Next: rebuild R.0.D.2, toggle islands 9
+  and 41, then check whether InfraWorks keeps or recomputes the arm values.
+- After the rebuild (5 Nov ~20:05): the road Stack shows the Parsons record (CONSTRAINED_DEFINITIONS
+  .DESCRIPTION is the field it shows). Arms: InfraWorks KEPT BLEND_POINT_MEDIAN_WIDTH (1.2 / 4.0) and
+  ENTRY/EXIT_WIDTH 3.3 (the arms now show a median and a nose at the road) but RESET LANES and
+  ENTRY/EXIT_LANES to 0: it takes the lane count from the road, and still reads 0 lanes on our
+  divided sections (also with the Shoulder). Grading 680.7-683.9, 0 dangling. Remaining fix: make
+  B1/C1/C2 lanes readable to InfraWorks (controlled test with its own divided assembly on a copy).
+- Lane-reading test on a temporary copy C:\IW\lanetest (5 Nov ~20:20; delete after the test):
+  V1 R.0.C.2 = our C1 without the kerbs and fill on the median (lanes off the median edge, as
+  InfraWorks' "Four Lane Divided ..." hangs them off its median curbs); V2 R.0.D.2 = our B1 without the
+  `classification` tags (InfraWorks' assemblies have none). Written to ROADS.MANUAL_STYLE only; the user
+  rebuilds each (Grading Limit toggle), then the junction arms' LANES are read.
+- Test round 1 (lanetest, 5 Nov ~20:40): V1 (R.0.C.2 without median kerbs and fill) -> every junction
+  arm reads 4 lanes (2 each way); roundabout median 4.8 (4.0 + 2 x 0.4 shoulder). V2 (no
+  classification) -> still 0. Cause: the kerbs / fill on the median with the lanes hung off the median.
+  Round 2 written: V3 R.0.D.2 = full B1 (kerbs + raised fill) but the shoulder hangs off the median
+  kerb (point 1 = the median edge at road level), as InfraWorks chains median -> curb -> lanes; V4
+  R.0.C.2 = kerbs, no fill, shoulder off the kerb. Same geometry; only the attachment parent changes.
+- Round 2 (lanetest, 5 Nov ~20:50): V4 R.0.C.2 (median kerbs, no fill, shoulder off the kerb) reads 2 + 2
+  lanes at every arm, body rebuilt (90 strips), the arm continues the road's lanes into the roundabout.
+  V3 R.0.D.2 (kerbs + raised fill as a Sidewalk on the median) still 0 lanes. Cause: a Sidewalk piece on
+  the median (InfraWorks seems to take a sidewalk as the carriageway edge). Plan: the raised median is
+  drawn by the kerbs themselves (each kerb half the median wide, 150 mm upstand, flat top); test V5 on
+  R.0.D.2 in the copy, then change `buildSection`.
+- Round 3 (lanetest): V5 R.0.D.2 = raised median drawn by the kerbs (each half the median wide, 150 mm
+  upstand), nothing else on the median, shoulder off the kerb face -> every arm reads 2 + 2 lanes
+  (9, 12, 21, 22, 40, 41, 90; roundabout median 2.0). `buildSection` B1/C1/C2 changed to this layout
+  (tests: median top 150 mm, only the two kerbs on the median, shoulder on the kerb face).
+  `model:roads ... --restyle divided` (`restyleRoad`: only the section in MANUAL_STYLE) applied to the
+  19 divided roads of the working model (5 Nov ~21:15); 0 dangling, integrity ok. Test copy deleted.
+  Next: InfraWorks rebuilds each of the 19 (one road edit each), then roundabout island toggles;
+  check junction arms read lanes. armsFromRoads should no longer be needed.
+- After the 19 road edits (5 Nov ~21:40): every divided road reads 4 lanes at its junctions (also
+  roundabouts 9 and 41). 3 pits = junctions 106 (RA-3 centre), 135 (R.0.D.13 south of RA-5), 161:
+  their surface strips go to z 0. Each joins a road InfraWorks has not rebuilt (still our body, zero
+  range hash): 106 R.0.D.14; 135 R.9.G.5, R.10.G.2; 161 R.4.G.2, R.5.G.1. Rule: InfraWorks builds a
+  junction at height 0 on a road that still carries our body (same as the blend points). Every road
+  InfraWorks rebuilds can make new junctions with neighbours not yet rebuilt; until every road has been
+  rebuilt once, such pits can appear. Fix now: one edit on those 5 roads. Open: a way to have all ~200
+  remaining roads rebuilt once without 200 hand edits.
+- Pits 106, 135, 161 (5 Nov ~22:50): rebuilding their 5 roads, then a Design Vehicle change on 135
+  (P -> SU-9 -> P, Autodesk "About Intersections"), rebuilt the junction but its surface and cut-out
+  still drop to ~0 / 637 m. Not the road levels (spread <= 0.14 m, like good 103), not the grading
+  surface (present, 686.9-689.1), not other cut-outs, not the layout (139 = same make-up as 135, ok;
+  136 = same as 106, ok). Remaining difference: they were first created while a road had our body.
+  Test: `model:intersections --delete-junctions 135` then one edit on R.9.G.5 so InfraWorks creates the
+  junction afresh (`deleteIntersection`, test).
+- Fresh-build test (5 Nov ~23:10): junction 135 deleted in the file (82 rows; area flat and clean in
+  InfraWorks), then an edit on R.9.G.5: InfraWorks created it again (now ID 298) with the same pit. So
+  it is how InfraWorks builds this junction, not its history. Also ruled out: grades near the junction
+  (pit 135: 1.74 / 0.95 %, good ones down to 0.008 %). Open: 3 of 21 crossings on divided roads
+  (106, 161, 298) build with surfaces dropping to 0; next cheap test: "Extend into Intersection" off in
+  the junction's Stack; else raise with Autodesk with the evidence.
+- "Extend into Intersection" off (and Yield Line off) on junction 298: same pit. Search stopped: an
+  InfraWorks build problem at 3 of 21 divided-road crossings (106, 161, 298), not explained by the
+  data. Proposed: delete 298 and 161 as a cosmetic workaround (they come back on a road edit), report
+  to Autodesk with the evidence, continue with RA-3..RA-7 (106 is replaced by RA-3's roundabout).
+- 6 Nov: junctions 298 and 161 deleted (cosmetic workaround; they come back with the pit on an edit of
+  their roads); Autodesk report `autodesk-report-junction-pits.md`. The single height-0 strip on
+  roundabouts 9 / 41 is a dashed marking with autoDraped: harmless.
+  RA-3..RA-7 plan (dry run passes): R.0.D.15 = R.0.D.14 + R.0.D.15 (RA-3, B1); R.0.D.12 = R.0.D.13 +
+  R.0.D.10 + R.0.D.12 (RA-5 and RA-4, B1); R.0.D.4 = R.0.D.3 + R.0.D.4 (RA-5, B1); R.0.C.4 = R.0.C.3 +
+  R.0.C.4 (RA-6, C1). Refused by the tool: R.0.D.9 + R.0.D.11 at RA-3 (Parsons' levels 687.859 vs
+  688.000 at the centre); not needed (one through road suffices). RA-7: no straight pair (R.0.B.1 C2,
+  R.0.C.4 C1, R.0.D.5 B1 at three angles): no through road without inventing; decision pending.
+- 6 Nov: merges written (template read from the base model `Al Qairawan Roads (Parsons 2).sqlite`
+  with `--template-from`: InfraWorks had rebuilt R.6.E.1 in the working model, 4 terrain operations
+  instead of 5): R.0.D.15 = R.0.D.14 + R.0.D.15, R.0.D.12 = R.0.D.13 + R.0.D.10 + R.0.D.12,
+  R.0.D.4 = R.0.D.3 + R.0.D.4, R.0.C.4 = R.0.C.3 + R.0.C.4; links moved, 0 dangling, integrity ok,
+  14 divided roads all with the new median layout, every drawn road recorded. Parsons questions 12-15
+  added (merges, RA-7, RA-3 levels, entries / apron). Next: InfraWorks rebuilds the 4 merged roads,
+  then roundabouts on the centre junctions of RA-3..RA-6.
+- 6 Nov: roundabouts written on the centre junctions RA-3 106, RA-4 125, RA-5 136, RA-6 140 (40.4 /
+  24.0 / 0.975 / 1 x 7.225). Found: after the divided roads became readable, InfraWorks set 2 lanes at
+  the yield line on every divided-road arm of 9 and 41 and widened their rings to 2 lanes (7.225 +
+  7.275, ICD 54.95, its "Rural Double Lane" standard). Parsons' ring is one lane: writeRoundabout now
+  resets the arms' yield lanes to the ring's count when it rewrites the sizes; 9 and 41 written back
+  to 1 lane, ICD 40.4. To check after the island toggles: whether InfraWorks widens them again (then
+  a single-lane roundabout standard is needed). Pits re-created as 298 (old 161) and 299 (old 135).
+- After the island toggles (6 Nov): RA-6 (140) built but on the wall again (all 4 blend points at 0;
+  R.12.E.1 still our body) -> blend heights set from the roads (684.9-687.5); needs R.12.E.1 rebuilt
+  and the island toggled again. RA-5 (136): "Invalid roundabout geometry - intersections overlap":
+  InfraWorks' default arm (blend point) is ~77-81 m, the next junctions on its arms are at 70 / 80 m.
+  Same risk on RA-3 (78-82 m) and RA-4 (63 m). Proposed: arm length = distance to the next junction on
+  that road - 25 m, capped at the default (a modelling value, not Parsons data); to agree.
+- 6 Nov: RA-6 (140) built on the ground after R.12.E.1 was rebuilt, but InfraWorks widened it to 2 ring
+  lanes again (14.5 m, ICD 54.95): its standard "FHWA 2010: Rural Double Lane Roundabout" follows the
+  2-lane approaches. InfraWorks' US_1400.atj (Resources\Standards\Roads\Roundabouts, zlib) offers
+  "FHWA 2010: Mini Roundabout" (aad8fad5-4647-4306-a768-6206c9237828), "FHWA 2010: Urban Single Lane
+  Roundabout" (ea0caa79-bc7a-4d45-90d3-bbfc6e713ed1), "FHWA 2010: Urban Double Lane Spiral Marking
+  Roundabout" (c097f781-629f-4e24-b66b-4363fe03aa78). Next: the user picks Urban Single Lane in the
+  Stack's Standard drop-down on 140 (Autodesk "To convert an intersection to a roundabout"); then read
+  what InfraWorks stores and write it with the sizes and arms for all six.
+  `shortenArms` (`--shorten-arms`, gap 25 m, test) ready, not yet applied.
+- Urban Single Lane on 140 (6 Nov): InfraWorks stored STANDARD ea0caa79-..., source "Pool", but replaced
+  the sizes with its defaults (ICD 54.0, apron 4.0, island 18.0) and made the ring 2 lanes of 7.0
+  (LANE_DETAILS), because it set ENTRY/EXIT_LANES_AT_YIELD 2 on the three divided-road arms. Rule:
+  InfraWorks takes each arm's lanes at the yield line from the approaching road (now 2 + 2 on B1/C1)
+  and the ring follows the widest arm, whatever the standard; it rewrites what we store on every
+  rebuild. No Autodesk help topic for setting lanes at the yield line (only arm length, yield-line
+  position). Parsons' one-lane 8.2 m ring / 40.4 m ICD cannot be built with 2-lane approaches; to
+  decide with the user / Autodesk / Parsons (question 15).
+- AICC decision (6 Nov): an acceptable InfraWorks model comes first; where it must differ from Parsons,
+  record the deviation and why (`parsons-deviations.md`, D1-D10), after trying every other option.
+  Roundabouts: InfraWorks' two-lane ring (standard Rural Double Lane, 7.225 + 7.275), island 24.0,
+  apron 0.975, ICD 54.95 (writeRoundabout accepts 1 or 2 lanes, sets the standard on a rewrite, keeps
+  InfraWorks' yield lanes on a 2-lane ring). Written on 9, 41, 106, 125, 136, 140 and, as a test, 233
+  (RA-7, road ends only). `--shorten-arms`: 17 arms shortened to 25 m before the next junction.
+  0 dangling, integrity ok. R.6.F.1 (at 125) still has our body. Next: rebuild R.6.F.1, island toggle
+  on the 7, then check bodies, levels, lanes and whether 233 builds.
+- 6 Nov, after the island toggles: RA-7 (233) builds as a roundabout on a junction of road ends (all
+  3 roads end at the centre) - so with readable divided roads the D1 merges may not be needed any more
+  (to test later on one roundabout). 106 built with one side unconnected (R.0.D.9 arm blend at 0),
+  233 on a wall (2 blend points at 0): blend heights set. My `--shorten-arms` (25 m before the next
+  junction) was harmful: "insufficient space for arm lengths, or arm radii" on 125 / 140 (InfraWorks
+  had already shortened 140's arms itself to 49.8-66.9 and it was fine); 9, 41, 140 arms restored from
+  the copy taken before. InfraWorks rewrites arm lengths on rebuild (125, 136: 84.4 m, overlapping
+  neighbours at 63-80 m). 125 had switched itself to Urban Double Lane (ICD 60): rewritten Rural Double
+  54.95. Do not use --shorten-arms; next for 125 / 136: drag the arm grip by hand.
+- 6 Nov 13:40: built and accepted by the user: RA-1 (9), RA-2 (41), RA-3 (106), RA-6 (140), RA-7 (233),
+  all 2-lane Rural Double, island 24.0, apron 0.975, ICD ~55. Not built: RA-5 (136) and RA-4 (125),
+  "intersections overlap": InfraWorks' minimum arm for a 2-lane ring is ~64.6 m (it raised 136 arm 3
+  from 45 to 64.6), the next junctions are at 70 m (142, on R.0.D.4) and 63 m (124, on R.0.D.12).
+  Tried: default arms, shortened arms, Urban Single Lane. Last options: Mini Roundabout standard, else
+  an ordinary junction (deviation D11).
+- Mini Roundabout on 125 (user, 6 Nov ~14:00): stored "FHWA 2010: Mini Roundabout", 2 lanes, ICD 30,
+  island null, apron 2; still "insufficient space for arm lengths, or arm radii"; body 55 strips.
+  136: type 1, Rural Double 54.95, body 1 strip (never built), so it cannot be picked in the canvas
+  (select it with Select By Filter on Intersections, ID = 136). Handed over to a new session.
+
+## Session 7 (6 Nov 2026, evening): why RA-4 / RA-5 do not build
+
+- InfraWorks' own log (`%APPDATA%\Autodesk\Autodesk InfraWorks\logs\AIW_26.0_2026-11-06_13-*.log`)
+  names the rule behind both Stack messages: `RoundaboutManager.cpp(397): [Create Roundabout Fail]
+  The blend point offset is less than Inner Zone Of Influence Radius`, then `update arm for arm N
+  failed`. The roundabout engine is Autodesk Vehicle Tracking (`VehicleTrackingRoundabout.cpp`); the
+  standards are its `.atj` files: the pool `C:\ProgramData\Autodesk\InfraWorks\Resources\Standards\
+  Roads\Roundabouts\US_1400.atj` (FHWA 2000 and 2010 series; GB_1400 TD16/07 Normal / Compact, TD54/07
+  Mini, GEN_1400 Single / Dual Lane sit beside it), copied per standard into
+  `<model>.files\unver\Content\Standards\Roundabouts\<EXTERNAL_STANDARD_GUID>.atj` (zlib after a 122-byte
+  header, Savoy binary; the ICD / island / apron edits are saved there as new GUIDs). Autodesk
+  Vehicle Tracking 2026 is installed on this laptop (its Roundabout Standard Editor makes custom
+  standards; not tried).
+- What the arm lengths did (`.files` history, `armhist` in the session scratchpad): 13:12 our
+  `--shorten-arms` wrote 125: 38.06 / 55.31, 136: 55.0 / 45.0 / 55.0. 13:32 InfraWorks raised 136 arm 3
+  (S, R.0.D.12) 55.0 -> 64.60, reset arm 4 (E, R.0.D.4) 45 -> 84.42 (default), kept arm 1 (N) 55.0;
+  125's arms went to ARM_INDEX -1 (fail) and the standard to Urban Double. 13:51: 125 arm 2 (N)
+  38.06 -> 46.57, arm 3 (SW) 55.31 -> 64.27; 136 arm 4 84.42 -> 55.60 (junction 142's body starts at
+  56.7). So the minimum is per arm (two arms of the same straight B1 road: N <= 55.0, S 64.6) and not
+  stored anywhere; InfraWorks lengthens a too-short arm to it. It also renumbers ARM_INDEX itself.
+- Rules in code (`armRoom`, `--arm-room [--arm-min 136:3=64.6,...]`, `IW_MIN_ARM_SEEN`, test): an arm's
+  blend point must end before the next junction's body (INTERSECTIONS.GEOMETRY box: InfraWorks' own
+  shortening stops there, 140 arm 3 49.8 vs 50.1, 9 arm 3 51.6 vs 49.8, 136 arm 4 55.6 vs 56.7), and
+  not nearer than the arm's minimum. Report on the working model: 125 arm 2 needs 46.6, junction
+  124's body starts at 43.8 (-2.8 m); 125 arm 3 needs 64.3, 120's body at 61.0 (-3.3 m); 136 arm 3
+  64.6 vs 299's body at 66.7 (+2.1 m); 136 arm 4 55.6 vs 56.7 (+1.1 m). 140 arm 1 sits 3.8 m inside
+  134's box and still builds, so the box is a guide within a few metres, not the exact test.
+  No "[Create Roundabout Fail]" after 13:51 in the logs; 136 has not been rebuilt since its arms got
+  these values (body still 1 strip): first thing to try is one more island toggle on 136.
+- Checked and ruled out: the model's roads at 125 and 136 match Parsons' centrelines (R.0.D.12 runs
+  through RA-4 on a continuous r 250 curve, R.0.D.15 arrives on r 400, R.6.F.1 leaves on r 400; at
+  RA-5 all four arms are straight at 0 / 90 / 180 / 270, R.0.D.3 straight 48.1 m then r 150); the
+  centres equal the drawn island circles (r 12.0); Parsons' profiles are the same pattern at every
+  roundabout (PVIs at 12 and 20.2 m, the 2 % ring crossfall); the neighbouring junctions' bodies are
+  normal (18-28 m from their centres, 299 included). Parsons' entries are 7.3 m wide between the
+  median nose and the outer kerb (2 lanes, no flare, kerb returns r 20), so a one-lane approach is not
+  in the drawings. The angle between arms 3 and 4 of RA-4 is 61.5 deg (the others 81-113).
+- Autodesk help: "To modify roundabout geometry" (InfraWorks-RoadsandHighways
+  GUID-5E5E1D95-F78E-4A03-A2E2-D97C8AB77EB5): select the roundabout, click an arm, drag its vertical
+  grip = blend point, the Stack shows Arm Length; Standard drop-down in the roundabout Stack. Roads
+  Tutorial 3 Exercise 3 (2016 tutorials GUID-E1D905F9-9CE9-4966-867E-CA1430F6E9F6): where there is
+  not enough space, pick a smaller standard (Urban Compact) then shorten the arms by their grips.
+  Civil 3D "Roundabout Standard Editor: Arm Geometry: Splitter ETW Construction"
+  (GUID-E5D615CE-26AF-4F74-A697-7C0418A4D174): the arm geometry a standard carries (construction
+  triangle length / width, entry and exit radii and taper radii, as ratios of the inscribed radius).
+- Next (user, in InfraWorks): (1) island toggle on 136 as it is; (2) on 136 and 125 type 30 in every
+  arm's Arm Length, toggle the island, read the lengths InfraWorks sets (= each arm's minimum) and
+  what the Standard drop-down lists (US only, or GB / GEN too); (3) the same on "FHWA 2000: Urban
+  Compact Roundabout". Then decide: custom standard with Parsons' radii (Vehicle Tracking 2026),
+  or deviation D11.
+- 7 Nov: 136 converted back to Intersection in the Stack (Junction Type thumbnail) shows "Intersection
+  not supported" and the Roundabout thumbnail does nothing again; the roundel of 136 / 125 cannot be
+  picked because the body was never built. Decision (user): delete both in the file and let InfraWorks
+  create them afresh. Written 7 Nov ~12:30 (model closed; copy in the session scratchpad
+  `backup-before-delete-125-136`): `--delete-junctions 125,136` (70 + 10 rows: arms, regions,
+  ROUNDABOUTS rows, bodies). Next: one edit on R.0.D.12 (through both centres) so InfraWorks creates
+  the two centre junctions again, then Junction Type > Roundabout in the Stack on each, with
+  InfraWorks' own arm lengths and sizes; our sizes (24.0 / 0.975) are written back only if it builds.
+- 7 Nov 14:53-14:57, fresh build (user): Grading Limit 5.0 -> 5.1 -> 5.0 on R.0.D.12 created the two
+  centre junctions again as 308 (RA-4) and 309 (RA-5), plain intersections without a warning. 308 ->
+  Roundabout: "Invalid roundabout geometry - insufficient space for arm lengths, or arm radii", ICD /
+  island 0.0. Log (`AIW_26.0_2026-11-07_14-50-55`): the same two lines as for 125, "blend point offset
+  is less than Inner Zone Of Influence Radius" for arms 2 and 3, and the same lengths InfraWorks chose:
+  R.0.D.15 64.27 m (junction 120's body at 61.0, -3.3), R.0.D.12 towards 124 47.57 m (body at 43.8,
+  -3.8); R.6.F.1 and R.0.D.12 towards 128 at the default 73.5 with room. So the old rows were not the
+  cause: the per-arm minimum comes from the standard's approach geometry (Civil 3D "Roundabout
+  Standard Editor: Arm Geometry: Approach", GUID-46861A10-F553-4648-9B72-53027B4D5E72: Deviation
+  Offset, Final Straight Section, Transition Arc Radius, Design Speed, each with Min / Max / Default).
+  Then 12 x "database table is locked" (FDO wrap, same thread, 11 s after the failure): the updates
+  of ROUNDABOUTS 8, arms 960-963 and INTERSECTIONS 308 (GEOMETRY, dates) did not persist, hence
+  Termination Date 17-Sep-1752 in the Stack and ARM_INDEX -1. The user then converted 309 as well:
+  no "Create Roundabout Fail" line for it, but its write failed the same way and left ROUNDABOUTS 9
+  and arms 968-971 with an empty parent GUID; the lengths InfraWorks chose for RA-5 fit the room
+  (R.0.D.12 towards 299: 65.6 vs body 66.7; R.0.D.4 towards 142: 55.6 vs 56.7; towards 180: 73.5),
+  so RA-5 is expected to build in a clean session. Never seen before 7 Nov (0 "table is locked" in
+  all logs since 1 Nov). Cleaned 7 Nov ~15:30 after the user closed the model (copy in the session
+  scratchpad `backup-before-delete-308-309`): `--delete-junctions 308,309` (11 + 9 rows) plus the
+  5 orphan rows (`pruneDanglingIntersections` now covers ROUNDABOUTS, commit e9b7d96); file back to
+  299 intersections, 923 arms, 651 regions, 5 roundabouts, integrity ok, max ID 307.
+- 7 Nov 15:38-15:46 (user): model opened (InfraWorks repaired a "transient state" of both `.files`
+  Git repos: the previous session was not closed cleanly), Grading Limit toggle on R.0.D.12 twice
+  (15:40, 15:45): 308 (RA-4) and 309 (RA-5) created again as plain intersections, 308 with a full body
+  (76 primitives). Junction Type > Roundabout on 309: **InfraWorks crashed** at 15:46:33, right after
+  the log line "Junction Standard loaded from .../US_1400.atj". Dump `%LOCALAPPDATA%\Temp\InfraWorks_error.dmp`
+  (2.5 MB, copy in the session scratchpad `dump\`), read with `scripts/road-pilot/minidump.cjs`
+  (minidump streams, no debugger): exception 0xC0000005 (read of address 0) in
+  `AIM_RoadsApp.dll+0xf8be5`, thread 32432 (UI thread), frames AIM_UIPlatform > AIM_Platform >
+  AIM_RoadsApp > AIM_ModelRoad / AIM_ModelCore > FdoWrap / AIM_CoreAPI (the database layer). No WER
+  record, no Application-log event. The file afterwards held exactly the rows of the locked session:
+  309 INTERSECTION_TYPE 1 without a ROUNDABOUTS row, ROUNDABOUTS 8 with an empty parent GUID, arms
+  968-971 with an empty parent and InfraWorks' shortened lengths (R.0.D.12 65.6 both ways, R.0.D.4
+  55.6 towards 142 and 73.5 towards 180), STATUS 1. So the locked-table errors of 14:54 and this crash
+  are the same failure in RA-5's conversion; InfraWorks writes the roundabout row and the arms before
+  it sets their parent, and dies in between. Cleaned 15:55 (model closed; copy in the scratchpad
+  `backup-after-crash-1546`): `--delete-junctions 309` (9 rows + 5 orphans); 308 kept as a plain
+  intersection. File: 300 intersections, 927 arms, 655 regions, 5 roundabouts, integrity ok.
+- Next (user, in InfraWorks, one action per session, save and close after each):
+  (1) RA-4 first, no crash there: select 308, Junction Type > Roundabout (expect the warning), then
+  the Standard drop-down: screenshot of the list, pick "FHWA 2000: Urban Compact Roundabout", then
+  Mini if needed; screenshots; save, close; I read the file. (2) RA-5 once more in a fresh session:
+  Grading Limit toggle on R.0.D.4 (not R.0.D.12), convert the new centre junction. A second crash at
+  the same offset makes it Autodesk's bug for RA-5: report with the dump (as
+  `autodesk-report-junction-pits.md`) and decide D11 (ordinary junction) or wait for a fix.
+- **7 Nov 18:16-18:31: RA-4 built.** 308 > Roundabout gave the known warning (Rural Double, ICD 0);
+  Standard drop-down > "FHWA 2000: Urban Compact Roundabout": built at once, no warning (the toast left
+  on screen was the old one). InfraWorks: ICD 42.0, island 18.0, apron 0, 2 ring lanes of 6 m
+  (LANE_DETAILS), standard GUID 5d67ca9e (a copy already in the model's `unver/Content/Standards`
+  since 4 Nov). Arm blend offsets in the file: R.6.F.1 73.545 (1 lane at yield), R.0.D.12 towards 124
+  47.57, R.0.D.15 towards 120 64.273, R.0.D.12 towards 128 73.545 (2 lanes) - exactly the lengths of
+  the failed Rural Double attempts (Stack Arm Length = offset - 21.0: 52.4 / 26.6 / 43.3 / 52.5).
+  So the lengths are InfraWorks' own clamp before the next junction, the same under every standard,
+  and the standard's arm geometry must fit under them: Rural Double's does not (> 64.27 on a 2 + 2
+  arm), Urban Compact's does (< 47.57). The neighbour's GEOMETRY box is a guide only: arms 2 and 3
+  built 3.8 and 3.3 m inside the boxes of 124 and 120. model-gate (commit aeeb3dd):
+  `IW_ARM_CLAMP_SEEN` (was `IW_MIN_ARM_SEEN`, wrongly named minima), `standardFitsArm`, `armRoom`
+  statuses by the box with `--arm-clamp` / `--standard`, `IW_ROUNDABOUT_STANDARDS` with
+  "urban-compact" (lane 6 m), apron 0 allowed, `--keep-lane-width` for a trial; 52 tests. Written
+  18:50 (copy in the scratchpad `backup-before-sizes-308`): `--roundabout 308 --icd 40.4 --island
+  24.0 --apron 0 --lanes 1 --lane-width 8.2 --standard urban-compact --keep-lane-width`, i.e.
+  Parsons' ring as drawn; the arms' lanes at yield set to 1 (InfraWorks set 2 back on RA-1 / RA-2;
+  expected here too). Deviation D11 (RA-4 on Urban Compact) recorded; D4 rewritten with the clamp rule.
+- 7 Nov ~19:10 (user): on opening, the Roundel of 308 read ICD 36.00, apron 0, island 24.00, Total
+  Width of Lanes 6.0: InfraWorks replaced the written 8.2 m lane by the standard's 6.0 m at once.
+  After the Grading Limit toggle on R.6.F.1: ICD 48.0, island 24.0, apron 0, lanes 12.0 m = 2 x 6 m
+  (the 2 + 2 divided approaches set the ring to two lanes again, as D2). Final RA-4: Urban Compact,
+  island 24.0 (Parsons' r 12), no apron, 2 x 6.0 m, ICD 48.0 (outer edge r 24.0 against the drawn
+  20.2; the five Rural Double roundabouts stand at 27.5). D11 closed on that. To write it again:
+  `--roundabout 308 --icd 48 --island 24 --apron 0 --lanes 2 --lane-width 6 --standard urban-compact`.
+- 7 Nov 19:27-19:30 (user): RA-5 again: Grading Limit toggle on R.0.D.4 created 309 as a plain cross
+  (R.0.D.12 x R.0.D.4), Junction Type > Roundabout: **second crash, same place** (dump 19:30:08:
+  0xC0000005 at `AIM_RoadsApp.dll+0xf8be5`, read of address 0, UI thread, right after "Junction
+  Standard loaded from .../US_1400.atj"; copy `dump\InfraWorks_error_2.dmp`). Deterministic for this
+  junction: the Stack conversion of a cross of two through roads crashes InfraWorks 2026.0.2.119 here,
+  while 308 (three roads) converted. The file held the same half rows again (309 type 1, ROUNDABOUTS
+  row and arms 968-971 with an empty parent, lengths 65.6 / 73.5 / 65.6 / 55.6).
+  Route taken (the one RA-1 / RA-2 were built by, 4 Nov: the roundabout row written in the file, the
+  body built by InfraWorks on one roundel edit): 19:45, model closed, copy in the scratchpad
+  `backup-after-crash-2-1930`: orphans pruned (5 rows) and `--roundabout 309 --icd 48 --island 24
+  --apron 0 --lanes 2 --lane-width 6 --standard urban-compact` (4 arms numbered 1 R.0.D.12 towards
+  137, 2 R.0.D.4 towards 180, 3 R.0.D.12 towards 299, 4 R.0.D.4 towards 142; blend points left to
+  InfraWorks, which clamps them to 65.6 / 73.5 / 65.6 / 55.6, all under Urban Compact's need).
+  File: 301 intersections, 930 arms, 657 regions, 7 roundabouts, integrity ok. `IW_ARM_CLAMP_SEEN`
+  has 309's clamps.
+- Next (user): open; select 309 (a roundabout now), pick its roundel and change Center Island
+  Diameter 24.0 -> 24.1 -> 24.0 in the Roundel Stack (Autodesk "To modify roundabout geometry"), which
+  makes InfraWorks build the body as it did for 41 and 9; screenshots; save, close. If InfraWorks
+  crashes on that too, RA-5 cannot be a roundabout in this release: D12 (ordinary junction, as
+  Parsons' cross) and an Autodesk report with both dumps.
+- 7 Nov ~20:00 (user): opened; 309 shows as Roundabout (Urban Compact, 48.0 / 0.0 / 24.0) but with no
+  body and the toast "Invalid roundabout geometry - intersections overlap"; the roundel cannot be
+  picked (nothing drawn). The file afterwards: InfraWorks had zeroed all four arms (offset 0, blend
+  point at the origin, 0 lanes at the yield line, widths and median 0): with no blend points it used
+  its default 76.9 m and found the neighbours at 70 / 80 m, and unlike the Stack conversion this
+  rebuild path does not clamp. Written 20:20 (model closed, copy `backup-before-arms-309`):
+  `--heal-arms 309 --shorten-arms --arm-gap 14.4 --arm-ids 309`: yield lanes 2 / 2, widths 3.3,
+  median 2.0 (R.0.D.12, from 308) / 1.2 (R.0.D.4, from the road section), blend offsets 65.6 / 76.9 /
+  65.6 / 55.6 with their points on the road at its level. `--arm-room --standard urban-compact`: all
+  four fit, builds. model-gate commits 624fc72 and the next: `--arm-ids`, `--heal-arms`, 53 tests.
+- 7 Nov 20:05-20:13 (user): Grading Limit toggle on R.0.D.4: 309 still "Invalid roundabout geometry -
+  intersections overlap", no ring, no arms, Termination Date 1752 again, the ground around the
+  centre a flat smear. The file afterwards: the arms kept our lengths (InfraWorks rewrote arm 2 to
+  76.9016 and R.0.D.4's median to 2.0, so it did read them), 1 primitive, no zeroing this time. So the
+  rebuild path refuses this roundabout at 65.6 / 55.6 m although the Stack path built 308 at 47.6 /
+  64.3 m inside its neighbours' boxes: the file route (RA-1 / RA-2) only works where the arms have
+  room; where they are clamped, only the Stack conversion builds, and that conversion crashes on a
+  cross of two through roads. Remaining before a deviation: give RA-5 the topology of 308 (one through
+  road + two road ends) by undoing the R.0.D.4 merge, as Parsons drew it (R.0.D.3 0+000-0+782.663,
+  R.0.D.4 0+782.663-1+436.094; centre at 782.7): `model:roads --split R.0.D.4=R.0.D.3+R.0.D.4` (dry
+  run passes), 309 deleted first; 10 junctions on R.0.D.4 (142, 176, 177, 180, 235, 237, 254, 257,
+  266, 274) keep their links on the part they lie on. Then InfraWorks builds R.0.D.3 / R.0.D.4 on a
+  Grading Limit toggle each, creates the centre junction (3 roads), Stack > Roundabout > Urban Compact.
+  Awaiting the user's decision (it narrows D1 for RA-5 towards the drawing).
+- 7 Nov ~20:45, user's decision "اقسم": model closed, copy in the scratchpad `backup-before-split-r0d4`;
+  `--delete-junctions 309` (11 rows), then `model:roads ... --split R.0.D.4=R.0.D.3+R.0.D.4` (template
+  from `Parsons 2`): R.0.D.3 782.7 m (ROADS.ID 288, new definition bdf07a05, junctions 266, 274, 176,
+  177, 180: 22 links moved) and R.0.D.4 653.4 m (ROADS.ID 289, keeps its definition 409ab168, junctions
+  142, 254, 257, 235, 237), both B1 2 + 2, meeting at the RA-5 centre 658848.35 / 2748232.83 at
+  690.66 on both. 236 roads, 244 definitions, 300 intersections, 0 dangling, integrity ok; no junction
+  at the centre yet (InfraWorks creates it when R.0.D.3 / R.0.D.4 are built). D1 updated.
+- Next (user): open; Select By Filter Roads `NAME = 'R.0.D.3'`, Grading Limit 5.0 -> 5.1 -> 5.0; the
+  same on R.0.D.4; a plain cross appears at the RA-5 centre (R.0.D.12 through, R.0.D.3 and R.0.D.4
+  ending there, as 308); screenshot; Junction Type > Roundabout, then Standard > FHWA 2000: Urban
+  Compact; screenshots; save, close. Then I write island 24.0 (`--roundabout <id> --icd 48 --island 24
+  --apron 0 --lanes 2 --lane-width 6 --standard urban-compact`) and the user toggles the island.
+- 7 Nov 20:31-20:35 (user): R.0.D.3 and R.0.D.4 built (90 / 75 primitives), the centre junction came
+  back as 309, a plain cross of R.0.D.12 (through), R.0.D.3 and R.0.D.4 (ending there) - and
+  **"Intersection not supported"**: no body (1 primitive), the Roundabout thumbnail does nothing. Log:
+  `IntersectionCommonInfo.cpp(1596): warn: failed to get road parameters` x4 on every rebuild, a
+  line never seen in any log since 4 Nov. 308 has two road ends too (R.6.F.1, R.0.D.15, at 61.5 deg)
+  and is supported, so what InfraWorks refuses is two road ends meeting end to end (collinear) at a
+  crossing - the same reason the four road ends of the original RA-5 / 136 were "not supported" (D1).
+  RA-5's geometry (two straight roads crossing at right angles) therefore has no supported topology
+  in InfraWorks 2026.0.2.119 other than two through roads, where the Stack conversion crashes and the
+  file route reports "intersections overlap" at InfraWorks' own clamped lengths (65.6 / 55.6).
+  Not yet tried: the file route with shorter arms (60 / 50 m: 6.7 m clear of the neighbours' boxes,
+  still above the 47.57 m Urban Compact is known to build at) on the merged cross; it costs merging
+  R.0.D.3 + R.0.D.4 again, deleting 309, one road edit, the roundabout written, one more road edit.
+  Else D12: RA-5 as the ordinary junction InfraWorks builds (with Parsons' roads R.0.D.3 / R.0.D.4
+  merged again or as drawn, whichever InfraWorks supports), and an Autodesk report with both dumps.
+- 7 Nov ~21:05, user's decision: one last file-route trial, and a deviation from Parsons' drawing is
+  allowed if it solves it, recorded with its reasons. Model closed, copy in the scratchpad
+  `backup-before-merge-back-r0d4`: `--merge R.0.D.4=R.0.D.3+R.0.D.4` again (1436.094 m, 17 PVIs, B1;
+  25 links moved, R.0.D.3's 132 rows deleted), 309 is the two-through cross again (arms R.0.D.12 x 2,
+  R.0.D.4 x 2). Then `--roundabout 309 --icd 48 --island 24 --apron 0 --lanes 2 --lane-width 6
+  --standard urban-compact --heal-arms 309 --shorten-arms --arm-gap 20 --arm-ids 309`: arms numbered
+  1 R.0.D.4 towards 180 (76.9), 2 R.0.D.12 towards 299 (60.0), 3 R.0.D.4 towards 142 (50.5), 4 R.0.D.12
+  towards 137 (60.0), all 6.7 m clear of the neighbours' boxes, yield lanes 2 / 2, widths 3.3, median
+  2.0 / 1.2, points on the road at its level. File: 301 intersections, 930 arms, 7 roundabouts,
+  integrity ok, 0 orphans. (`IW_ARM_CLAMP_SEEN` keys for 309 renumbered.)
+- Next (user): open, Grading Limit toggle on R.0.D.4 only; screenshots of 309 and the Stack; save,
+  close. If "intersections overlap" again: the overlap rule of the rebuild path is not about the arm
+  length at all; then either a deviation (to be designed: the only geometric freedom is the arm
+  lengths, already used) or D12.
+- 7 Nov 21:16-21:26 (user): still "Invalid roundabout geometry - intersections overlap" with the
+  60 / 50 m arms, no body. File: InfraWorks kept the lengths (60.0 / 76.9 / 60.0 / 50.5; it only
+  rewrote R.0.D.4's median to 2.0 and renumbered the arms), wrote 309's INTERSECTIONS box as
+  128.8 x 120.0 m (the arms' extent), 1 primitive. Row-by-row diff against 308 (built by InfraWorks)
+  shows no field missing in ours (ROUNDABOUTS, arms, regions all alike); 308's own box overlaps
+  124's by 2 m and it builds. So the rebuild path's "overlap" is neither the arm length nor the boxes;
+  it refuses this roundabout as soon as junctions 142 (70.5 m, R.0.D.4 x R.6.G.18), 137 (80 m,
+  R.0.D.12 x R.8.G.2) and 299 (80 m, R.0.D.12 x R.9.G.5 / R.10.G.2) are that close.
+  Next idea, InfraWorks' own tools only: remove those three junctions (and 309) in the file
+  (`--delete-junctions 142,137,299,309`; InfraWorks recreates each when its local road is edited),
+  then in InfraWorks: Grading Limit toggle on R.0.D.4 (309 comes back as a cross with no junction
+  nearer than 180 at 126 m), Stack > Roundabout (nothing to clamp: if it still crashes, the crash is
+  general for a cross of two through roads -> D12 and an Autodesk report), Standard > Urban Compact,
+  shorten the two R.0.D.12 arms and the east R.0.D.4 arm by their grips to ~60 / 50 m ("To modify
+  roundabout geometry"), save; then Grading Limit toggles on R.6.G.18, R.8.G.2, R.9.G.5 bring 142,
+  137, 299 back; whether the roundabout survives their return is the test (308 lives with 124's box
+  overlapping its own).
+- 7 Nov ~21:45 (user: "do it, but on a new copy"): trial copy `C:\IW\Al Qairawan Roads (Parsons 7 RA5
+  trial).sqlite` + `.files` (robocopy, 2339 entries, identical); the working copy `(Parsons 6
+  junctions)` is untouched (301 intersections, 7 roundabouts). In the trial copy:
+  `--delete-junctions 142,137,299,309` (60 + 60 + 82 + 11 rows): 297 intersections, 916 arms, 645
+  regions, 6 roundabouts, 0 dangling, integrity ok, nothing within 80 m of the RA-5 centre. If the
+  trial succeeds, the same steps are repeated on the working copy (or the trial copy becomes it).
+- 7 Nov 21:41-21:44 (user, trial copy): Grading Limit toggle on R.0.D.4, then Junction Type >
+  Roundabout on the new centre junction (311): **third crash, same address** `AIM_RoadsApp.dll+0xf8be5`
+  (dump 21:44:05, copy `dump\InfraWorks_error_3.dmp`). The test was not clean: rebuilding R.0.D.4
+  made InfraWorks recreate the deleted junctions as well (the trial copy is back at 301 intersections;
+  312 = the old 142 at 70 m), and the orphan arms carry the same clamps 65.6 / 73.5 / 65.6 / 55.6, so
+  the neighbours were there when it converted. Deleting junctions cannot keep them away: only removing
+  the local roads themselves (R.6.G.18, R.8.G.2, R.9.G.5, R.10.G.2; `--delete-roads`, rewritten later
+  with `model:roads --only`) would give a conversion with no neighbour at all. The crash address is
+  identical in all three dumps.
+- 7 Nov ~22:00 (user: "delete the roads temporarily"), trial copy only (copy in the scratchpad
+  `backup-trial-before-delete-roads`): `--delete-roads R.6.G.18,R.8.G.2,R.9.G.5,R.10.G.2
+  --delete-junctions 311`: 4 roads (209 rows), 311, and the 16 junctions left on one road (130, 131,
+  132, 134, 143, 144, 178, 179, 187, 231, 232, 253, 278, 309, 310, 312) with 651 body rows; 284
+  intersections, 877 arms, 231 roads, 0 dangling, integrity ok; nearest junction to the RA-5 centre
+  is now 180 at 125 m. To restore: `model:roads ... --only R.6.G.18,R.8.G.2,R.9.G.5,R.10.G.2` then a
+  Grading Limit toggle on each (InfraWorks recreates the 16 junctions).
+- Next (user, trial copy): Grading Limit toggle on R.0.D.4 (the centre cross comes back, no neighbour
+  nearer than 125 m), Junction Type > Roundabout. A crash now = general for a cross of two through
+  roads (D12 + Autodesk report). Built = Standard > Urban Compact, save, close; then the roads are
+  rewritten and the roundabout watched as the neighbours return.
+- 7 Nov 21:53 (user, trial copy, no junction nearer than 125 m): **fourth crash, same address**
+  `AIM_RoadsApp.dll+0xf8be5` (`dump\InfraWorks_error_4.dmp`). The crash is therefore not about the
+  neighbours: InfraWorks 2026.0.2.119 cannot convert this cross of two through roads at all.
+  **Closed as D12**: RA-5 stays the ordinary crossing InfraWorks builds (R.0.D.4 merged, as D1).
+  Working copy: `--delete-junctions 309` (the half roundabout row) so InfraWorks recreates the plain
+  cross on the next edit of R.0.D.4 (copy `backup-before-d12-309`). Report
+  `autodesk-report-roundabout-crash.md`; the four dumps and the day's logs copied to
+  `InfraWorks-Modeling-Data\reports\infraworks-roundabout-crash-2026-11-07`. The trial copy
+  `(Parsons 7 RA5 trial)` (four local roads removed) is kept only as the reproduction case for
+  Autodesk; the working copy remains `(Parsons 6 junctions)`.
+- Next (user, working copy): open, Grading Limit toggle on R.0.D.4 so the centre comes back as a
+  plain cross (expect no warning: that is how it was before 6 Nov), save, close; then the roundabout
+  work is done: RA-1, RA-2, RA-3, RA-6, RA-7 on Rural Double Lane (D2 / D3), RA-4 on Urban Compact
+  (D11), RA-5 an ordinary crossing (D12). Remaining from the plan: D8 kerb return radii.
+- 7 Nov 22:00-22:16 (user, working copy): Grading Limit toggle on R.0.D.4; 309 came back as a plain
+  cross with a full body (84 primitives, 5 terrain operations), no warning, no "failed to get road
+  parameters" in the log; saved and closed. User's decision (22:20): R.0.D.4 stays merged (splitting
+  it as drawn makes the crossing "Intersection not supported", D1). File: 301 intersections, 930 arms,
+  657 regions, 6 roundabouts (9, 41, 106, 140, 233 Rural Double Lane 54.95 / 55.05; 308 Urban Compact
+  48.0), 0 orphans, integrity ok. **Roundabout work closed.** Next: D8 (kerb return radii 10 / 12 /
+  20 m from the drawing on the ordinary junctions), then the Autodesk report goes out.
+
+## Session 8 (7 Nov 2026, night): D8 kerb return radii
+
+- Model: 657 INTERSECTION_REGIONS, one per junction corner; CURB_RETURN_TYPE 2 (radius) on 643 with
+  CURB_RETURN_RADIUS 9 (513), 11 (100), 12 (14), 10 (10), 15, 18, 6; type 4 (taper, offset 0.8,
+  ratio 8) on 14; INPUT_CURB_RETURN_TYPE -1 and MANUALLY_CHANGED 0 everywhere (nothing ever edited in
+  the Stack). Rule checked on all 634 regions of the plain junctions: the corner (centroid of the
+  region geometry) lies in the wedge between the incoming arm (before the centre along its road when
+  SAME_DIRECTION_AS_INCOMING_ASSET) and the outgoing arm (after the centre when
+  SAME_DIRECTION_AS_OUTGOING_ASSET); 634 of 634 within 30 degrees of the bisector.
+- Drawing: 1269 arcs on -RD_Edges (LWPOLYLINE bulges), 981 of them r < 40 m sweeping > 30 degrees;
+  the kerb return of a corner is the arc whose centre bears within 35 degrees of the corner from the
+  junction centre and lies within 35 m of it (on the divided roads the centre is 20-30 m out). Fillets
+  of r 1 m and arcs under 20 degrees are skipped. REFERENCE_POINTS is a MultiPoint on some junctions
+  (51, 300, 303): read through parseFgf (`junctionCentre`), not at byte 8 (the earlier scratch scripts
+  showed those centres as x = 0).
+- model-gate: `packages/model-gate/src/roads/curb-returns.ts` (`kerbArcs`, `junctionCentre`,
+  `curbReturnsFromDrawing`), CLI `--curb-returns <10200.dxf> [--junctions ...]`, 3 tests (56 in all).
+  Written values: CURB_RETURN_RADIUS = drawn, CURB_RETURN_TYPE 2, INPUT_CURB_RETURN_TYPE 2,
+  MANUALLY_CHANGED 1 (assumed to be what the Stack writes for a user-set radius; to confirm).
+  Dry run on the working copy: 634 corners on 294 junctions, 600 to set (10 m x447, 12 m x141,
+  11 m x10, 15 m x2), 11 already the drawn value, 22 without a drawn arc (listed; 309's four among
+  them: the drawing has a roundabout there), 1 compound (232: 14 / 13.9).
+- Written on junctions 2 and 13 only (copy `backup-before-kerbs-2-13`) as the InfraWorks test.
+- Next (user, working copy): open; select junction 13 (R.1.F.4 x R.1.F.1) and junction 2; Stack >
+  Turning Zone: do the radii read 12 (13) and 10 (2) instead of 9 / 11; Grading Limit toggle on
+  R.1.F.1 and on one road of 2; do they survive the rebuild (Autodesk "About Intersections": select a
+  Turning Zone to view and modify its attributes in the Stack). If yes: write all 600; if InfraWorks
+  resets them, try INPUT_CURB_RETURN_TYPE -1 / MANUALLY_CHANGED 0 with the radius alone, else D8 stays
+  a deviation.
+- 7 Nov ~22:50 (user): junction 13's Turning Zone reads Radius 12.00 (Simple Curve, turn angle
+  101.79) on opening and again after the Grading Limit toggle on R.1.F.1; junction 2 reads 10.00
+  before and after the toggle on R.12.G.3. So a radius written in the file with INPUT_CURB_RETURN_TYPE
+  2 and MANUALLY_CHANGED 1 is kept by InfraWorks. (The yellow jagged wall by junction 2 is the known
+  site-edge terrain issue, not the junction.) Written on everything (copy `backup-before-kerbs-all`):
+  596 more corners set (600 with 2 and 13), 15 already the drawn value, 22 without a drawn arc left,
+  232's compound corner 14 m. Regions now: 10 m 447, 12 m 141, 11 m 10, 15 m 2 as drawn; the 13
+  former taper corners (type 4) are simple curves now, their old offset / taper values left in the
+  row unused. Integrity ok. D8 closed; the 22 corners go to Parsons as question 16.
+- Next (user): open the working copy, spot-check a few junctions' Turning Zones (e.g. 4, 12, 60, 232),
+  save, close. Then the Autodesk report (`autodesk-report-roundabout-crash.md`) goes out, and the
+  branch waits for "ادمج".

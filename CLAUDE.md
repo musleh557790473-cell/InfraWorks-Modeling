@@ -46,6 +46,8 @@ pnpm package:build "<drawing.dxf | model.stsw.sqlite | model.wtg.sqlite>" [--pro
 pnpm gate:model "<model>.sqlite" --package <package.zip>      # Gate G3, on a closed model
 pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"]
 pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profiles <40000.dxf> --surface <grading.xml> [--package <road_centerline>] [--dry]
+#   Al Qairawan: add --section R.9.G.6=A1,R.9.G.7=A1 (AICC decision for the two roads the drawing does not type)
+pnpm model:intersections "<model>.sqlite" [--dry]               # drop intersections left on a deleted road
 ```
 
 ## Inputs from Parsons
@@ -109,6 +111,14 @@ pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profi
   invalidateModel, saveUpdates, getRoadID, addPVI, createRoad...), `app.ActiveModel.Intersections`
   (updateIntersections, findIntersectionById), `app.ActiveModelDb` (Table, BeginTransaction,
   ExecuteSqlCommand), `app.Regenerate`. Autodesk calls this API unofficial.
+  Signatures come from the Qt metadata in `AIM_JavaScriptAPI.dll` (every method reports length 0).
+  `RoadModel.readRoadModel(id)` takes the road's CONSTRAINED_DEFINITIONS.ID (RA-2: 299), not
+  ROADS.ID (280, the "ID" in the properties panel): with 280 it returns false and stays empty.
+- InfraWorks' intersections point at roads by the road's CONSTRAINED_DEFINITIONS GUID
+  (INTERSECTION_ARMS.FK_ASSET_GUID, INTERSECTION_REGIONS.FK_INCOMING/OUTGOING_ASSET_GUID), not
+  ROADS.GUID. model:roads keeps both GUIDs when it replaces a road, so they stay valid.
+- `<model>.files` keeps every InfraWorks edit as text rows (`exploded/<TABLE>/<n>`): diff its Git
+  history to see what InfraWorks wrote, read-only, without opening the model.
 - InfraWorks rebuilds a component road (body, and the intersections where it meets other roads)
   only on a single-road edit. Rebuilding RA-1 split it into 4 pieces between its arms and created
   9 intersections; the one-piece closed ring model:roads writes draws a stray band until then.
@@ -167,5 +177,5 @@ street-lighting ducts (not in the Parsons documents, drawn on the terrain); the 
 (`Xref Road Layout Al Narjis.dwg`) from Parsons; Al Narjis and other districts through the same path.
 Roads: junctions and roundabouts as InfraWorks intersections; the roundabout circulatory width;
 a band InfraWorks draws away from RA-1 when it is selected (not in its stored rows; test: change
-its Grading Limit and undo); R.3.G.1 stands 5 m above Parsons' grading surface over its first 100 m
-(to raise with Parsons).
+its Grading Limit and undo); to raise with Parsons: R.3.G.1 stands 5 m above their grading surface
+over its first 100 m, and R.1.G.24 starts 0.535 m below loop R.1.G.23 (both profiles as printed).

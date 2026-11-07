@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  applySectionDecisions, parseSectionDecisions, type SectionClass,
   assemblePvis, buildAlignments, buildRoundaboutSection, buildSection, crossfallSides, measureRoundabouts, orientRoads, pieceLen, readDxfBlock, readProfileViews, trimTo,
   type Alignment, type DxfEnt, type ProfileView, type Seg,
 } from "../src/index.js";
@@ -137,10 +138,22 @@ test("direction: a junction at the same level keeps a road the surface alone wou
 test("sections: the median is raised 150 mm by upstand kerbs, lanes start at the profile level (C1)", () => {
   const s = buildSection("C1");
   assert.equal(s.width, 30);
-  const median = s.parts.filter((p) => p.role === "median").flatMap((p) => p.crossSection.map((q) => q[1]));
+  const median = s.parts.filter((p) => p.role === "median" || p.role === "median kerb").flatMap((p) => p.crossSection.map((q) => q[1]));
   assert.ok(Math.abs(Math.max(...median) - 0.15) < 1e-9);
   const shy = s.parts.find((p) => p.role === "shy")!.crossSection.map((q) => q[1]);
   assert.ok(Math.abs(Math.max(...shy)) < 1e-9, "shy lane edge at the profile level");
+});
+
+test("sections: a divided road has exactly its lanes as Lane components; the 0.4 m strip is a Shoulder (B1, C1, C2)", () => {
+  for (const t of ["B1", "C1", "C2"] as const) {
+    const s = buildSection(t);
+    const refs = (s.componentStyle as { references: { def: string; paramOverrides: { name: string; value: number }[] }[] }).references;
+    const lanes = refs.filter((r) => r.def.endsWith("/Lane"));
+    assert.equal(lanes.length, 2 * s.lanes, `${t}: ${s.lanes} lanes each way`);
+    assert.ok(lanes.every((r) => r.paramOverrides.find((p) => p.name === "Width")!.value === 3.3));
+    const shoulders = refs.filter((r) => r.def.endsWith("/Shoulder"));
+    assert.deepEqual(shoulders.map((r) => r.paramOverrides.find((p) => p.name === "Width")!.value), [0.4, 0.4]);
+  }
 });
 
 test("sections: a local road falling left has its lane slopes flipped", () => {
@@ -215,4 +228,30 @@ test("roundabout section: 8.2 m carriageway on the island side at 0 %, kerbs on 
   const right = buildRoundaboutSection(8.2, "right").parts.find((p) => p.role === "lane")!.crossSection.map((q) => q[0]);
   assert.ok(Math.abs(Math.max(...right) - 8.2) < 1e-9, "island on the right: lane to the right");
   assert.throws(() => buildRoundaboutSection(0, "left"));
+});
+
+test("section decisions: an untyped road takes the AICC type; a road the drawing types is not overridden", () => {
+  // R.9.G.6 / R.9.G.7: A1 at their ends (ROW 15 m) but no exact width over enough samples
+  const cls = (type: SectionClass["type"]): SectionClass => ({ type, votes: {}, samples: 0, oneSidedSamples: 0, edge: null });
+  const sections: Record<string, SectionClass> = { "R.9.G.6": cls(null), "R.9.G.7": cls(null), "R.0.D.6": cls("B1") };
+  const d = applySectionDecisions(sections, parseSectionDecisions("R.9.G.6=A1, R.9.G.7=A1,R.0.D.6=A1,R.X=A2"));
+  assert.deepEqual(d.applied, ["R.9.G.6=A1", "R.9.G.7=A1"]);
+  assert.deepEqual(d.refused, ["R.0.D.6: the drawing types it B1", "R.X: not a road of the layout"]);
+  assert.equal(sections["R.9.G.6"]!.type, "A1");
+  assert.equal(sections["R.9.G.6"]!.decided, true);
+  assert.equal(sections["R.0.D.6"]!.type, "B1");
+  assert.throws(() => parseSectionDecisions("R.9.G.6=D9"), /expected <road>=/);
+});
+
+test("sections: the raised median is the kerbs themselves, nothing else sits on the median, the road hangs off the kerb (B1, C1, C2)", () => {
+  for (const t of ["B1", "C1", "C2"] as const) {
+    const refs = (buildSection(t).componentStyle as { references: { def: string; attachment?: { point: number; ex_comp: number; ex_point: number }; paramOverrides: { name: string; value: number }[] }[] }).references;
+    const w = (r: (typeof refs)[number]) => r.paramOverrides.find((p) => p.name === "Width")!.value;
+    const onMedian = refs.filter((r) => r.attachment?.ex_comp === 0);
+    assert.deepEqual(onMedian.map((r) => r.def), ["ComponentDefinition/Curb", "ComponentDefinition/Curb"], `${t}: only the two median kerbs`);
+    assert.ok(onMedian.every((r) => w(r) === w(refs[0]!) / 2), `${t}: each kerb half the median`);
+    const kerbs = onMedian.map((r) => refs.indexOf(r));
+    const shoulders = refs.filter((r) => r.def.endsWith("/Shoulder"));
+    assert.deepEqual(shoulders.map((r) => [kerbs.includes(r.attachment!.ex_comp), r.attachment!.ex_point]), [[true, 1], [true, 1]], `${t}: shoulder on the kerb face`);
+  }
 });
