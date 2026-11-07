@@ -969,3 +969,10 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   plain cross (expect no warning: that is how it was before 6 Nov), save, close; then the roundabout
   work is done: RA-1, RA-2, RA-3, RA-6, RA-7 on Rural Double Lane (D2 / D3), RA-4 on Urban Compact
   (D11), RA-5 an ordinary crossing (D12). Remaining from the plan: D8 kerb return radii.
+- 7 Nov 22:00-22:16 (user, working copy): Grading Limit toggle on R.0.D.4; 309 came back as a plain
+  cross with a full body (84 primitives, 5 terrain operations), no warning, no "failed to get road
+  parameters" in the log; saved and closed. User's decision (22:20): R.0.D.4 stays merged (splitting
+  it as drawn makes the crossing "Intersection not supported", D1). File: 301 intersections, 930 arms,
+  657 regions, 6 roundabouts (9, 41, 106, 140, 233 Rural Double Lane 54.95 / 55.05; 308 Urban Compact
+  48.0), 0 orphans, integrity ok. **Roundabout work closed.** Next: D8 (kerb return radii 10 / 12 /
+  20 m from the drawing on the ordinary junctions), then the Autodesk report goes out.
