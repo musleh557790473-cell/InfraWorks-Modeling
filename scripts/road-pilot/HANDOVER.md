@@ -749,3 +749,11 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   what the Standard drop-down lists (US only, or GB / GEN too); (3) the same on "FHWA 2000: Urban
   Compact Roundabout". Then decide: custom standard with Parsons' radii (Vehicle Tracking 2026),
   or deviation D11.
+- 7 Nov: 136 converted back to Intersection in the Stack (Junction Type thumbnail) shows "Intersection
+  not supported" and the Roundabout thumbnail does nothing again; the roundel of 136 / 125 cannot be
+  picked because the body was never built. Decision (user): delete both in the file and let InfraWorks
+  create them afresh. Written 7 Nov ~12:30 (model closed; copy in the session scratchpad
+  `backup-before-delete-125-136`): `--delete-junctions 125,136` (70 + 10 rows: arms, regions,
+  ROUNDABOUTS rows, bodies). Next: one edit on R.0.D.12 (through both centres) so InfraWorks creates
+  the two centre junctions again, then Junction Type > Roundabout in the Stack on each, with
+  InfraWorks' own arm lengths and sizes; our sizes (24.0 / 0.975) are written back only if it builds.
