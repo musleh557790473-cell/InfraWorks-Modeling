@@ -827,7 +827,23 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   island 24.0 (Parsons' r 12), no apron, 2 x 6.0 m, ICD 48.0 (outer edge r 24.0 against the drawn
   20.2; the five Rural Double roundabouts stand at 27.5). D11 closed on that. To write it again:
   `--roundabout 308 --icd 48 --island 24 --apron 0 --lanes 2 --lane-width 6 --standard urban-compact`.
-- Next: RA-5 in its own session: Grading Limit toggle on R.0.D.4, convert the new centre junction;
-  if it builds, Standard > Urban Compact at once (its arms towards 142 / 299 are clamped to 55.6 /
-  65.6, under Rural Double's need); if it crashes again, note the offset in the dump
-  (`minidump.cjs`) and decide D12 (ordinary junction) or an Autodesk report.
+- 7 Nov 19:27-19:30 (user): RA-5 again: Grading Limit toggle on R.0.D.4 created 309 as a plain cross
+  (R.0.D.12 x R.0.D.4), Junction Type > Roundabout: **second crash, same place** (dump 19:30:08:
+  0xC0000005 at `AIM_RoadsApp.dll+0xf8be5`, read of address 0, UI thread, right after "Junction
+  Standard loaded from .../US_1400.atj"; copy `dump\InfraWorks_error_2.dmp`). Deterministic for this
+  junction: the Stack conversion of a cross of two through roads crashes InfraWorks 2026.0.2.119 here,
+  while 308 (three roads) converted. The file held the same half rows again (309 type 1, ROUNDABOUTS
+  row and arms 968-971 with an empty parent, lengths 65.6 / 73.5 / 65.6 / 55.6).
+  Route taken (the one RA-1 / RA-2 were built by, 4 Nov: the roundabout row written in the file, the
+  body built by InfraWorks on one roundel edit): 19:45, model closed, copy in the scratchpad
+  `backup-after-crash-2-1930`: orphans pruned (5 rows) and `--roundabout 309 --icd 48 --island 24
+  --apron 0 --lanes 2 --lane-width 6 --standard urban-compact` (4 arms numbered 1 R.0.D.12 towards
+  137, 2 R.0.D.4 towards 180, 3 R.0.D.12 towards 299, 4 R.0.D.4 towards 142; blend points left to
+  InfraWorks, which clamps them to 65.6 / 73.5 / 65.6 / 55.6, all under Urban Compact's need).
+  File: 301 intersections, 930 arms, 657 regions, 7 roundabouts, integrity ok. `IW_ARM_CLAMP_SEEN`
+  has 309's clamps.
+- Next (user): open; select 309 (a roundabout now), pick its roundel and change Center Island
+  Diameter 24.0 -> 24.1 -> 24.0 in the Roundel Stack (Autodesk "To modify roundabout geometry"), which
+  makes InfraWorks build the body as it did for 41 and 9; screenshots; save, close. If InfraWorks
+  crashes on that too, RA-5 cannot be a roundabout in this release: D12 (ordinary junction, as
+  Parsons' cross) and an Autodesk report with both dumps.
