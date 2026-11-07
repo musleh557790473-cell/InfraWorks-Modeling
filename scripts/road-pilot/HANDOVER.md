@@ -802,3 +802,26 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   Grading Limit toggle on R.0.D.4 (not R.0.D.12), convert the new centre junction. A second crash at
   the same offset makes it Autodesk's bug for RA-5: report with the dump (as
   `autodesk-report-junction-pits.md`) and decide D11 (ordinary junction) or wait for a fix.
+- **7 Nov 18:16-18:31: RA-4 built.** 308 > Roundabout gave the known warning (Rural Double, ICD 0);
+  Standard drop-down > "FHWA 2000: Urban Compact Roundabout": built at once, no warning (the toast left
+  on screen was the old one). InfraWorks: ICD 42.0, island 18.0, apron 0, 2 ring lanes of 6 m
+  (LANE_DETAILS), standard GUID 5d67ca9e (a copy already in the model's `unver/Content/Standards`
+  since 4 Nov). Arm blend offsets in the file: R.6.F.1 73.545 (1 lane at yield), R.0.D.12 towards 124
+  47.57, R.0.D.15 towards 120 64.273, R.0.D.12 towards 128 73.545 (2 lanes) - exactly the lengths of
+  the failed Rural Double attempts (Stack Arm Length = offset - 21.0: 52.4 / 26.6 / 43.3 / 52.5).
+  So the lengths are InfraWorks' own clamp before the next junction, the same under every standard,
+  and the standard's arm geometry must fit under them: Rural Double's does not (> 64.27 on a 2 + 2
+  arm), Urban Compact's does (< 47.57). The neighbour's GEOMETRY box is a guide only: arms 2 and 3
+  built 3.8 and 3.3 m inside the boxes of 124 and 120. model-gate (commit aeeb3dd):
+  `IW_ARM_CLAMP_SEEN` (was `IW_MIN_ARM_SEEN`, wrongly named minima), `standardFitsArm`, `armRoom`
+  statuses by the box with `--arm-clamp` / `--standard`, `IW_ROUNDABOUT_STANDARDS` with
+  "urban-compact" (lane 6 m), apron 0 allowed, `--keep-lane-width` for a trial; 52 tests. Written
+  18:50 (copy in the scratchpad `backup-before-sizes-308`): `--roundabout 308 --icd 40.4 --island
+  24.0 --apron 0 --lanes 1 --lane-width 8.2 --standard urban-compact --keep-lane-width`, i.e.
+  Parsons' ring as drawn; the arms' lanes at yield set to 1 (InfraWorks set 2 back on RA-1 / RA-2;
+  expected here too). Deviation D11 (RA-4 on Urban Compact) recorded; D4 rewritten with the clamp rule.
+- Next (user): open, select 308, Stack: do the sizes read 40.4 / 24.0 / 0 and does the ring show one
+  lane; Grading Limit toggle on R.6.F.1 (the short arm) to force a rebuild; screenshot of the Stack
+  and the ring; save, close. Then I read what InfraWorks kept (8.2 or 6 m, 1 or 2 lanes) and close
+  D11. RA-5 after that: Grading Limit toggle on R.0.D.4, convert; if it crashes again, note the
+  offset in the dump (`minidump.cjs`) and decide.
