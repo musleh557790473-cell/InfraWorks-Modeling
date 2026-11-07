@@ -2,26 +2,29 @@
 import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
-import { IW_MIN_ARM_SEEN, armRoom, armsFromRoads, danglingLinks, deleteIntersection, fixBlendLevels, shortenArms, pruneDanglingIntersections, writeRoundabout } from "./roads/intersections.js";
+import { IW_ARM_CLAMP_SEEN, IW_ROUNDABOUT_STANDARDS, armRoom, armsFromRoads, danglingLinks, deleteIntersection, fixBlendLevels, shortenArms, pruneDanglingIntersections, writeRoundabout, type RoundaboutStandard } from "./roads/intersections.js";
 import { removeRoad } from "./roads/write.js";
 
 const USAGE = `
 model-intersections - InfraWorks intersections in a closed model, written in place
 
   model-intersections <model.sqlite> [--delete-roads RA-1,RA-3] [--dry]
-      [--roundabout 41 --icd 40.4 --island 24.0 --apron 2.0 --lanes 1 --lane-width 8.2]
+      [--roundabout 41 --icd 40.4 --island 24.0 --apron 2.0 --lanes 1 --lane-width 8.2
+        [--standard rural-double|urban-compact] [--keep-lane-width]]
 
 --delete-junctions 135,161: delete those junctions (rows and body) so InfraWorks builds them afresh.
 --shorten-arms [--arm-gap 25]: roundabout arms that would reach the next junction on their road end that
 many metres before it (InfraWorks: "intersections overlap").
---arm-room [--arm-min 136:3=64.6,...]: for every roundabout arm, the room before the body of the next
-junction on the road; with the shortest length InfraWorks accepts for an arm (measured in its Stack:
-its "Inner Zone Of Influence Radius"), reports arms that cannot fit at all (read-only). Known minima
-(Al Qairawan, 6 Nov 2026) are used unless --arm-min is given.
+--arm-room [--arm-clamp 136:3=64.6,...] [--standard ...]: for every roundabout arm, the room before the
+body of the next junction on the road, the longest arm InfraWorks allows there where measured (the
+clamp; known ones from Al Qairawan, 6-7 Nov 2026, unless --arm-clamp is given) and, with --standard,
+whether that standard's arm geometry is known to build or fail at that length (read-only).
 --arms-from-roads: roundabout arms built without lanes get the lanes, lane width and median of their road.
 Roundabout blend points InfraWorks left at height 0 get the road's level (always).
 --roundabout turns that intersection into a roundabout as InfraWorks stores one (sizes from the
-designer; nothing is assumed: every size must be given). InfraWorks builds the body.
+designer; nothing is assumed: every size must be given; apron may be 0). InfraWorks builds the body.
+--standard picks the InfraWorks standard stored (default rural-double). --keep-lane-width writes the
+designer's lane width although InfraWorks is expected to write the standard's back (a trial).
 
 --delete-roads deletes those roads (definition, constraints, body) first.
 Then removes the intersections left pointing at a deleted road, as InfraWorks does when a road is
@@ -59,15 +62,16 @@ function main(argv: string[]): number {
       say(`dangling links after: ${danglingLinks(db)}`);
       kept = r.kept.length;
       const ra = flag("--roundabout");
+      const standardFlag = flag("--standard") as RoundaboutStandard | undefined;
+      if (standardFlag && !(standardFlag in IW_ROUNDABOUT_STANDARDS)) throw new Error(`--standard ${standardFlag}: known standards are ${Object.keys(IW_ROUNDABOUT_STANDARDS).join(", ")}`);
       if (ra) {
         const num = (f: string) => Number(flag(f));
-        const idx = writeRoundabout(db, Number(ra), { inscribedCircleDiameter: num("--icd"), islandDiameter: num("--island"), apronWidth: num("--apron"), lanes: num("--lanes"), laneWidth: num("--lane-width") });
-        void idx;
-        say(`roundabout on intersection ${ra}: ${idx.size} arms, ICD ${flag("--icd")} m, island ${flag("--island")} m, apron ${flag("--apron")} m, ${flag("--lanes")} x ${flag("--lane-width")} m`);
+        const idx = writeRoundabout(db, Number(ra), { inscribedCircleDiameter: num("--icd"), islandDiameter: num("--island"), apronWidth: num("--apron"), lanes: num("--lanes"), laneWidth: num("--lane-width"), standard: standardFlag, keepLaneWidth: args.includes("--keep-lane-width") });
+        say(`roundabout on intersection ${ra}: ${idx.size} arms, ICD ${flag("--icd")} m, island ${flag("--island")} m, apron ${flag("--apron")} m, ${flag("--lanes")} x ${flag("--lane-width")} m, standard ${IW_ROUNDABOUT_STANDARDS[standardFlag ?? "rural-double"].STANDARD_NAME}`);
       }
       if (args.includes("--arm-room")) {
-        const minArm = flag("--arm-min") ? Object.fromEntries(flag("--arm-min")!.split(",").map((p) => { const [k, v] = p.split("="); return [k!, Number(v)]; })) : IW_MIN_ARM_SEEN;
-        for (const a of armRoom(db, { minArm })) say(`arm room: roundabout ${a.id} arm ${a.arm} (${a.road}) blend ${a.blend.toFixed(1)} m; next junction ${a.nextId} at ${a.next.toFixed(1)} m, its body from ${a.edge.toFixed(1)} m; shortest arm ${a.minArm ?? "unknown"} -> room ${a.room.toFixed(1)} m: ${a.status}`);
+        const clamp = flag("--arm-clamp") ? Object.fromEntries(flag("--arm-clamp")!.split(",").map((p) => { const [k, v] = p.split("="); return [k!, Number(v)]; })) : IW_ARM_CLAMP_SEEN;
+        for (const a of armRoom(db, { clamp, standard: standardFlag })) say(`arm room: roundabout ${a.id} arm ${a.arm} (${a.road}) blend ${a.blend.toFixed(1)} m; next junction ${a.nextId} at ${a.next.toFixed(1)} m, its body from ${a.edge.toFixed(1)} m; InfraWorks' clamp ${a.clamp ?? "unknown"}; room ${a.room.toFixed(1)} m: ${a.status}${a.standard ? `; ${standardFlag}: ${a.standard}` : ""}`);
       }
       if (args.includes("--arms-from-roads")) for (const a of armsFromRoads(db)) say(`arm: intersection ${a.id} arm ${a.arm} (${a.road}) -> ${a.lanes} + ${a.lanes} lanes of ${a.laneWidth} m, median ${a.median} m`);
       if (args.includes("--shorten-arms")) for (const a of shortenArms(db, Number(flag("--arm-gap") ?? 25))) say(`arm shortened: roundabout ${a.id} arm ${a.arm} (${a.road}) -> ${a.length.toFixed(1)} m (next junction ${a.next.toFixed(1)} m)`);

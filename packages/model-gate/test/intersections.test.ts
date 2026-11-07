@@ -149,6 +149,7 @@ test("a roundabout written into the file as InfraWorks stores one: type 1, one R
   db.exec(`insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, APPROACH_DIRECTION_MATCHES_ASSET) values
     ('west', 'j', 'cd-A', 1), ('east', 'j', 'cd-A', 0), ('north', 'j', 'cd-B', 0)`);
   assert.throws(() => writeRoundabout(db, 41, { inscribedCircleDiameter: 40.4, islandDiameter: 20, apronWidth: 2, lanes: 1, laneWidth: 8.2 }), /InfraWorks keeps the standard's one lane of 7.225 m/);
+  assert.throws(() => writeRoundabout(db, 41, { inscribedCircleDiameter: 40.4, islandDiameter: 20, apronWidth: 2, lanes: 1, laneWidth: 7.225, standard: "urban-compact" }), /InfraWorks keeps the standard's one lane of 6 m/);
   assert.throws(() => writeRoundabout(db, 41, { inscribedCircleDiameter: 40.4, islandDiameter: 24, apronWidth: 2, lanes: 1, laneWidth: 7.225 }), /= 42.45 m, not the circle 40.4 m/);
   const idx = writeRoundabout(db, 41, { inscribedCircleDiameter: 40.4, islandDiameter: 24, apronWidth: 0.975, lanes: 1, laneWidth: 7.225 });
   assert.deepEqual(Object.fromEntries(idx), { west: 1, east: 2, north: 3 }, "anticlockwise from the west, as InfraWorks numbered junction 4");
@@ -173,15 +174,50 @@ test("a roundabout written into the file as InfraWorks stores one: type 1, one R
   assert.equal(Buffer.from((db.prepare("select GEOMETRY g from ROUNDABOUTS").get() as { g: Uint8Array }).g).readDoubleLE(16), -20.225);
 });
 
-test("a roundabout is not written with a missing size", () => {
+test("a roundabout is not written with a missing size (an apron of 0 is a size)", () => {
   const db = model();
   db.exec("alter table INTERSECTIONS add column INTERSECTION_TYPE integer; alter table INTERSECTIONS add column REFERENCE_POINTS blob; create table ROUNDABOUTS (ID integer primary key, FK_PARENT_GUID text);");
   const id = n(db, "select ID n from INTERSECTIONS where GUID='tee'");
-  assert.throws(() => writeRoundabout(db, id, { inscribedCircleDiameter: 40.4, islandDiameter: 24, apronWidth: 0, lanes: 1, laneWidth: 7.225 }), /apronWidth missing/);
+  assert.throws(() => writeRoundabout(db, id, { inscribedCircleDiameter: 40.4, islandDiameter: 0, apronWidth: 0, lanes: 1, laneWidth: 7.225 }), /islandDiameter missing/);
+  assert.throws(() => writeRoundabout(db, id, { inscribedCircleDiameter: 40.4, islandDiameter: 24, apronWidth: Number.NaN, lanes: 1, laneWidth: 7.225 }), /apronWidth missing/);
+  assert.throws(() => writeRoundabout(db, id, { inscribedCircleDiameter: 40.4, islandDiameter: 24, apronWidth: 0, lanes: 1, laneWidth: 7.225, standard: "gb-normal" as never }), /unknown standard gb-normal/);
 });
 test("the circle InfraWorks shows is island + 2 x apron + 2 x lanes (junctions 4 and 41)", () => {
   assert.equal(roundaboutDiameter({ islandDiameter: 27, apronWidth: 2, lanes: 1, laneWidth: 7.225 }), 45.45);
   assert.equal(roundaboutDiameter({ islandDiameter: 24, apronWidth: 2, lanes: 1, laneWidth: 7.225 }), 42.45);
+  assert.equal(roundaboutDiameter({ islandDiameter: 18, apronWidth: 0, lanes: 2, laneWidth: 6, standard: "urban-compact" }), 42, "RA-4 as InfraWorks built it on Urban Compact");
+  assert.equal(Math.round(roundaboutDiameter({ islandDiameter: 24, apronWidth: 0, lanes: 1, laneWidth: 8.2, standard: "urban-compact", keepLaneWidth: true }) * 10) / 10, 40.4, "Parsons' ring kept as drawn");
+});
+test("the FHWA 2000 Urban Compact standard (RA-4 / 308, 7 Nov 2026): no apron, 6 m lanes, Parsons' 8.2 m only as a trial", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`
+    create table ROADS (ID integer primary key, GUID text, NAME text, FK_PARENT_GUID text, GEOMETRY blob);
+    create table INTERSECTIONS (ID integer primary key, GUID text, REFERENCE_POINTS blob, INTERSECTION_TYPE integer);
+    create table INTERSECTION_ARMS (ID integer primary key, GUID text, FK_PARENT_GUID text, FK_ASSET_GUID text, APPROACH_DIRECTION_MATCHES_ASSET integer,
+      ARM_INDEX integer, ENTRY_LANES_AT_YIELD integer, EXIT_LANES_AT_YIELD integer, STATUS integer);
+    create table ROUNDABOUTS (ID integer primary key, GUID text, GEOMETRY blob, FK_PARENT_TABLE text, FK_PARENT_GUID text, EXTERNAL_STANDARD_GUID text, STANDARD_NAME text,
+      STANDARD_SOURCE text, LOCATION_OFFSET blob, LANES integer, LANE_DETAILS text, ISLAND_DIAMETER real, APRON_WIDTH real, INSCRIBED_CIRCLE_DIAMETER real,
+      TILTED_PLANE_BEARING real, TILTED_PLANE_CROSSFALL real, STATUS integer);
+  `);
+  db.prepare("insert into ROADS (GUID, NAME, FK_PARENT_GUID, GEOMETRY) values ('ra', 'R.0.D.12', 'cd-A', ?), ('rb', 'R.0.D.15', 'cd-B', ?)").run(lineBlob([[-100, 0, 0], [100, 0, 0]]), lineBlob([[0, 0, 0], [0, 100, 0]]));
+  const rp = Buffer.alloc(32); rp.writeUInt32LE(1, 0); rp.writeUInt32LE(1, 4);
+  db.prepare("insert into INTERSECTIONS (ID, GUID, REFERENCE_POINTS, INTERSECTION_TYPE) values (308, 'j', ?, 1)").run(rp);
+  db.exec(`insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, APPROACH_DIRECTION_MATCHES_ASSET, ARM_INDEX, ENTRY_LANES_AT_YIELD, EXIT_LANES_AT_YIELD) values
+    ('w', 'j', 'cd-A', 1, 1, 2, 2), ('e', 'j', 'cd-A', 0, 2, 2, 2), ('n', 'j', 'cd-B', 0, 3, 2, 2)`);
+  // the row InfraWorks wrote when the user picked the standard in the Stack
+  db.prepare(`insert into ROUNDABOUTS (GUID, FK_PARENT_TABLE, FK_PARENT_GUID, EXTERNAL_STANDARD_GUID, STANDARD_NAME, STANDARD_SOURCE, LANES, LANE_DETAILS, ISLAND_DIAMETER, APRON_WIDTH, INSCRIBED_CIRCLE_DIAMETER, STATUS)
+    values ('r', 'INTERSECTIONS', 'j', '5d67ca9e-b1fc-4bf5-bf10-d792903f0b19', 'FHWA 2000: Urban Compact Roundabout', 'Pool', 2, ?, 18, 0, 42, 0)`).run('{"version": "1.0.0","lanes": [{"id": 1,"width": 6},{"id": 2,"width": 6}]}');
+  // Parsons' 8.2 m lane is refused unless asked for as a trial; the standard's 6 m is the rule
+  assert.throws(() => writeRoundabout(db, 308, { inscribedCircleDiameter: 40.4, islandDiameter: 24, apronWidth: 0, lanes: 1, laneWidth: 8.2, standard: "urban-compact" }), /InfraWorks keeps the standard's one lane of 6 m/);
+  writeRoundabout(db, 308, { inscribedCircleDiameter: 40.4, islandDiameter: 24, apronWidth: 0, lanes: 1, laneWidth: 8.2, standard: "urban-compact", keepLaneWidth: true });
+  const r = db.prepare("select * from ROUNDABOUTS").get() as Record<string, unknown>;
+  assert.equal(n(db, "select count(*) n from ROUNDABOUTS"), 1, "the same row");
+  assert.deepEqual([r.STANDARD_NAME, r.EXTERNAL_STANDARD_GUID, r.LANES, r.LANE_DETAILS, r.ISLAND_DIAMETER, r.APRON_WIDTH, r.INSCRIBED_CIRCLE_DIAMETER],
+    ["FHWA 2000: Urban Compact Roundabout", "5d67ca9e-b1fc-4bf5-bf10-d792903f0b19", 1, '{"version":"1.0.0","lanes":[{"id":1,"width":8.2}]}', 24, 0, 40.4]);
+  assert.equal(n(db, "select max(ENTRY_LANES_AT_YIELD) n from INTERSECTION_ARMS"), 1, "one ring lane: one lane at the yield line");
+  // the standard's own lane: 24 + 2 x 6 = 36
+  writeRoundabout(db, 308, { inscribedCircleDiameter: 36, islandDiameter: 24, apronWidth: 0, lanes: 1, laneWidth: 6, standard: "urban-compact" });
+  assert.equal(String((db.prepare("select LANE_DETAILS d from ROUNDABOUTS").get() as { d: string }).d), '{"version":"1.0.0","lanes":[{"id":1,"width":6}]}');
 });
 test("a removed intersection takes its body with it: left behind, its terrain cut-outs hole the ground (RA-1 ring junctions)", () => {
   const db = model();
@@ -300,7 +336,7 @@ test("a roundabout arm that would reach the next junction on its road ends 25 m 
   assert.ok(Math.abs(b.readDoubleLE(8) + 45) < 1e-6 && Math.abs(b.readDoubleLE(24) - 699.55) < 1e-6, "45 m west of the centre, at the road's level");
   assert.equal(n(db, "select BLEND_POINT_ENTRY_OFFSET n from INTERSECTION_ARMS where GUID='east'"), 80.8);
 });
-test("a roundabout arm must end before the next junction's body; where InfraWorks' shortest arm reaches it there is no room (RA-5 arm 3: 64.6 m, 299's body from 66.7)", () => {
+test("a roundabout arm's room before the next junction: InfraWorks builds a few metres inside its box, not up to its centre; the standard decides (RA-4 arm 2: clamp 47.57, Rural Double fails, Urban Compact builds)", () => {
   const db = new DatabaseSync(":memory:");
   db.exec(`
     create table ROADS (ID integer primary key, GUID text, NAME text, FK_PARENT_GUID text, GEOMETRY blob);
@@ -315,23 +351,30 @@ test("a roundabout arm must end before the next junction's body; where InfraWork
     .run(rp(0), boxBlob(-85, -60, 85, 60), rp(70), boxBlob(70 - 13.3, -13.3, 70 + 13.3, 13.3), rp(-127), boxBlob(-127 - 15, -15, -127 + 15, 15));
   db.exec(`insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID, ARM_INDEX, APPROACH_DIRECTION_MATCHES_ASSET, BLEND_POINT_ENTRY_OFFSET, ENTRY_LANES_AT_YIELD) values
     ('a2', 'rb', 'cd', 2, 1, 84.4, 2), ('a4', 'rb', 'cd', 4, 0, 55.6, 2), ('je', 'e', 'cd', 1, 0, null, 1), ('jw', 'w', 'cd', 1, 1, null, 1)`);
-  // the shortest arm InfraWorks accepts is only known where it was measured: 64.6 m for arm 4 here
-  const r = armRoom(db, { minArm: { "136:4": 64.6 } });
-  assert.deepEqual(r.map((a) => [a.arm, a.nextId, Math.round(a.next * 10) / 10, Math.round(a.edge * 10) / 10, a.minArm, Math.round(a.room * 10) / 10, a.status]), [
-    [2, 180, 127, 112, null, 27.6, "fits"],
-    [4, 142, 70, 56.7, 64.6, -7.9, "no room before the next junction"],
+  // InfraWorks' clamp is only known where it was measured: 55.6 m for arm 4 here (136 arm 4, 7 Nov 2026)
+  const r = armRoom(db, { clamp: { "136:4": 55.6 } });
+  assert.deepEqual(r.map((a) => [a.arm, a.nextId, Math.round(a.next * 10) / 10, Math.round(a.edge * 10) / 10, a.clamp, Math.round(a.room * 10) / 10, a.standard, a.status]), [
+    [2, 180, 127, 112, null, 27.6, null, "fits"],
+    [4, 142, 70, 56.7, 55.6, 1.1, null, "fits"],
   ]);
-  // the same arm with InfraWorks' default 84.4 m blend and the junction at 80 m (body from 66.7): the arm overlaps it
+  // InfraWorks' default 76.9 m blend with the junction at 80 m (body from 66.7): the arm reaches it
   db.prepare("update INTERSECTIONS set REFERENCE_POINTS = ?, GEOMETRY = ? where ID = 142").run(rp(80), boxBlob(80 - 13.3, -13.3, 80 + 13.3, 13.3));
   db.exec("update INTERSECTION_ARMS set BLEND_POINT_ENTRY_OFFSET = null where GUID = 'a4'");
-  const a = armRoom(db, { minArm: { "136:4": 64.6 } }).find((x) => x.arm === 4)!;
+  const a = armRoom(db).find((x) => x.arm === 4)!;
   assert.equal(a.blend, 76.9);
-  assert.equal(Math.round(a.room * 10) / 10, 2.1, "66.7 - 64.6");
-  assert.equal(a.status, "arm overlaps the next junction");
-  // shortened to the minimum it fits; without a measured minimum only the overlap rule applies
-  db.exec("update INTERSECTION_ARMS set BLEND_POINT_ENTRY_OFFSET = 64.6 where GUID = 'a4'");
-  assert.equal(armRoom(db, { minArm: { "136:4": 64.6 } }).find((x) => x.arm === 4)!.status, "fits");
-  assert.equal(armRoom(db).find((x) => x.arm === 4)!.minArm, null);
+  assert.equal(Math.round(a.room * 10) / 10, -10.2);
+  assert.equal(a.status, "reaches the next junction");
+  // a few metres inside the box InfraWorks still builds (308 arm 3: 64.27 against the box at 61.0)
+  db.exec("update INTERSECTION_ARMS set BLEND_POINT_ENTRY_OFFSET = 69.9 where GUID = 'a4'");
+  assert.equal(armRoom(db).find((x) => x.arm === 4)!.status, "inside the next junction's box");
+  // which standard fits the clamped length is known for the two tried on RA-4
+  const two = (s: Parameters<typeof armRoom>[1]) => armRoom(db, s).find((x) => x.arm === 4)!;
+  assert.equal(two({ clamp: { "136:4": 47.57 }, standard: "rural-double" }).standard, "fails");
+  assert.equal(two({ clamp: { "136:4": 47.57 }, standard: "urban-compact" }).standard, "builds");
+  assert.equal(two({ clamp: { "136:4": 70 }, standard: "rural-double" }).standard, "unknown", "between 64.27 and the default 76.9 nothing is known");
+  assert.equal(two({ clamp: { "136:4": 40 }, standard: "urban-compact" }).standard, "unknown");
+  assert.equal(two({ standard: "rural-double" }).standard, "unknown", "without a clamp the blend 69.9 is used");
+  assert.equal(armRoom(db).find((x) => x.arm === 4)!.clamp, null);
 });
 test("a two-lane ring as InfraWorks builds it with two-lane approaches: 24 + 2 x 0.975 + 2 x (7.225 + 7.275) = 54.95 (AICC, 6 Nov 2026)", () => {
   assert.equal(Math.round(roundaboutDiameter({ islandDiameter: 24, apronWidth: 0.975, lanes: 2, laneWidth: 7.225 }) * 1000) / 1000, 54.95);

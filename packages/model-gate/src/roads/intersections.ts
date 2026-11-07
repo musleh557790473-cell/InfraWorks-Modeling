@@ -168,22 +168,35 @@ export function readJunctions(db: DatabaseSync): Junction[] {
 export interface RoundaboutSpec {
   inscribedCircleDiameter: number;
   islandDiameter: number;
+  /** may be 0 (the FHWA 2000 Urban Compact roundabout has none) */
   apronWidth: number;
   /** circulatory lanes and the width of each */
   lanes: number;
   laneWidth: number;
+  /** InfraWorks standard to store (default "rural-double") */
+  standard?: RoundaboutStandard;
+  /**
+   * Write the designer's lane width although InfraWorks is expected to write the standard's back on
+   * the next rebuild (a trial: RA-4 / 308 with Parsons' 8.2 m on Urban Compact, 7 Nov 2026).
+   */
+  keepLaneWidth?: boolean;
 }
 
 /**
- * The roundabout standard InfraWorks 2026 chose itself when junction 4 was converted in the Stack
- * (4 Nov 2026); the only one whose pool GUID is known. Its sizes are replaced by the designer's.
+ * The InfraWorks 2026 roundabout standards seen in the model (pool GUIDs from ROUNDABOUTS rows
+ * InfraWorks wrote itself). InfraWorks writes the standard's circulatory lane width back over
+ * LANE_DETAILS when it builds the roundabout (junction 41: 8.2 written, 7.225 after the rebuild,
+ * 4 Nov 2026), so only the circle, island and apron can be chosen. "rural-double" is what the Stack
+ * picks on conversion (junction 4, 4 Nov 2026); "urban-compact" is the one whose arm geometry fits
+ * where the neighbouring junctions are close (RA-4 / 308 built with it, 7 Nov 2026: ICD 42.0, island
+ * 18.0, no apron, 2 lanes of 6 m).
  */
-/**
- * Its circulatory lane is 7.225 m, and InfraWorks writes that width back over LANE_DETAILS when it
- * builds the roundabout (junction 41: 8.2 written, 7.225 after the rebuild, 4 Nov 2026), so only the
- * circle, island and apron can be chosen.
- */
-export const IW_ROUNDABOUT_STANDARD = { EXTERNAL_STANDARD_GUID: "4bfa64b5-07ca-4a15-8413-79dab6124e1d", STANDARD_NAME: "FHWA 2010: Rural Double Lane Roundabout", STANDARD_SOURCE: "Pool", laneWidth: 7.225, laneWidths: [7.225, 7.275] } as const;
+export const IW_ROUNDABOUT_STANDARDS = {
+  "rural-double": { EXTERNAL_STANDARD_GUID: "4bfa64b5-07ca-4a15-8413-79dab6124e1d", STANDARD_NAME: "FHWA 2010: Rural Double Lane Roundabout", STANDARD_SOURCE: "Pool", laneWidth: 7.225, laneWidths: [7.225, 7.275] },
+  "urban-compact": { EXTERNAL_STANDARD_GUID: "5d67ca9e-b1fc-4bf5-bf10-d792903f0b19", STANDARD_NAME: "FHWA 2000: Urban Compact Roundabout", STANDARD_SOURCE: "Pool", laneWidth: 6, laneWidths: [6, 6] },
+} as const;
+export type RoundaboutStandard = keyof typeof IW_ROUNDABOUT_STANDARDS;
+export const IW_ROUNDABOUT_STANDARD = IW_ROUNDABOUT_STANDARDS["rural-double"];
 
 const pt3 = (x: number, y: number, z: number) => { const b = Buffer.alloc(32); b.writeUInt32LE(1, 0); b.writeUInt32LE(1, 4); b.writeDoubleLE(x, 8); b.writeDoubleLE(y, 16); b.writeDoubleLE(z, 24); return b; };
 /** FGF polygon, XY, one ring (as InfraWorks stores INTERSECTIONS / ROUNDABOUTS boxes). */
@@ -217,8 +230,11 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
   const i = db.prepare("select GUID, REFERENCE_POINTS rp, INTERSECTION_TYPE t from INTERSECTIONS where ID = ?").get(intersectionId) as Row | undefined;
   if (!i) throw new Error(`no intersection ${intersectionId}`);
   const guid = String(i.GUID);
-  for (const [k, v] of Object.entries(spec)) if (!(Number(v) > 0)) throw new Error(`roundabout ${intersectionId}: ${k} missing`);
-  if (![1, 2].includes(spec.lanes) || Math.abs(spec.laneWidth - IW_ROUNDABOUT_STANDARD.laneWidth) > 0.001) throw new Error(`roundabout ${intersectionId}: ${spec.lanes} x ${spec.laneWidth} m lanes; InfraWorks keeps the standard's one lane of ${IW_ROUNDABOUT_STANDARD.laneWidth} m`);
+  const std = IW_ROUNDABOUT_STANDARDS[spec.standard ?? "rural-double"];
+  if (!std) throw new Error(`roundabout ${intersectionId}: unknown standard ${spec.standard}; known: ${Object.keys(IW_ROUNDABOUT_STANDARDS).join(", ")}`);
+  for (const k of ["inscribedCircleDiameter", "islandDiameter", "lanes", "laneWidth"] as const) if (!(Number(spec[k]) > 0)) throw new Error(`roundabout ${intersectionId}: ${k} missing`);
+  if (!(Number(spec.apronWidth) >= 0)) throw new Error(`roundabout ${intersectionId}: apronWidth missing`);
+  if (![1, 2].includes(spec.lanes) || (!spec.keepLaneWidth && Math.abs(spec.laneWidth - std.laneWidth) > 0.001)) throw new Error(`roundabout ${intersectionId}: ${spec.lanes} x ${spec.laneWidth} m lanes; InfraWorks keeps the standard's one lane of ${std.laneWidth} m`);
   const sum = roundaboutDiameter(spec);
   if (Math.abs(sum - spec.inscribedCircleDiameter) > 0.01) throw new Error(`roundabout ${intersectionId}: island ${spec.islandDiameter} + 2 x apron ${spec.apronWidth} + 2 x ${spec.lanes} x lane ${spec.laneWidth} = ${sum.toFixed(2)} m, not the circle ${spec.inscribedCircleDiameter} m`);
   const existing = db.prepare("select GUID from ROUNDABOUTS where FK_PARENT_GUID = ?").get(guid) as Row | undefined;
@@ -231,7 +247,8 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
     .sort((p, q) => q.b - p.b);
   const index = new Map(order.map((a, k) => [a.g, k + 1]));
   const h = spec.inscribedCircleDiameter / 2;
-  const laneDetails = JSON.stringify({ version: "1.0.0", lanes: IW_ROUNDABOUT_STANDARD.laneWidths.slice(0, spec.lanes).map((width, k) => ({ id: k + 1, width })) });
+  const widths: readonly number[] = spec.keepLaneWidth ? Array(spec.lanes).fill(spec.laneWidth) : std.laneWidths.slice(0, spec.lanes);
+  const laneDetails = JSON.stringify({ version: "1.0.0", lanes: widths.map((width, k) => ({ id: k + 1, width })) });
   db.exec("savepoint roundabout");
   try {
     if (existing) {
@@ -239,7 +256,7 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
       db.prepare(`update ROUNDABOUTS set GEOMETRY = ?, LANES = ?, LANE_DETAILS = ?, ISLAND_DIAMETER = ?, APRON_WIDTH = ?, INSCRIBED_CIRCLE_DIAMETER = ?,
         EXTERNAL_STANDARD_GUID = ?, STANDARD_NAME = ?, STANDARD_SOURCE = ? where GUID = ?`)
         .run(boxBlob(cx - h, cy - h, cx + h, cy + h), spec.lanes, laneDetails, spec.islandDiameter, spec.apronWidth, spec.inscribedCircleDiameter,
-          IW_ROUNDABOUT_STANDARD.EXTERNAL_STANDARD_GUID, IW_ROUNDABOUT_STANDARD.STANDARD_NAME, IW_ROUNDABOUT_STANDARD.STANDARD_SOURCE, String(existing.GUID));
+          std.EXTERNAL_STANDARD_GUID, std.STANDARD_NAME, std.STANDARD_SOURCE, String(existing.GUID));
       db.prepare("update INTERSECTIONS set INTERSECTION_TYPE = 1 where GUID = ?").run(guid);
       // InfraWorks widens the ring to two lanes once the approaches read two lanes each way (it set 2 at
       // the yield line on every divided-road arm; Al Qairawan 9 and 41, 6 Nov 2026): the arms take the
@@ -252,7 +269,7 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
     db.prepare(`insert into ROUNDABOUTS (GUID, GEOMETRY, FK_PARENT_TABLE, FK_PARENT_GUID, EXTERNAL_STANDARD_GUID, STANDARD_NAME, STANDARD_SOURCE,
       LOCATION_OFFSET, LANES, LANE_DETAILS, ISLAND_DIAMETER, APRON_WIDTH, INSCRIBED_CIRCLE_DIAMETER, TILTED_PLANE_BEARING, TILTED_PLANE_CROSSFALL, STATUS)
       values (?, ?, 'INTERSECTIONS', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)`).run(
-      randomUUID(), boxBlob(cx - h, cy - h, cx + h, cy + h), guid, IW_ROUNDABOUT_STANDARD.EXTERNAL_STANDARD_GUID, IW_ROUNDABOUT_STANDARD.STANDARD_NAME, IW_ROUNDABOUT_STANDARD.STANDARD_SOURCE,
+      randomUUID(), boxBlob(cx - h, cy - h, cx + h, cy + h), guid, std.EXTERNAL_STANDARD_GUID, std.STANDARD_NAME, std.STANDARD_SOURCE,
       pt3(0, 0, 0), spec.lanes, laneDetails,
       spec.islandDiameter, spec.apronWidth, spec.inscribedCircleDiameter);
     db.prepare("update INTERSECTIONS set INTERSECTION_TYPE = 1 where GUID = ?").run(guid);
@@ -269,9 +286,10 @@ export function writeRoundabout(db: DatabaseSync, intersectionId: number, spec: 
  * lanes (Al Qairawan, 4 Nov 2026: junction 4 27 + 4 + 2 x 7.225 = 45.45; junction 41 24 + 4 + 14.45 =
  * 42.45 shown, though 40.4 was stored). Sizes that do not add up are not written.
  */
-export function roundaboutDiameter(s: Pick<RoundaboutSpec, "islandDiameter" | "apronWidth" | "lanes" | "laneWidth">): number {
-  // the ring lanes are the standard's (7.225, then 7.275: InfraWorks junctions 9 and 41, 6 Nov 2026)
-  const widths = s.laneWidth === IW_ROUNDABOUT_STANDARD.laneWidth ? IW_ROUNDABOUT_STANDARD.laneWidths.slice(0, s.lanes) : Array(s.lanes).fill(s.laneWidth);
+export function roundaboutDiameter(s: Pick<RoundaboutSpec, "islandDiameter" | "apronWidth" | "lanes" | "laneWidth" | "standard" | "keepLaneWidth">): number {
+  // the ring lanes are the standard's (Rural Double: 7.225, then 7.275: InfraWorks junctions 9 and 41, 6 Nov 2026)
+  const std = IW_ROUNDABOUT_STANDARDS[s.standard ?? "rural-double"];
+  const widths: readonly number[] = !s.keepLaneWidth && std && s.laneWidth === std.laneWidth ? std.laneWidths.slice(0, s.lanes) : Array(s.lanes).fill(s.laneWidth);
   return s.islandDiameter + 2 * s.apronWidth + 2 * widths.reduce((a, b) => a + b, 0);
 }
 /** Height of a 3D polyline at the point nearest to (x, y), interpolated along the nearest segment. */
@@ -446,16 +464,34 @@ function pointAt(line: number[][], s: number): [number, number, number] {
 export const IW_DEFAULT_ARM = 76.9;
 
 /**
- * Shortest arms InfraWorks 2026 has accepted on a two-lane FHWA 2010 Rural Double Lane roundabout fed
- * by 2 + 2 divided roads (Al Qairawan, 6 Nov 2026), by "intersection:arm": the lengths it raised ours
- * to when they were too short (136 arm 3: 55.0 -> 64.6; 125 arm 2: 38.06 -> 46.57; 125 arm 3: 55.31 ->
- * 64.27), and the shortest it chose itself on roundabouts that built (140 arm 3: 49.8). Its log names
- * the rule: "[Create Roundabout Fail] The blend point offset is less than Inner Zone Of Influence
- * Radius" (RoundaboutManager.cpp), then "update arm for arm N failed". The radius comes from the
- * Vehicle Tracking engine (standard, lanes, road) per arm and is not stored in the model, so it is
- * only known where it was measured; `armRoom` takes such measurements.
+ * Arm lengths InfraWorks 2026 clamps to itself where the next junction on the road is close, by
+ * "intersection:arm" (Al Qairawan, 6-7 Nov 2026): the longest blend point offset it allows there. It
+ * is the same whatever the standard (RA-4 arms 2 and 3: 47.57 and 64.27 m under Rural Double, which
+ * failed, and under Urban Compact, which built; 125 and its fresh copy 308 alike) and it lies a few
+ * metres inside the neighbour's GEOMETRY box (308 arm 3: 64.27 against the box at 61.0; 140 arm 1:
+ * 55.8 against 52.0), so the box is a guide only. The build then fails when the standard's arm
+ * geometry needs more than that: the log says "[Create Roundabout Fail] The blend point offset is
+ * less than Inner Zone Of Influence Radius" (RoundaboutManager.cpp), then "update arm for arm N
+ * failed", and the Stack "Invalid roundabout geometry - insufficient space for arm lengths, or arm
+ * radii". That radius comes from the Vehicle Tracking engine per arm (standard: Deviation Offset,
+ * Final Straight Section, Transition Arc Radius; the arm's lanes and angle) and is not stored: on a
+ * 2 + 2 divided arm it is above 64.27 m for FHWA 2010 Rural Double Lane and below 47.57 m for FHWA
+ * 2000 Urban Compact. The Stack's Arm Length is this offset minus the inscribed radius.
  */
-export const IW_MIN_ARM_SEEN: Readonly<Record<string, number>> = { "136:3": 64.6, "125:2": 46.57, "125:3": 64.27, "140:3": 49.8 };
+export const IW_ARM_CLAMP_SEEN: Readonly<Record<string, number>> = { "136:3": 64.6, "136:4": 55.6, "125:2": 47.57, "125:3": 64.27, "308:2": 47.57, "308:3": 64.27, "140:1": 55.8, "140:3": 49.8 };
+/** @deprecated the measured lengths are InfraWorks' maxima before the next junction, not minima: `IW_ARM_CLAMP_SEEN` */
+export const IW_MIN_ARM_SEEN = IW_ARM_CLAMP_SEEN;
+
+/**
+ * Where a standard is known to build or fail on a 2 + 2 divided arm clamped to `clamp` metres (RA-4,
+ * 7 Nov 2026): Rural Double failed at 64.27, Urban Compact built at 47.57. Between the two nothing is
+ * known. Local one-lane arms are not covered (140 arm 3, R.0.C.4, built at 49.8 under Rural Double).
+ */
+export function standardFitsArm(standard: RoundaboutStandard, clamp: number): "builds" | "fails" | "unknown" {
+  if (standard === "rural-double") return clamp <= 64.27 ? "fails" : clamp >= IW_DEFAULT_ARM ? "builds" : "unknown";
+  if (standard === "urban-compact") return clamp >= 47.57 ? "builds" : "unknown";
+  return "unknown";
+}
 
 export interface ArmRoom {
   id: number;
@@ -468,26 +504,26 @@ export interface ArmRoom {
   next: number;
   /** where that junction's body (INTERSECTIONS.GEOMETRY box) begins, along the road from the centre */
   edge: number;
-  /** the arm's shortest length InfraWorks accepts, where measured (`minArm` option); else null */
-  minArm: number | null;
-  /** edge - minArm (or edge - blend when the minimum is not known): what is left before the next junction's body */
+  /** the longest arm InfraWorks allows here, where measured (`clamp` option, `IW_ARM_CLAMP_SEEN`); else null */
+  clamp: number | null;
+  /** edge - blend: what is left before the next junction's body (negative inside it) */
   room: number;
-  status: "fits" | "arm overlaps the next junction" | "no room before the next junction";
+  /** whether a standard's arm geometry is known to fit the clamp (`standardFitsArm`), when `standard` is given */
+  standard: "builds" | "fails" | "unknown" | null;
+  status: "fits" | "inside the next junction's box" | "reaches the next junction";
 }
 
 /**
- * Room for each roundabout arm before the next junction on its road.
+ * Room for each roundabout arm before the next junction on its road (read-only).
  *
- * Two rules seen on Al Qairawan (6 Nov 2026): (1) the blend point may not reach the next junction's
- * body ("Invalid roundabout geometry - intersections overlap"); when InfraWorks shortens an arm itself
- * it stops near that junction's GEOMETRY box (140 arm 3: 49.8 m, box at 50.1; 9 arm 3: 51.6, box at
- * 49.8; 136 arm 4: 55.6, box at 56.7); (2) the blend point may not be nearer than the arm's inner zone
- * of influence, which InfraWorks enforces by lengthening the arm (`IW_MIN_ARM_SEEN`; "insufficient
- * space for arm lengths, or arm radii" in the Stack). Where that minimum reaches the box, no arm length
- * fits: RA-5 (136) arm 3 needs 64.6 m, junction 299's body starts at 66.7; RA-4 (125) arm 2 needs
- * 46.6, junction 124's body starts at 43.8. `minArm` holds the measured minima by "intersection:arm".
+ * Seen on Al Qairawan (6-7 Nov 2026): InfraWorks clamps an arm's blend point before the next junction
+ * on the road (`IW_ARM_CLAMP_SEEN`) and builds with the arm a few metres inside that junction's
+ * GEOMETRY box (up to 3.8 m: 140 arm 1, 308 arms 2 and 3); what then decides the build is whether the
+ * standard's arm geometry fits that length (`standardFitsArm`). An arm reaching the junction's centre
+ * line less 10 m is beyond anything seen to build ("Invalid roundabout geometry - intersections
+ * overlap", RA-5 with 80 m arms, 6 Nov 2026).
  */
-export function armRoom(db: DatabaseSync, opts: { minArm?: Readonly<Record<string, number>> } = {}): ArmRoom[] {
+export function armRoom(db: DatabaseSync, opts: { clamp?: Readonly<Record<string, number>>; standard?: RoundaboutStandard } = {}): ArmRoom[] {
   const js = db.prepare("select ID id, GUID g, REFERENCE_POINTS rp, GEOMETRY geom from INTERSECTIONS").all() as Row[];
   const at = new Map(js.map((j) => {
     const b = Buffer.from(j.rp as Uint8Array);
@@ -509,9 +545,10 @@ export function armRoom(db: DatabaseSync, opts: { minArm?: Readonly<Record<strin
     // the body box's nearest corner on the arm's side of the roundabout centre
     const corners = nxt.o.box.map((p) => stationOn(line, p[0]!, p[1]!).s).filter(side).map((s) => Math.abs(s - s0));
     const edge = corners.length ? Math.min(...corners) : next;
-    const blend = a.o == null ? IW_DEFAULT_ARM : Number(a.o), minArm = opts.minArm?.[`${c.id}:${a.ix}`] ?? null, room = edge - (minArm ?? blend);
-    const status: ArmRoom["status"] = minArm != null && minArm > edge ? "no room before the next junction" : blend > edge ? "arm overlaps the next junction" : "fits";
-    out.push({ id: c.id, arm: Number(a.ix), road: String(a.n), blend, nextId: nxt.o.id, next, edge, minArm, room, status });
+    const blend = a.o == null ? IW_DEFAULT_ARM : Number(a.o), clamp = opts.clamp?.[`${c.id}:${a.ix}`] ?? null, room = edge - blend;
+    const status: ArmRoom["status"] = blend > next - 10 ? "reaches the next junction" : blend > edge ? "inside the next junction's box" : "fits";
+    const standard = opts.standard ? standardFitsArm(opts.standard, clamp ?? blend) : null;
+    out.push({ id: c.id, arm: Number(a.ix), road: String(a.n), blend, nextId: nxt.o.id, next, edge, clamp, room, standard, status });
   }
   return out;
 }
