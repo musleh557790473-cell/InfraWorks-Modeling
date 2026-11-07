@@ -935,3 +935,12 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   `--delete-junctions 142,137,299,309` (60 + 60 + 82 + 11 rows): 297 intersections, 916 arms, 645
   regions, 6 roundabouts, 0 dangling, integrity ok, nothing within 80 m of the RA-5 centre. If the
   trial succeeds, the same steps are repeated on the working copy (or the trial copy becomes it).
+- 7 Nov 21:41-21:44 (user, trial copy): Grading Limit toggle on R.0.D.4, then Junction Type >
+  Roundabout on the new centre junction (311): **third crash, same address** `AIM_RoadsApp.dll+0xf8be5`
+  (dump 21:44:05, copy `dump\InfraWorks_error_3.dmp`). The test was not clean: rebuilding R.0.D.4
+  made InfraWorks recreate the deleted junctions as well (the trial copy is back at 301 intersections;
+  312 = the old 142 at 70 m), and the orphan arms carry the same clamps 65.6 / 73.5 / 65.6 / 55.6, so
+  the neighbours were there when it converted. Deleting junctions cannot keep them away: only removing
+  the local roads themselves (R.6.G.18, R.8.G.2, R.9.G.5, R.10.G.2; `--delete-roads`, rewritten later
+  with `model:roads --only`) would give a conversion with no neighbour at all. The crash address is
+  identical in all three dumps.
