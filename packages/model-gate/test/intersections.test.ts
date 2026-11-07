@@ -47,6 +47,20 @@ test("an intersection left with one road after its other road was deleted goes, 
   assert.equal(n(db, "select count(*) n from INTERSECTION_ARMS where GUID='lost'"), 0, "an arm without an intersection goes too");
 });
 
+test("a roundabout row and arms without a parent intersection go too (7 Nov 2026: InfraWorks' locked write left ROUNDABOUTS 9 and four arms with an empty parent)", () => {
+  const db = model();
+  db.exec("create table ROUNDABOUTS (ID integer primary key, FK_PARENT_GUID text, STANDARD_NAME text)");
+  db.prepare("insert into ROUNDABOUTS (FK_PARENT_GUID, STANDARD_NAME) values ('tee', 'FHWA 2010: Rural Double Lane Roundabout')").run();
+  db.prepare("insert into ROUNDABOUTS (FK_PARENT_GUID, STANDARD_NAME) values ('', 'FHWA 2010: Rural Double Lane Roundabout')").run();
+  for (let k = 0; k < 4; k++) db.prepare("insert into INTERSECTION_ARMS (GUID, FK_PARENT_GUID, FK_ASSET_GUID) values (?, '', 'cd-B')").run(`half-${k}`);
+  const dry = pruneDanglingIntersections(db, { dry: true });
+  assert.equal(dry.orphans, 1 + 4 + 1, "the lost arm, four half-written arms, one roundabout row");
+  assert.equal(n(db, "select count(*) n from ROUNDABOUTS"), 2, "dry: nothing written");
+  pruneDanglingIntersections(db);
+  assert.deepEqual(db.prepare("select FK_PARENT_GUID p from ROUNDABOUTS").all().map((r) => (r as { p: string }).p), ["tee"]);
+  assert.equal(n(db, "select count(*) n from INTERSECTION_ARMS where FK_PARENT_GUID = ''"), 0);
+});
+
 test("an intersection still joining two roads is left as it is and listed for a rebuild in InfraWorks", () => {
   const db = model();
   const r = pruneDanglingIntersections(db);

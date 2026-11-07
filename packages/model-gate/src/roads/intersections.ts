@@ -29,7 +29,11 @@ export interface PruneResult {
    * they are and listed for a rebuild in InfraWorks.
    */
   kept: PrunedIntersection[];
-  /** Arms and regions whose parent intersection no longer exists, removed. */
+  /**
+   * Arms, regions and roundabout rows whose parent intersection no longer exists, removed. InfraWorks
+   * leaves such rows when a write fails half-way (7 Nov 2026: "database table is locked" after a
+   * failed roundabout conversion left a ROUNDABOUTS row and four arms with an empty parent GUID).
+   */
   orphans: number;
   /**
    * Body rows (PRIMITIVES, TERRAIN_OPERATIONS with FK_PARENT_TABLE INTERSECTIONS) of intersections that
@@ -75,7 +79,9 @@ export function pruneDanglingIntersections(db: DatabaseSync, opts: { dry?: boole
     });
   }
   const orphanWhere = "where not exists (select 1 from INTERSECTIONS i where i.GUID = t.FK_PARENT_GUID)";
-  for (const t of ["INTERSECTION_ARMS", "INTERSECTION_REGIONS"]) {
+  const hasTable = (t: string) => (db.prepare("select count(*) n from sqlite_master where type = 'table' and name = ?").get(t) as Row).n === 1;
+  const orphanTables = ["INTERSECTION_ARMS", "INTERSECTION_REGIONS", "ROUNDABOUTS"].filter(hasTable);
+  for (const t of orphanTables) {
     res.orphans += Number((db.prepare(`select count(*) n from ${t} t ${orphanWhere}`).get() as Row).n);
   }
   const removing = new Set(res.removed.map((i) => i.guid));
@@ -89,7 +95,7 @@ export function pruneDanglingIntersections(db: DatabaseSync, opts: { dry?: boole
   db.exec("savepoint prune");
   try {
     for (const w of work) w();
-    for (const t of ["INTERSECTION_ARMS", "INTERSECTION_REGIONS"]) db.prepare(`delete from ${t} as t ${orphanWhere}`).run();
+    for (const t of orphanTables) db.prepare(`delete from ${t} as t ${orphanWhere}`).run();
     for (const t of bodyTables) db.prepare(`delete from ${t} as t ${bodyWhere}`).run();
     db.exec("release prune");
   } catch (e) {
