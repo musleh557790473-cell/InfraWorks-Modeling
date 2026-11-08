@@ -1044,3 +1044,46 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   all present (235 roads), links sound, no leftovers, 6 roundabouts and 295 intersections consistent,
   every roundabout arm built, 612 of 634 corners at the drawn radius and 22 without a drawn arc.
   Report kept as `scripts/road-pilot/g3-roads-2026-11-08.md`.
+
+## Session 10 (8 Nov 2026): the utility networks into the roads model
+
+Goal (user): one Al Qairawan model; the networks imported earlier into test models go into the roads
+working copy `C:\IW\Al Qairawan Roads (Parsons 6 junctions)`. User's choice: all networks, wet then
+dry; the 10100 package (plots / blocks / road reserve / asphalt) left out, since its `road_centerline`
+would add 332 planning roads over the component roads and G3 with that package blocks (G3-003)
+without it.
+
+- Where the networks were (`OneDrive\Documents\03 WIP\Neom\10_AI Tools & Scripts\InfraWorks Test
+  Model`): `Al qirwan test 4 (names)` holds only storm, valves, hydrants and the dry networks (wet v3
+  `f6ZVj1UKeB`, dry v4 `NSQr1zr2zh`); sewer is in `Al qirawan test 3 (depth)` (package
+  `-hOVCRRPu0`, kept only in `C:\Temp\iwg3\utilities` on this laptop); water and irrigation in
+  `qairawan test (names)` (artifacts `b-exetRbG1`, `7J6yfbVPJL`). Their Configure mappings equal each
+  package's IMPORT_CHECKLIST (EXTERNAL_ID = FeatId plus the Table fields); the only extra was a Rule
+  Style. The three hydraulic packages were copied (folder + zip) to `DATA_DIR\exports\
+  Al-Qairawan-sewer-shp-v1`, `-water-shp-v1`, `-irrigation-shp-v1`, so both laptops import from one
+  stable place.
+- Baseline before import: G3 --layout PASS 0 warnings; road tables fingerprinted with
+  `scripts/road-pilot/roadprint.cjs`; full copy (sqlite + 2184 `.files` files) kept in `C:\IW` as
+  `Al Qairawan Roads (Parsons 6 junctions) (قبل استيراد الشبكات)` (= before the networks import and
+  before the Grading Limit edits below; hash 2B055666...).
+- Wet batch (user, 14:30-14:57): 11 Shapefiles, full counts. EXTERNAL_ID = FeatId was in every data
+  source without a manual step (InfraWorks' default for a Shapefile). But the road tables had changed:
+  InfraWorks' log (`%APPDATA%\Autodesk\Autodesk InfraWorks\logs`, UTC) shows 11 "Regen time after
+  setting grading property: gradingLimit" between 13:58 and 14:25 local, before the first import, all
+  in `.files` commit 479bb13. Result: R.6.G.10, R.2.F.4, R.13.G.3 rebuilt; new junctions 310
+  (R.6.G.7 / 8 / 9) and 311 (R.6.G.8 / 10); junction 140's R.0.D.12 arm remade; 103 gained an arm on
+  R.5.G.3; RA-1 (junction 9) arm R.2.F.3 blend offset 55.607 -> 54.607; RA-4 (308) arms about 1 m
+  shorter; junction 41 unchanged. G3 --layout: 2 warnings (G3-022 234 body rows of gone junctions;
+  G3-025 9 corners at InfraWorks' default radius). User: the edits were intended, keep them.
+- Written (copies first, model closed, hash of the working file checked unchanged before each
+  install): `model:names` with sewer, water, irrigation, wet v3; `model:intersections --curb-returns
+  <10200.dxf> --junctions 12,103,310,311` (9 corners set: 10 m x8, 12 m x1; 234 body rows pruned).
+  Sewer: 19 manholes and 21 pipes keep no depth (empty in the package, as in test 3).
+- Dry batch (user, 15:25-15:34): 12 Shapefiles, full counts; the road tables byte-identical to the
+  installed state and no road edit in the log. `model:names` with dry v4, installed.
+- Result: 23 utility data sources (5 packages) with names and attributes; 235 roads, 303
+  intersections, 6 roundabouts. G3 with each of the five packages and with --layout: **PASS, 0
+  warnings** each (report `scripts/road-pilot/g3-utilities-2026-11-08.md`); integrity ok.
+- Next (user): open the model and check the networks in InfraWorks (Rule Styles as wanted, depths
+  under the Mass Grading surface). The 10100 layers stay out until decided (without road_centerline,
+  G3 with that package will report G3-003 for it).

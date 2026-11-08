@@ -94,7 +94,8 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
   use the LandXML export of the surface (set UTM84-38N by hand: the file carries no CRS).
 - InfraWorks keeps a Shapefile field only when mapped in Configure, and maps nothing by itself
   (not even a field called NAME). Rows keep the Shapefile record number in `EXTERNAL_ID`
-  (mapping `EXTERNAL_ID = FeatId`), so `model:names` fills columns on a copy and records each
+  (mapping `EXTERNAL_ID = FeatId`, which InfraWorks sets by default on a Shapefile import: seen on
+  all 23 utility sources, 8 Nov), so `model:names` fills columns on a copy and records each
   mapping in `DATA_SOURCES.CONFIG` (JSON `propertyMappings`), which a Refresh then keeps.
 - InfraWorks' own triggers use double-quoted literals (`"INVALID"`): write with `node:sqlite`
   and `enableDoubleQuotedStringLiterals: true`; better-sqlite3 rejects them (read-only is fine).
@@ -137,7 +138,12 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
   Model Explorer lists classes and subsets only, not single features.
 - Force InfraWorks to rebuild a road and recreate its junctions: Stack > Grading Limit 5.0 -> 5.1
   -> 5.0 (Autodesk "To set the roadside grading method"). Rebuilding a road recreates every junction
-  on it, including ones deleted in the file.
+  on it, including ones deleted in the file. It also leaves body rows (PRIMITIVES,
+  TERRAIN_OPERATIONS) of the junctions it replaced and InfraWorks' default radius on new corners:
+  afterwards run `model:intersections --curb-returns <10200.dxf> --junctions <ids>` (prunes the rows
+  too) and G3 --layout. InfraWorks' log (`%APPDATA%\Autodesk\Autodesk InfraWorks\logs`, UTC) records
+  each such edit as "Regen time after setting grading property: gradingLimit": check it when road
+  tables change unexpectedly (`scripts/road-pilot/roadprint.cjs` fingerprints them).
 - Roundabouts (7 Nov 2026, InfraWorks 2026.0.2.119): a junction is converted in the Stack (Junction
   Type > Roundabout, then the Standard drop-down). InfraWorks clamps each arm before the next
   junction on the road (`IW_ARM_CLAMP_SEEN`); the standard's arm geometry must fit under that clamp
@@ -208,6 +214,12 @@ Qairawan, all in UTM 38N, checked by Gate G3 and seen in InfraWorks unless noted
   and MV (0.80 m, 200 mm) cables, street lighting (110 mm), telecom, security, substations,
   pillars, CCTV and street lights (Points of Interest). LV/HV/telecom/security sizes are 0.1 m
   for display only. Model `Al qirwan test 4 (names)`: G3 PASS, 0 warnings.
+- One model (8 Nov, HANDOVER session 10): all these networks are now also in the roads working copy
+  `C:\IW\Al Qairawan Roads (Parsons 6 junctions)`: 23 data sources from five packages in
+  `DATA_DIR\exports` (sewer / water / irrigation `-shp-v1`, wet v3, dry v4), names and attributes by
+  model:names; G3 with each package and with --layout PASS, 0 warnings. The 10100 layers are not in
+  it (their road_centerline would duplicate the component roads). Pre-import copy:
+  `... (Parsons 6 junctions) (قبل استيراد الشبكات)`.
 
 Open points: confirm the irrigation cover with Parsons; depths of telecom, security and
 street-lighting ducts (not in the Parsons documents, drawn on the terrain); the full Al Narjis road layout
