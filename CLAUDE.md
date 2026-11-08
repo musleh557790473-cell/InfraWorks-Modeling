@@ -48,7 +48,15 @@ pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"
 pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profiles <40000.dxf> --surface <grading.xml> [--package <road_centerline>] [--dry]
 #   Al Qairawan: add --section R.9.G.6=A1,R.9.G.7=A1 (AICC decision for the two roads the drawing does not type)
 pnpm model:intersections "<model>.sqlite" [--dry]               # drop intersections left on a deleted road
+#   --delete-junctions 125,136      delete junctions (rows + body); InfraWorks recreates them on a road edit
+#   --roundabout 41 --icd 48 --island 24 --apron 0 --lanes 2 --lane-width 6 --standard urban-compact
+#   --shorten-arms --arm-gap 14.4 --arm-ids 309 | --heal-arms 309 | --arm-room [--standard ...] (read-only)
+#   --curb-returns <10200.dxf>      kerb return radii from the drawn -RD_Edges arcs (D8)
+pnpm model:roads ... --merge R.0.D.4=R.0.D.3+R.0.D.4 | --split R.0.D.4=R.0.D.3+R.0.D.4 | --only R.6.G.18
 ```
+Every write: model closed (`.lock` gone), a copy in the scratchpad first, `--dry` first, verify after
+(integrity, counts, orphans). Deviations from Parsons' drawings go to `scripts/road-pilot/parsons-deviations.md`
+with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
 
 ## Inputs from Parsons
 
@@ -126,6 +134,27 @@ pnpm model:intersections "<model>.sqlite" [--dry]               # drop intersect
   right-click the class (Surface Layers > Roads) > Select By Filter, expression `NAME = 'R.5.G.1'`
   (single quotes, `=`), OK; then F (Zoom to Selection). The class must be unlocked (padlock).
   Model Explorer lists classes and subsets only, not single features.
+- Force InfraWorks to rebuild a road and recreate its junctions: Stack > Grading Limit 5.0 -> 5.1
+  -> 5.0 (Autodesk "To set the roadside grading method"). Rebuilding a road recreates every junction
+  on it, including ones deleted in the file.
+- Roundabouts (7 Nov 2026, InfraWorks 2026.0.2.119): a junction is converted in the Stack (Junction
+  Type > Roundabout, then the Standard drop-down). InfraWorks clamps each arm before the next
+  junction on the road (`IW_ARM_CLAMP_SEEN`); the standard's arm geometry must fit under that clamp
+  or the build fails ("insufficient space for arm lengths, or arm radii"; log: "blend point offset
+  is less than Inner Zone Of Influence Radius"). FHWA 2010 Rural Double Lane needs > 64 m on a 2 + 2
+  arm, FHWA 2000 Urban Compact builds at 47.6 m. InfraWorks writes the standard's lane width back
+  (7.225 / 6.0) and sets two ring lanes from 2 + 2 approaches; only the island (and apron) hold.
+  A roundabout row written in the file builds on one roundel edit only where the arms have room;
+  near neighbours it is refused as "intersections overlap" whatever the arm lengths. Converting a
+  cross of two through roads in the Stack crashes InfraWorks (4 dumps, `AIM_RoadsApp.dll+0xf8be5`,
+  `scripts/road-pilot/autodesk-report-roundabout-crash.md`); two road ends meeting end to end at a
+  crossing give "Intersection not supported". Read a crash dump with `scripts/road-pilot/minidump.cjs`.
+- Kerb return radii: INTERSECTION_REGIONS.CURB_RETURN_RADIUS with CURB_RETURN_TYPE 2,
+  INPUT_CURB_RETURN_TYPE 2, MANUALLY_CHANGED 1 is kept by InfraWorks through rebuilds (D8).
+- INTERSECTIONS.REFERENCE_POINTS is a MultiPoint on some junctions: read it with parseFgf
+  (`junctionCentre`), never at a fixed byte offset.
+- An InfraWorks crash leaves `.lock` behind and half-written rows (a ROUNDABOUTS row and arms with
+  an empty FK_PARENT_GUID, arms zeroed): `pruneDanglingIntersections` / `--heal-arms` clean them.
 
 ## OpenFlows (SewerGEMS / WaterGEMS) databases
 
@@ -143,20 +172,27 @@ pnpm model:intersections "<model>.sqlite" [--dry]               # drop intersect
   carry the bore: an inside diameter within 1.5 mm of a standard size x 9/11 is that SDR 11
   nominal size (130.8 mm is 160), per the PWT notes "HDPE PE100-SDR11".
 
-## Where things stand (3 Nov 2026)
+## Where things stand (8 Nov 2026)
 
-main after PR #20 (`aac7e3d`). Al Qairawan, all in UTM 38N, checked by Gate G3 and seen in
-InfraWorks unless noted:
+main after the merge of `feat/section-decisions` (`38da8ab`; PR #22 is its GitHub record). Al
+Qairawan, all in UTM 38N, checked by Gate G3 and seen in InfraWorks unless noted:
 
 - Component roads (PR #20, `pnpm model:roads`): all 250 Parsons roads with name, plan elements,
   PVIs and vertical curves, typical section A1-C2 and crossfall side, written into the working
   copy `C:\IW\Al Qairawan Roads (Parsons 6 junctions)` (base for rebuilds: `... (Parsons 2)`,
   template road R.6.E.1, GUID `f501f75e-d927-4312-b06b-93cc4b55e402`). Checks: no level problems,
-  one junction step >= 0.3 m (R.1.G.24 on R.1.G.23, 0.53 m). Untyped, template section: RA-1..RA-7
-  (roundabouts), R.9.G.6, R.9.G.7. Junctions not modelled (approach roads run through the
-  roundabout centres). Inputs: `DATA_DIR\inputs\road-pilot` (10200 and 40000 DXF), the grading
-  LandXML `C:\IW\data\LDIP-RCRC-LAI-LDIP-01-CIV-DWG-00002-01.xml`; history in
-  `scripts/road-pilot/HANDOVER.md`.
+  one junction step >= 0.3 m (R.1.G.24 on R.1.G.23, 0.53 m). Inputs: `DATA_DIR\inputs\road-pilot`
+  (10200 and 40000 DXF), the grading LandXML `C:\IW\data\LDIP-RCRC-LAI-LDIP-01-CIV-DWG-00002-01.xml`;
+  history in `scripts/road-pilot/HANDOVER.md`.
+- Junctions (6-8 Nov): every crossing is an InfraWorks intersection; the straight pairs through the
+  roundabout centres are merged into one road (D1, Parsons' names in the Description). Roundabouts
+  RA-1, RA-2, RA-3, RA-6, RA-7 on FHWA 2010 Rural Double Lane (island 24.0, apron 0.975, ICD 54.95;
+  D2, D3); RA-4 (junction 308) on FHWA 2000 Urban Compact (island 24.0, 2 x 6 m, ICD 48.0; D11);
+  RA-5 an ordinary crossing (D12: InfraWorks crashes converting it; Autodesk report drafted, dumps in
+  `DATA_DIR\reports\infraworks-roundabout-crash-2026-11-07`). Kerb return radii as drawn on 600 of
+  634 corners (D8; 22 corners without a drawn arc are Parsons question 16). Untyped, template
+  section: R.9.G.6, R.9.G.7 (A1 by AICC decision). Trial copy `(Parsons 7 RA5 trial)` exists only as
+  Autodesk's reproduction case.
 
 - Roads (332 centrelines, 280 named), plots (6,555, 5,944 numbered), road reserve, blocks,
   asphalt. Al Narjis: one sheet window only (11 centrelines).
@@ -175,7 +211,8 @@ InfraWorks unless noted:
 Open points: confirm the irrigation cover with Parsons; depths of telecom, security and
 street-lighting ducts (not in the Parsons documents, drawn on the terrain); the full Al Narjis road layout
 (`Xref Road Layout Al Narjis.dwg`) from Parsons; Al Narjis and other districts through the same path.
-Roads: junctions and roundabouts as InfraWorks intersections; the roundabout circulatory width;
-a band InfraWorks draws away from RA-1 when it is selected (not in its stored rows; test: change
-its Grading Limit and undo); to raise with Parsons: R.3.G.1 stands 5 m above their grading surface
-over its first 100 m, and R.1.G.24 starts 0.535 m below loop R.1.G.23 (both profiles as printed).
+Roads: send the Autodesk report on the RA-5 conversion crash; Parsons questions 12-16 (merged road
+pairs, RA-7, RA-3 levels, roundabout entries / apron / ring, corners without a kerb arc); the
+site-edge terrain wall (tall yellow wall at the grading edge, a terrain issue); to raise with
+Parsons: R.3.G.1 stands 5 m above their grading surface over its first 100 m, and R.1.G.24 starts
+0.535 m below loop R.1.G.23 (both profiles as printed).
