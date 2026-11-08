@@ -1018,3 +1018,12 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
 - Next (user): open the working copy, spot-check a few junctions' Turning Zones (e.g. 4, 12, 60, 232),
   save, close. Then the Autodesk report (`autodesk-report-roundabout-crash.md`) goes out, and the
   branch waits for "ادمج".
+- 7 Nov 23:20: "ادمج": `feat/section-decisions` (79 commits, 56 tests) merged into main with
+  `--no-ff` as `38da8ab` ("Merge branch 'feat/section-decisions' ..."), pushed, remote main verified.
+  No pull request had been opened for the branch (the last one is #21); the user then asked for a PR
+  to be opened by Cursor as the GitHub record (it will show only the commits after the merge).
+- 8 Nov 00:05 (user): spot-check in InfraWorks after the full write: junction 271 (T) Turning Zone
+  Radius 10.00, Simple Curve, turn angle 104.95; junction 266 (cross) 12.00, turn angle 90.02; the
+  kerbs drawn accordingly, no warnings. D8 confirmed on the model.
+- 8 Nov: PR #22 opened by Cursor from `feat/section-decisions` to main (the GitHub record of sessions
+  7-8; main already holds the work through `38da8ab`). Not merged until "ادمج".
