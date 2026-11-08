@@ -192,7 +192,9 @@ Qairawan, all in UTM 38N, checked by Gate G3 and seen in InfraWorks unless noted
   (10200 and 40000 DXF), the grading LandXML `C:\IW\data\LDIP-RCRC-LAI-LDIP-01-CIV-DWG-00002-01.xml`;
   history in `scripts/road-pilot/HANDOVER.md`.
 - Junctions (6-8 Nov): every crossing is an InfraWorks intersection; the straight pairs through the
-  roundabout centres are merged into one road (D1, Parsons' names in the Description). Roundabouts
+  roundabout centres are merged into one road (D1, Parsons' names in the Description; seven roads,
+  to stay merged by the user's decision of 8 Nov: a split leaves collinear road ends at the centre,
+  "Intersection not supported", and the roundabout loses its body). Roundabouts
   RA-1, RA-2, RA-3, RA-6, RA-7 on FHWA 2010 Rural Double Lane (island 24.0, apron 0.975, ICD 54.95;
   D2, D3); RA-4 (junction 308) on FHWA 2000 Urban Compact (island 24.0, 2 x 6 m, ICD 48.0; D11);
   RA-5 an ordinary crossing (D12: InfraWorks crashes converting it; Autodesk report drafted, dumps in

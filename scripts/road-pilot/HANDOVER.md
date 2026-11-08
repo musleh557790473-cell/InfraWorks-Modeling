@@ -1084,6 +1084,14 @@ without it.
 - Result: 23 utility data sources (5 packages) with names and attributes; 235 roads, 303
   intersections, 6 roundabouts. G3 with each of the five packages and with --layout: **PASS, 0
   warnings** each (report `scripts/road-pilot/g3-utilities-2026-11-08.md`); integrity ok.
+- Merged roads (user, before merging PR #25: "if splitting them harms the junctions, especially the
+  roundabouts, leave them and record it"): not split. The model holds seven merged roads (D1):
+  R.0.C.2, R.0.C.4, R.0.D.2, R.2.F.3, R.0.D.12, R.0.D.15, R.0.D.4, each with Parsons' parts in its
+  Description. Splitting was tried twice and harmed both times: R.0.C.2 (5 Nov) cost RA-2 its body
+  after one rebuild; R.0.D.4 (7 Nov) made the RA-5 crossing "Intersection not supported". Each pair
+  is a straight line through a roundabout centre (or RA-5), so a split leaves two collinear road
+  ends there, which InfraWorks 2026.0.2 does not support. **Decision (8 Nov): all seven stay merged**;
+  D1 in `parsons-deviations.md` updated (its row still said R.0.D.4 was split).
 - Next (user): open the model and check the networks in InfraWorks (Rule Styles as wanted, depths
   under the Mass Grading surface). The 10100 layers stay out until decided (without road_centerline,
   G3 with that package will report G3-003 for it).
