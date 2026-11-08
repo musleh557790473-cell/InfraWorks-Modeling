@@ -1025,3 +1025,5 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
 - 8 Nov 00:05 (user): spot-check in InfraWorks after the full write: junction 271 (T) Turning Zone
   Radius 10.00, Simple Curve, turn angle 104.95; junction 266 (cross) 12.00, turn angle 90.02; the
   kerbs drawn accordingly, no warnings. D8 confirmed on the model.
+- 8 Nov: PR #22 opened by Cursor from `feat/section-decisions` to main (the GitHub record of sessions
+  7-8; main already holds the work through `38da8ab`). Not merged until "ادمج".
