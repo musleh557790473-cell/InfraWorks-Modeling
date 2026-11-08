@@ -1,8 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
+import { readDxfBlock } from "@infraworks/domain";
 import { openImx, readRegions } from "@infraworks/imx-gate";
 
+import { roadModelFindings } from "./roads/road-gate.js";
 import { dataSources, importedFilled, importedNames, importedStats, modelRegions, modelWkt, openModel, readPackage, schemaVersion } from "./read.js";
 import type { DataSourceRow, ModelHandle } from "./read.js";
 import { EXPECTED_TABLE } from "./types.js";
@@ -148,8 +151,14 @@ export function runModelGate(modelPath: string, opts: ModelGateOptions = {}): Mo
       compareLayers(h, pkg, findings, layers, maxOffset, maxLoss);
     }
     if (opts.imxPath) compareRegions(h, opts.imxPath, findings, regions);
-    if (!opts.packagePath && !opts.imxPath) {
-      findings.push(f("G3-000", "Nothing to compare", "warning", "Give --package and/or --imx so the model can be checked against what was imported."));
+    if (opts.layoutPath) {
+      const layout = readDxfBlock(readFileSync(opts.layoutPath, "latin1"), opts.layoutBlock ?? "Xref Road Layout Al Qairawan");
+      // InfraWorks' own triggers use double-quoted literals ("INVALID"): node:sqlite must accept them to parse the schema
+      const ro = new DatabaseSync(modelPath, { readOnly: true, enableDoubleQuotedStringLiterals: true } as ConstructorParameters<typeof DatabaseSync>[1]);
+      try { findings.push(...roadModelFindings(ro, layout)); } finally { ro.close(); }
+    }
+    if (!opts.packagePath && !opts.imxPath && !opts.layoutPath) {
+      findings.push(f("G3-000", "Nothing to compare", "warning", "Give --package, --imx and/or --layout so the model can be checked against what it was built from."));
     }
 
     findings.sort((a, b) => ORDER[a.severity] - ORDER[b.severity] || a.ruleId.localeCompare(b.ruleId));

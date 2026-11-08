@@ -7,11 +7,14 @@ import { toConsole, toMarkdown } from "./report.js";
 const USAGE = `
 model-gate — check an InfraWorks model after import (Gate G3)
 
-  model-gate <model.sqlite> [--package <package.zip|folder>] [--imx <export.imx>] [options]
+  model-gate <model.sqlite> [--package <package.zip|folder>] [--imx <export.imx>] [--layout <10200.dxf>] [options]
 
 Options
   --package <path>     the import package the model was built from
   --imx <path>         the Civil 3D IMX export its design roads came from
+  --layout <path>      the designer's road layout DXF for a model written by model:roads (G3-020..025:
+                       drawn roads present, links, leftovers, roundabout rows and arms, kerb returns)
+  --layout-block <n>   its xref block (default "Xref Road Layout Al Qairawan")
   --max-offset <m>     allowed position shift (default 1)
   --max-loss <ratio>   allowed missing road length, e.g. 0.01 = 1 % (default)
   --md <path>          also write a Markdown report
@@ -44,8 +47,8 @@ function main(argv: string[]): number {
 
   let opts;
   try {
-    opts = { packagePath: flag("--package"), imxPath: flag("--imx"), maxOffsetM: num("--max-offset"), maxLengthLoss: num("--max-loss") };
-    for (const p of [model, opts.packagePath, opts.imxPath]) if (p && !existsSync(p)) throw new Error(`file not found: ${p}`);
+    opts = { packagePath: flag("--package"), imxPath: flag("--imx"), layoutPath: flag("--layout"), layoutBlock: flag("--layout-block"), maxOffsetM: num("--max-offset"), maxLengthLoss: num("--max-loss") };
+    for (const p of [model, opts.packagePath, opts.imxPath, opts.layoutPath]) if (p && !existsSync(p)) throw new Error(`file not found: ${p}`);
   } catch (err) {
     process.stderr.write(`model-gate: ${err instanceof Error ? err.message : String(err)}\n`);
     return 2;

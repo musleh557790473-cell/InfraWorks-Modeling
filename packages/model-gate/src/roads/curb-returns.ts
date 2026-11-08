@@ -88,7 +88,8 @@ export function curbReturnsFromDrawing(db: DatabaseSync, layout: readonly DxfEnt
   const out: CurbReturn[] = [];
   const js = (db.prepare("select ID id, GUID g, REFERENCE_POINTS rp from INTERSECTIONS where INTERSECTION_TYPE = 0 or INTERSECTION_TYPE is null order by ID").all() as { id: number; g: string; rp: Uint8Array }[])
     .filter((j) => !opts.only || opts.only.includes(Number(j.id)));
-  const upd = db.prepare("update INTERSECTION_REGIONS set CURB_RETURN_RADIUS = ?, CURB_RETURN_TYPE = 2, INPUT_CURB_RETURN_TYPE = 2, MANUALLY_CHANGED = 1 where ID = ?");
+  // prepared only when writing: on a read-only connection preparing an UPDATE parses InfraWorks' triggers
+  const upd = opts.dry ? null : db.prepare("update INTERSECTION_REGIONS set CURB_RETURN_RADIUS = ?, CURB_RETURN_TYPE = 2, INPUT_CURB_RETURN_TYPE = 2, MANUALLY_CHANGED = 1 where ID = ?");
   if (!opts.dry) db.exec("savepoint kerbs");
   try {
     for (const j of js) {
@@ -106,7 +107,7 @@ export function curbReturnsFromDrawing(db: DatabaseSync, layout: readonly DxfEnt
         const drawn = radii[0]!, others = radii.slice(1);
         const status: CurbReturn["status"] = was != null && Math.abs(was - drawn) < 0.005 ? "unchanged" : others.length ? "ambiguous" : "set";
         out.push({ id: Number(j.id), region: Number(r.rid), corner, was, drawn, others, status });
-        if (!opts.dry && status !== "unchanged") upd.run(drawn, Number(r.rid));
+        if (upd && status !== "unchanged") upd.run(drawn, Number(r.rid));
       }
     }
     if (!opts.dry) db.exec("release kerbs");

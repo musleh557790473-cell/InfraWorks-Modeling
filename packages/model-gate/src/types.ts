@@ -92,6 +92,10 @@ export interface ModelGateOptions {
   maxOffsetM?: number;
   /** Allowed missing road length, as a fraction. Default 0.01 (1 %). */
   maxLengthLoss?: number;
+  /** The designer's road layout drawing (DXF) for a model written by model:roads (enables G3-020..025). */
+  layoutPath?: string;
+  /** Block in that DXF holding the layout xref. Default "Xref Road Layout Al Qairawan". */
+  layoutBlock?: string;
 }
 
 /** InfraWorks table each package feature class should land in. */

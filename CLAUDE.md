@@ -43,7 +43,8 @@ holds how we work and what has been learned the hard way.
 pnpm install && pnpm build && pnpm test          # expect 0 failures
 pnpm package:build "<drawing.dxf | model.stsw.sqlite | model.wtg.sqlite>" [--profile parsons-ldip-roads]
 #   WaterGEMS: --utility <Water|Irrigation> --cover <m> --cover-source "<where the cover comes from>"
-pnpm gate:model "<model>.sqlite" --package <package.zip>      # Gate G3, on a closed model
+pnpm gate:model "<model>.sqlite" --package <package.zip>      # Gate G3, on a closed model (or a copy)
+pnpm gate:model "<model>.sqlite" --layout <10200.dxf>         # G3 for a road model written by model:roads (G3-020..025)
 pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"]
 pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profiles <40000.dxf> --surface <grading.xml> [--package <road_centerline>] [--dry]
 #   Al Qairawan: add --section R.9.G.6=A1,R.9.G.7=A1 (AICC decision for the two roads the drawing does not type)
@@ -93,7 +94,8 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
   use the LandXML export of the surface (set UTM84-38N by hand: the file carries no CRS).
 - InfraWorks keeps a Shapefile field only when mapped in Configure, and maps nothing by itself
   (not even a field called NAME). Rows keep the Shapefile record number in `EXTERNAL_ID`
-  (mapping `EXTERNAL_ID = FeatId`), so `model:names` fills columns on a copy and records each
+  (mapping `EXTERNAL_ID = FeatId`, which InfraWorks sets by default on a Shapefile import: seen on
+  all 23 utility sources, 8 Nov), so `model:names` fills columns on a copy and records each
   mapping in `DATA_SOURCES.CONFIG` (JSON `propertyMappings`), which a Refresh then keeps.
 - InfraWorks' own triggers use double-quoted literals (`"INVALID"`): write with `node:sqlite`
   and `enableDoubleQuotedStringLiterals: true`; better-sqlite3 rejects them (read-only is fine).
@@ -136,7 +138,12 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
   Model Explorer lists classes and subsets only, not single features.
 - Force InfraWorks to rebuild a road and recreate its junctions: Stack > Grading Limit 5.0 -> 5.1
   -> 5.0 (Autodesk "To set the roadside grading method"). Rebuilding a road recreates every junction
-  on it, including ones deleted in the file.
+  on it, including ones deleted in the file. It also leaves body rows (PRIMITIVES,
+  TERRAIN_OPERATIONS) of the junctions it replaced and InfraWorks' default radius on new corners:
+  afterwards run `model:intersections --curb-returns <10200.dxf> --junctions <ids>` (prunes the rows
+  too) and G3 --layout. InfraWorks' log (`%APPDATA%\Autodesk\Autodesk InfraWorks\logs`, UTC) records
+  each such edit as "Regen time after setting grading property: gradingLimit": check it when road
+  tables change unexpectedly (`scripts/road-pilot/roadprint.cjs` fingerprints them).
 - Roundabouts (7 Nov 2026, InfraWorks 2026.0.2.119): a junction is converted in the Stack (Junction
   Type > Roundabout, then the Standard drop-down). InfraWorks clamps each arm before the next
   junction on the road (`IW_ARM_CLAMP_SEEN`); the standard's arm geometry must fit under that clamp
@@ -185,7 +192,9 @@ Qairawan, all in UTM 38N, checked by Gate G3 and seen in InfraWorks unless noted
   (10200 and 40000 DXF), the grading LandXML `C:\IW\data\LDIP-RCRC-LAI-LDIP-01-CIV-DWG-00002-01.xml`;
   history in `scripts/road-pilot/HANDOVER.md`.
 - Junctions (6-8 Nov): every crossing is an InfraWorks intersection; the straight pairs through the
-  roundabout centres are merged into one road (D1, Parsons' names in the Description). Roundabouts
+  roundabout centres are merged into one road (D1, Parsons' names in the Description; seven roads,
+  to stay merged by the user's decision of 8 Nov: a split leaves collinear road ends at the centre,
+  "Intersection not supported", and the roundabout loses its body). Roundabouts
   RA-1, RA-2, RA-3, RA-6, RA-7 on FHWA 2010 Rural Double Lane (island 24.0, apron 0.975, ICD 54.95;
   D2, D3); RA-4 (junction 308) on FHWA 2000 Urban Compact (island 24.0, 2 x 6 m, ICD 48.0; D11);
   RA-5 an ordinary crossing (D12: InfraWorks crashes converting it; Autodesk report drafted, dumps in
@@ -207,6 +216,12 @@ Qairawan, all in UTM 38N, checked by Gate G3 and seen in InfraWorks unless noted
   and MV (0.80 m, 200 mm) cables, street lighting (110 mm), telecom, security, substations,
   pillars, CCTV and street lights (Points of Interest). LV/HV/telecom/security sizes are 0.1 m
   for display only. Model `Al qirwan test 4 (names)`: G3 PASS, 0 warnings.
+- One model (8 Nov, HANDOVER session 10): all these networks are now also in the roads working copy
+  `C:\IW\Al Qairawan Roads (Parsons 6 junctions)`: 23 data sources from five packages in
+  `DATA_DIR\exports` (sewer / water / irrigation `-shp-v1`, wet v3, dry v4), names and attributes by
+  model:names; G3 with each package and with --layout PASS, 0 warnings. The 10100 layers are not in
+  it (their road_centerline would duplicate the component roads). Pre-import copy:
+  `... (Parsons 6 junctions) (قبل استيراد الشبكات)`.
 
 Open points: confirm the irrigation cover with Parsons; depths of telecom, security and
 street-lighting ducts (not in the Parsons documents, drawn on the terrain); the full Al Narjis road layout
