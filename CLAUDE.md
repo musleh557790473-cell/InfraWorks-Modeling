@@ -43,7 +43,8 @@ holds how we work and what has been learned the hard way.
 pnpm install && pnpm build && pnpm test          # expect 0 failures
 pnpm package:build "<drawing.dxf | model.stsw.sqlite | model.wtg.sqlite>" [--profile parsons-ldip-roads]
 #   WaterGEMS: --utility <Water|Irrigation> --cover <m> --cover-source "<where the cover comes from>"
-pnpm gate:model "<model>.sqlite" --package <package.zip>      # Gate G3, on a closed model
+pnpm gate:model "<model>.sqlite" --package <package.zip>      # Gate G3, on a closed model (or a copy)
+pnpm gate:model "<model>.sqlite" --layout <10200.dxf>         # G3 for a road model written by model:roads (G3-020..025)
 pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"]
 pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profiles <40000.dxf> --surface <grading.xml> [--package <road_centerline>] [--dry]
 #   Al Qairawan: add --section R.9.G.6=A1,R.9.G.7=A1 (AICC decision for the two roads the drawing does not type)

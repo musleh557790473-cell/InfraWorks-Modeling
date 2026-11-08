@@ -1026,4 +1026,21 @@ assembly; build A1–A3, B1, C1, C2 once and copy the resulting MANUAL_STYLE to 
   Radius 10.00, Simple Curve, turn angle 104.95; junction 266 (cross) 12.00, turn angle 90.02; the
   kerbs drawn accordingly, no warnings. D8 confirmed on the model.
 - 8 Nov: PR #22 opened by Cursor from `feat/section-decisions` to main (the GitHub record of sessions
-  7-8; main already holds the work through `38da8ab`). Not merged until "ادمج".
+  7-8; main already holds the work through `38da8ab`). Not merged until "ادمج". Merged 8 Nov as
+  `5cd7b87`, with PR #23 (CLAUDE.md) as `dedc8e5`.
+
+## Session 9 (8 Nov 2026): Gate G3 for the road model
+
+- `pnpm gate:model` alone said "Nothing to compare" (G3-000): the gate compared a model with its
+  import package only, and the road model was written by model:roads, not imported. New road checks
+  against the layout drawing (`--layout <10200.dxf>`, `packages/model-gate/src/roads/road-gate.ts`,
+  3 tests, 59 in all): G3-020 every drawn road is in the model (names from the 0-Alignment Name
+  texts, 468 labels = 250 names, the 7 RA rings not expected as roads; merged pairs count through
+  their Description), G3-021 no dangling links, G3-022 no junction rows left over, G3-023 roundabout
+  type and row agree, G3-024 roundabout arms built, G3-025 kerb returns at the drawn radius. The
+  checks run on a second read-only node:sqlite connection with double-quoted literals enabled
+  (InfraWorks' triggers); `curbReturnsFromDrawing` prepares its UPDATE only when writing.
+- Run on a copy of the working model (InfraWorks had it open): **PASS, 0 warnings**: 243 drawn roads
+  all present (235 roads), links sound, no leftovers, 6 roundabouts and 295 intersections consistent,
+  every roundabout arm built, 612 of 634 corners at the drawn radius and 22 without a drawn arc.
+  Report kept as `scripts/road-pilot/g3-roads-2026-11-08.md`.
