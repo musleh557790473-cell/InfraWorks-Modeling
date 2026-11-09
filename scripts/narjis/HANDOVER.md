@@ -86,6 +86,14 @@ and 12 `NRJ_*_SHIFTED` layers (plots 112, facilities 14, parking, landscape, roa
 - Base for the new model: its survey + DEM terrain (as Al Qairawan's base model); its OSM roads and
   `_SHIFTED` layers do not belong in the design model.
 
+### Working copy (9 Nov 2026)
+
+`C:\IW\Al Narjis.sqlite` + `.files`: robocopy of the model above (InfraWorks not running, the
+`.lock` gone by then). Same sqlite hash (17903AA9...), 1 205 / 1 205 `.files` files, integrity ok,
+`.files` Git clean, one proposal (`master`). To do in InfraWorks (user): remove the Model Builder
+`roads` / `landuse` / `waterways` and the twelve `NRJ_*_SHIFTED` sources (Manage > Content > Data
+Sources, Remove Data Source), add the grading LandXML on top of the survey surface (Surface Layers).
+
 ### Packages built
 
 | Package | Source | Content | Validation |
