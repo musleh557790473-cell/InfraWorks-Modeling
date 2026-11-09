@@ -96,8 +96,18 @@ Sources, Remove Data Source), add the grading LandXML on top of the survey surfa
 
 Other copies found (compared read-only with `C:\IW\Al Narjis`, 9 Nov):
 - `C:\IW\Al Narjis\Al Narjis.sqlite` + `.files`: byte-identical sqlite, same `.files` commit; a
-  duplicate of the working copy; deleted (user, 9 Nov). The working copy stays at
-  `C:\IW\Al Narjis.sqlite` (user's decision).
+  duplicate of the working copy; deleted (user, 9 Nov).
+- **Working copy now `C:\IW\Al Narjis\Al Narjis.sqlite` + `.files`**: the user moved it into the
+  folder at 13:13 and opened it there (cleanup below).
+
+### Cleanup in InfraWorks (user, 9 Nov 13:13-)
+
+Removed: Model Builder `roads`, `landuse`, `waterways`; `NRJ_*_SHIFTED` plots 20x15 / 25x12 / 30x10,
+facilities, landscape, road areas. Left at the screenshot: coverage `NRJ_Boundary_ProjectSite (2)`;
+imagery `imagery`, `Al Narjis grading.tif (2)` / `(3)`; parcels `NRJ_Plots_All_SHIFTED`; parking
+`NRJ_Parking_Areas_SHIFTED`; project site `NRJ_Boundary_ProjectSite_SHIFTED`; terrain `elevation`,
+`Narjis Survey C3D - SURFACES` (IMX), `Al Narjis grading.tif` (raster, 3 Sep, source not recorded).
+The grading LandXML is not added yet.
 - `Documents\Autodesk InfraWorks Models\Autodesk 360\2266988\Al Narjis.sqlite` (29 Oct, the cloud
   model's local cache): the same model plus the trial `road_centerline` source (11 planning roads,
   ROADS 92 -> 103, 2 intersections). Nothing in it that the 30% CD path does not redo.

@@ -81,7 +81,7 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
   IRO-40001/2, sections IRO-30001; utilities ISW, ISE, IPW, IRW, ILV, IMV, ISL, ITE, IIC, IUC. The
   site is small (376 x 542 m, 11 centrelines): the "one sheet window" is the whole layout. The 30%
   CD files sit on the survey as delivered (the 1 108 m shift of Sep was for the old LSD v00 plan).
-  Working copy `C:\IW\Al Narjis` (from `TAWAZUN PROGRAM\Infraworks\ALNARJIS`, survey + DEM terrain).
+  Working copy `C:\IW\Al Narjis\Al Narjis.sqlite` (from `TAWAZUN PROGRAM\Infraworks\ALNARJIS`, survey + DEM terrain).
 - Projects are in UTM 38N (EPSG:32638, InfraWorks `UTM84-38N`): Riyadh (Al Narjis, Al Qairawan).
   NEOM is UTM 36N. A model created in the wrong zone fails G3-002 / G3-006.
 - Prefer the designer's own data to drawing labels: SewerGEMS / WaterGEMS models
