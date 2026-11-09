@@ -47,18 +47,36 @@ function shpRings(base: string): number[][][][] {
 }
 const clockwise = (r: number[][]) => r.reduce((s, p, i) => s + (r[(i + 1) % r.length]![0]! - p[0]!) * (r[(i + 1) % r.length]![1]! + p[1]!), 0) > 0;
 
-async function build(text: string) {
+async function build(text: string, skipLayers?: string[]) {
   const dir = mkdtempSync(join(tmpdir(), "iw-areas-"));
   const path = join(dir, "t.dxf");
   writeFileSync(path, text);
   const store = createFileStore(dir);
   const project = store.createProject("t", 32638);
   store.setMappingProfile(project.id, PROFILE);
+  if (skipLayers) store.updateProject(project.id, { skipLayers });
   store.addUpload({ projectId: project.id, filename: "t.dxf", kind: "dxf", path, size: 0 });
   const r = await runBuildPipeline(store, project.id);
   const staging = join(store.artifactDir, readdirSync(store.artifactDir).find((d) => d.startsWith(`pkg-${project.id}`))!);
   return { r, staging, manifest: JSON.parse(readFileSync(join(staging, "manifest.json"), "utf8")) };
 }
+
+test("skipLayers leaves a layer out of the package (10100 road centrelines for a model with component roads)", async () => {
+  const { r, manifest } = await build(
+    dxf(
+      0, "SECTION", 2, "ENTITIES",
+      ...poly("Boundary", square(0, 0, 100)),
+      ...poly("RD_ROW", square(10, 10, 30)),
+      0, "LINE", 8, "RD_CL", 10, X, 20, Y + 50, 11, X + 100, 21, Y + 50,
+      0, "ENDSEC", 0, "EOF",
+    ),
+    ["road_centerline"],
+  );
+  const shp = manifest.layers.filter((l: { format: string }) => l.format === "shp").map((l: { name: string }) => l.name).sort();
+  assert.deepEqual(shp, ["blocks", "road_reserve"]);
+  assert.ok(!manifest.files.some((f: string) => f.includes("road_centerline")));
+  assert.equal(r.collection.features.filter((f) => f.infraFeatureClass === "road_centerline").length, 0);
+});
 
 test("road reserve = site boundary minus the blocks, each in its own Shapefile; open lines stay out", async () => {
   const { r, staging, manifest } = await build(

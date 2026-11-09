@@ -5,6 +5,7 @@
  * pipes and structures. For a hydraulic model:
  *   --utility <Water|Irrigation|Sewer>  layer prefix and network name (default: Sewer / Water)
  *   --cover <m> --cover-source "<doc>"   WaterGEMS has no inverts: cover over the crown, and where it comes from
+ *   --skip-layers road_centerline,...    output layers left out (planning roads for a model with component roads)
  * Uses the data folder from DATA_DIR (.env), so the package lands where both machines see it.
  */
 import { copyFileSync, mkdirSync } from "node:fs";
@@ -39,6 +40,11 @@ const project = store.createProject(flag("--name") ?? basename(src, extname(src)
 store.setMappingProfile(project.id, profile);
 const drawings = sources.filter((x) => !/\.(stsw|wtg)\.sqlite$/i.test(x));
 if (drawings.length > 1) store.updateProject(project.id, { cadMode: "all" });
+const skipLayers = flag("--skip-layers")?.split(",").map((s) => s.trim()).filter(Boolean);
+if (skipLayers?.length) {
+  store.updateProject(project.id, { skipLayers });
+  console.log(`Left out    ${skipLayers.join(", ")}`);
+}
 const dir = join(store.uploadDir, project.id);
 mkdirSync(dir, { recursive: true });
 // A hydraulic model's utility and pipe cover (WaterGEMS has no inverts), from the command line.
