@@ -147,6 +147,15 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   working file was unchanged (hash E86B62D8... -> 60630133...); integrity ok; G3 rerun on the
   working copy: PASS, 0 warnings.
 
+### Irrigation imported (9 Nov 2026)
+
+- User: `irrigation_pipes` (Pipelines) and `irrigation_structures` (Pipeline Connectors) from
+  `exports\Al-Narjis-irrigation-shp-v1\shp`. Model closed, proposal `master`, `.files` HEAD
+  unchanged by the copy. `model:names` into a scratchpad copy: structures 5 (NAME, NETWORKNAME),
+  pipes 47 (NAME, sizes, material, network, ELEV_FROM/TO). G3 on the copy: **PASS, 0 warnings**
+  (5/5, 47/47, 1 251 m, all named). Installed (hash B5B2860B... -> E3680A78...); integrity ok;
+  G3 on the working copy with the irrigation and the sewer packages: both PASS, 0 warnings.
+
 ### Order proposed
 
 1. Copy the submission into `DATA_DIR\inputs\narjis` (stable shared place).
