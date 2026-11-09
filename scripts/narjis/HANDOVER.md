@@ -129,7 +129,12 @@ wider terrain, as in Al Qairawan.
 | --- | --- | --- | --- |
 | `DATA_DIR\exports\Al-Narjis-sewer-shp-v1` (+ zip) | `inputs\narjis\hydraulic\AL-NARJIS_option 5.stsw.sqlite` (from the submission zip) | 20 pipes (200 mm HDPE-Corrugated, depths 1.60-7.08 m), 21 manholes (rim 671.87-675.63, depth 1.70-7.18), network "Sewer - AL-NARJIS_option 5" | OK, no warnings |
 
-The water and irrigation `.wtg.sqlite` are extracted beside it, waiting for a cover source.
+| `DATA_DIR\exports\Al-Narjis-irrigation-shp-v1` (+ zip) | `inputs\narjis\hydraulic\Narjis Model.wtg.sqlite`, scenario "Peak Distibution" | 47 pipes (1.25 km; HDPE 2 x 110, 26 x 90, 19 x 75 mm), 5 structures (reservoir, 3 isolation valves, pump), network "Irrigation - Narjis Model"; cover 0.80 m ASSUMED (centre 0.837-0.855 m below terrain) | OK, no warnings |
+
+Irrigation cover: the IRW-00001/00002 general notes (user screenshot, 9 Nov) give none; they state HDPE
+PE100 SDR11 PN16 and nominal outside diameters, which match the sizes read from the model (inside
+diameter x 11/9). 0.80 m is an AICC assumption (as Al Qairawan), pending Parsons; likely in a trench
+detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a cover source (IPW notes).
 
 ### Sewer imported (9 Nov 2026)
 
