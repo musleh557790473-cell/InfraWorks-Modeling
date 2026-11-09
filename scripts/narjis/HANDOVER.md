@@ -107,7 +107,13 @@ facilities, landscape, road areas. Left at the screenshot: coverage `NRJ_Boundar
 imagery `imagery`, `Al Narjis grading.tif (2)` / `(3)`; parcels `NRJ_Plots_All_SHIFTED`; parking
 `NRJ_Parking_Areas_SHIFTED`; project site `NRJ_Boundary_ProjectSite_SHIFTED`; terrain `elevation`,
 `Narjis Survey C3D - SURFACES` (IMX), `Al Narjis grading.tif` (raster, 3 Sep, source not recorded).
-The grading LandXML is not added yet.
+Then (13:20-13:28) the user removed the rest of the `_SHIFTED` sources and `NRJ_Boundary_ProjectSite
+(2)`, and imported the grading LandXML straight from the OneDrive folder: source `AL-Narjis Grading_
+Roads TOS - Surfaces`, CRS UTM84-38N read from the file; surface layers edited (4 `.files` commits).
+Resource `Resources\LandXML\4d174c16-...\Compiled Grading.aecc.<hex>.pnt/.tri`, longest `.files`
+path 145 characters (the model sits on `C:\IW`, so the source's long path does not matter). Kept:
+imagery `imagery`, `Al Narjis grading.tif (2)` / `(3)`; terrain `elevation`, survey IMX,
+`Al Narjis grading.tif`, the LandXML.
 - `Documents\Autodesk InfraWorks Models\Autodesk 360\2266988\Al Narjis.sqlite` (29 Oct, the cloud
   model's local cache): the same model plus the trial `road_centerline` source (11 planning roads,
   ROADS 92 -> 103, 2 intersections). Nothing in it that the 30% CD path does not redo.
