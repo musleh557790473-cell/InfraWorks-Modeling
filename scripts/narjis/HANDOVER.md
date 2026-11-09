@@ -94,6 +94,15 @@ and 12 `NRJ_*_SHIFTED` layers (plots 112, facilities 14, parking, landscape, roa
 `roads` / `landuse` / `waterways` and the twelve `NRJ_*_SHIFTED` sources (Manage > Content > Data
 Sources, Remove Data Source), add the grading LandXML on top of the survey surface (Surface Layers).
 
+Other copies found (compared read-only with `C:\IW\Al Narjis`, 9 Nov):
+- `C:\IW\Al Narjis\Al Narjis.sqlite` + `.files`: byte-identical sqlite, same `.files` commit; a
+  duplicate of the working copy (one copy per task: to delete).
+- `Documents\Autodesk InfraWorks Models\Autodesk 360\2266988\Al Narjis.sqlite` (29 Oct, the cloud
+  model's local cache): the same model plus the trial `road_centerline` source (11 planning roads,
+  ROADS 92 -> 103, 2 intersections). Nothing in it that the 30% CD path does not redo.
+- `Documents\Autodesk InfraWorks Models\Al Narjis1.sqlite` (31 Aug): the survey surface
+  `Narjis Survey C3D - NARJIS` only.
+
 ### Packages built
 
 | Package | Source | Content | Validation |
