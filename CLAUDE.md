@@ -55,6 +55,7 @@ pnpm model:intersections "<model>.sqlite" [--dry]               # drop intersect
 #   --shorten-arms --arm-gap 14.4 --arm-ids 309 | --heal-arms 309 | --arm-room [--standard ...] (read-only)
 #   --curb-returns <10200.dxf>      kerb return radii from the drawn -RD_Edges arcs (D8)
 pnpm model:roads ... --merge R.0.D.4=R.0.D.3+R.0.D.4 | --split R.0.D.4=R.0.D.3+R.0.D.4 | --only R.6.G.18
+pnpm model:roads ... --only R.4.G.2,R.5.G.1 --tie-ends R.4.G.2@R.0.D.11,R.5.G.1@R.0.D.11   # end level = through road (D13)
 ```
 Every write: model closed (`.lock` gone), a copy in the scratchpad first, `--dry` first, verify after
 (integrity, counts, orphans). Deviations from Parsons' drawings go to `scripts/road-pilot/parsons-deviations.md`
@@ -149,7 +150,14 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
   afterwards run `model:intersections --curb-returns <10200.dxf> --junctions <ids>` (prunes the rows
   too) and G3 --layout. InfraWorks' log (`%APPDATA%\Autodesk\Autodesk InfraWorks\logs`, UTC) records
   each such edit as "Regen time after setting grading property: gradingLimit": check it when road
-  tables change unexpectedly (`scripts/road-pilot/roadprint.cjs` fingerprints them).
+  tables change unexpectedly (`scripts/road-pilot/roadprint.cjs` fingerprints them). One edit can
+  rebuild junctions several roads away (R.9.G.5 -> R.0.D.12 -> R.0.D.15 -> RA-3 lost its R.0.D.11
+  arm, 9 Nov): rerun G3 --layout after every edit (G3-026 catches a missing roundabout arm); a Grading
+  Limit edit on the road that lost the arm brought it back. `.files` keeps one undo commit per edit
+  (`git reflog`): it tells which edit changed what.
+- Junction "pits" (whole junction body and grading down to 250-640 m) came where two roads ending on a
+  square crossing sat 4-5 cm off the through road's level; tying their ends to it (`--tie-ends`, D13)
+  and a Grading Limit edit on each made InfraWorks build them at road level (298, 299; 9 Nov).
 - Roundabouts (7 Nov 2026, InfraWorks 2026.0.2.119): a junction is converted in the Stack (Junction
   Type > Roundabout, then the Standard drop-down). InfraWorks clamps each arm before the next
   junction on the road (`IW_ARM_CLAMP_SEEN`); the standard's arm geometry must fit under that clamp
@@ -231,7 +239,8 @@ Qairawan, all in UTM 38N, checked by Gate G3 and seen in InfraWorks unless noted
   layers from `exports\Al-Qairawan-10100-shp-v4` (built with `--skip-layers road_centerline`): plots
   6,555 (5,944 numbered), blocks, road reserve, asphalt. G3 with all six packages and --layout PASS,
   0 warnings. Other proposals (master, Plots, Imagery, EGL, Engineering1) hold older road states
-  without the full data. Junction pits 298 / 299 (grading down to ~252 m) remain to fix.
+  without the full data. Junction pits 298 / 299 fixed the same day (D13, Parsons question 17); G3
+  (with G3-026) PASS, 0 warnings after the fix.
 
 Open points: confirm the irrigation cover with Parsons; depths of telecom, security and
 street-lighting ducts (not in the Parsons documents, drawn on the terrain); the full Al Narjis road layout

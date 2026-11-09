@@ -59,6 +59,9 @@ these documents; where AICC had to choose, the choice is stated and awaits confi
 15. **Roundabout entries.** Number of entry lanes and the taper from the two-lane divided approaches to
     the single circulatory lane; apron width (AICC assumed 0.975 m = ring 8.2 m - one 7.225 m lane, with
     the island at r 12.0 and the outer edge at r 20.2 as drawn).
+17. **Levels where local roads end on R.0.D.11 and R.0.D.12.** R.4.G.2 / R.5.G.1 end at 688.722 where
+    R.0.D.11's profile gives 688.681, and R.9.G.5 / R.10.G.2 at 689.754 where R.0.D.12 gives 689.801
+    (4-5 cm). AICC tied the local road ends to the through road (D13). Which level is intended?
 ## Utilities (already open)
 
 9. Irrigation cover: 0.80 m assumed by AICC (not in the PWT/IRR documents).

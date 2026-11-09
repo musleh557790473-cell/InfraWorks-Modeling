@@ -1132,5 +1132,36 @@ without it.
   roundabouts, 23 utility sources, plots / blocks / road reserve / asphalt. G3 with each of the six
   packages and with --layout: **PASS, 0 warnings** (report `g3-single-model-2026-11-09.md`).
 - Open: proposals master, Plots, Imagery, EGL, Engineering1 hold other road states without the full
-  data (the user decides whether to keep or delete them); junction pits 298 / 299; after any proposal
+  data (the user decides whether to keep or delete them); junction pits 298 / 299 (fixed below); after any proposal
   switch, rerun G3 --layout (leftover body rows may return; `model:intersections` cleans them).
+
+### Junction pits 298 / 299 fixed (9 Nov 2026, D13)
+
+- User: "if you can fix the two pits, do it". Both junctions were broken as a whole (every
+  extrudedCrossSection / morphingCrossSection / symbolizedPath strip and all grading down to 250-640 m),
+  not one corner. Of the 24 junctions of the same make-up (divided road through, two roads ending on it
+  opposite each other), direction and crossing angle did not set them apart; the level step did: the
+  ending roads sit 4.1 cm (298, on R.0.D.11) and 4.7 cm (299, on R.0.D.12) off the through road, where
+  every other square one is within 2.2 cm (103 has 4.7 cm but crosses at 83 degrees and builds).
+- `model:roads --only ... --tie-ends R.4.G.2@R.0.D.11,R.5.G.1@R.0.D.11,R.9.G.5@R.0.D.12,R.10.G.2@R.0.D.12`
+  (new: `tieLevels` / `parseTieEnds` in checks.ts, `planRoad(al, pv, { startZ, endZ })`, test; refused
+  over 0.10 m) on a copy: the four roads written with the end PVI at the through road's level (688.722
+  -> 688.681, 689.754 -> 689.801), same GUIDs, plan and length; G3 --layout PASS; installed (Networks).
+- User (10:03-10:16): Grading Limit toggles on R.4.G.2, R.5.G.1, R.9.G.5 (R.10.G.2 not edited).
+  **Both pits gone**: 298 body 688.51-688.79, 299 689.36-689.94. But the R.9.G.5 rebuild (10:08:38,
+  found in the `.files` undo commits) cascaded through R.0.D.12 / R.0.D.15: RA-3 (junction 106) lost
+  its R.0.D.11 arm and two corners, while G3-020..025 still passed. New check **G3-026** (road-gate.ts
+  `roundaboutArmGaps`, test): every road whose centreline passes within 1 m of a roundabout centre has an
+  arm there; it blocked on 106 / R.0.D.11.
+- User (10:23): Grading Limit toggle on R.0.D.11: InfraWorks recreated the arm (977) and its corners
+  (711, 712); nothing else changed but RA-3's outline and arm lanes. Final, proposal Networks: 235
+  roads, 303 intersections, 6 roundabouts, no pit, junctions 9 and 41 identical to 8 Nov; G3 with the
+  six packages and --layout (with G3-026) **PASS, 0 warnings** (`g3-single-model-2026-11-09.md`).
+  Deviation D13 and Parsons question 17 recorded.
+- Lesson: one road's Grading Limit edit can rebuild junctions several roads away (through the roads
+  it meets and the roundabouts on them): rerun G3 --layout after every such edit; if a roundabout
+  loses an arm, a Grading Limit edit on that road brings it back (seen on R.0.D.11).
+- Left: R.10.G.2 still carries the body model:roads wrote (InfraWorks has not rebuilt it; junction 299
+  builds anyway). The `junctionSteps` check reports R.3.G.11's end 0.54 m below R.0.C.2: R.0.C.2 was
+  rebuilt by InfraWorks and its cached centreline has few vertices, so the interpolated level may be
+  wrong there; not looked into.

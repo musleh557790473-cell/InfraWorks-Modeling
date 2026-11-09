@@ -2,9 +2,9 @@
 
 Model: `C:\IW\Al Qairawan Roads (Parsons 6 junctions).sqlite`, proposal **Networks** active, closed:
 component roads and junctions, the 23 utility sources and the 10100 layers (plots, blocks, road
-reserve, asphalt; no road_centerline). After `model:names` with the 10100 package and
-`model:intersections` (leftover body rows). Run on a copy of the installed file. Seven runs, all
-**PASS, 0 warnings**.
+reserve, asphalt; no road_centerline). Rerun after the junction-pit fix (HANDOVER session 11:
+road ends tied on R.4.G.2 / R.5.G.1 / R.9.G.5 / R.10.G.2, InfraWorks rebuilds, RA-3 arm back) with
+the new G3-026. Run on a copy of the closed working file. Seven runs, all **PASS, 0 warnings**.
 
 ### --package exports\Al-Qairawan-sewer-shp-v1\-hOVCRRPu0-infraworks-package.zip
 ```
@@ -152,6 +152,9 @@ Schema        17.18.0   CRS UTM84-38N
 
 [INFO] G3-025 Kerb returns as drawn
         642 corners: 620 at the drawn radius, 0 differ, 22 without a drawn arc.
+
+[INFO] G3-026 Roundabout arms present
+        Every road reaching a roundabout centre has an arm there.
 
 ────────────────────────────────────────────────────────────────────────
 PASS — 0 warning(s).
