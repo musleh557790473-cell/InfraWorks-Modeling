@@ -43,6 +43,7 @@ holds how we work and what has been learned the hard way.
 pnpm install && pnpm build && pnpm test          # expect 0 failures
 pnpm package:build "<drawing.dxf | model.stsw.sqlite | model.wtg.sqlite>" [--profile parsons-ldip-roads]
 #   WaterGEMS: --utility <Water|Irrigation> --cover <m> --cover-source "<where the cover comes from>"
+#   --skip-layers road_centerline   leave layers out (10100 for a model that already has component roads)
 pnpm gate:model "<model>.sqlite" --package <package.zip>      # Gate G3, on a closed model (or a copy)
 pnpm gate:model "<model>.sqlite" --layout <10200.dxf>         # G3 for a road model written by model:roads (G3-020..025)
 pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"]
@@ -82,6 +83,11 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
 ## InfraWorks facts (verified in InfraWorks 2026 models)
 
 - A model is `<name>.sqlite` + `<name>.files`; `<name>.lock` while open. Work on copies only.
+- Proposals are branches of the `.files` Git repo; the sqlite holds the ACTIVE proposal only
+  (`git -C <model>.files rev-parse --abbrev-ref HEAD` names it). Before writing, check which proposal
+  is active and that it is the one the user works in. A switch rebuilds the sqlite from `.files`:
+  data imported in another proposal "disappears", and direct sqlite deletes (body rows) can come back.
+  Rerun G3 after a switch. Autodesk help "To create or open a proposal" (Toolbar > Proposals list).
 - Keep ONE working copy per task and update it in place; do not make a new copy for each fix
   (the user asked: too many copies cause confusion). Never write while its `.lock` exists: ask the
   user to close the model first. Road pilot working copy: `C:\IW\Al Qairawan Roads (Parsons 6 junctions)`.
@@ -219,9 +225,13 @@ Qairawan, all in UTM 38N, checked by Gate G3 and seen in InfraWorks unless noted
 - One model (8 Nov, HANDOVER session 10): all these networks are now also in the roads working copy
   `C:\IW\Al Qairawan Roads (Parsons 6 junctions)`: 23 data sources from five packages in
   `DATA_DIR\exports` (sewer / water / irrigation `-shp-v1`, wet v3, dry v4), names and attributes by
-  model:names; G3 with each package and with --layout PASS, 0 warnings. The 10100 layers are not in
-  it (their road_centerline would duplicate the component roads). Pre-import copy:
+  model:names; G3 with each package and with --layout PASS, 0 warnings. Pre-import copy:
   `... (Parsons 6 junctions) (قبل استيراد الشبكات)`.
+- Single model (9 Nov, session 11): proposal **Networks** of that working copy also holds the 10100
+  layers from `exports\Al-Qairawan-10100-shp-v4` (built with `--skip-layers road_centerline`): plots
+  6,555 (5,944 numbered), blocks, road reserve, asphalt. G3 with all six packages and --layout PASS,
+  0 warnings. Other proposals (master, Plots, Imagery, EGL, Engineering1) hold older road states
+  without the full data. Junction pits 298 / 299 (grading down to ~252 m) remain to fix.
 
 Open points: confirm the irrigation cover with Parsons; depths of telecom, security and
 street-lighting ducts (not in the Parsons documents, drawn on the terrain); the full Al Narjis road layout

@@ -1095,3 +1095,42 @@ without it.
 - Next (user): open the model and check the networks in InfraWorks (Rule Styles as wanted, depths
   under the Mass Grading surface). The 10100 layers stay out until decided (without road_centerline,
   G3 with that package will report G3-003 for it).
+
+## Session 11 (9 Nov 2026): the 10100 layers, and the model's proposals
+
+- User's screenshots of the networks (from above and from under the terrain): pipes under the roads,
+  depths sane (no extreme offsets). Seen and explained: 34 sewer pipes with one end without a depth
+  (empty in the package) rise to the terrain at that end; telecom / security / street-lighting
+  ducts have no depth (open point). The tall grey column under a junction is not a utility: junctions
+  298 (R.4.G.2 / R.5.G.1 / R.0.D.11) and 299 (R.9.G.5 / R.10.G.2 / R.0.D.12) have body / grading
+  points down to about 252 m (site 677-700 m), already in the pre-import copy: the known "pit"
+  (session 5), to fix as a road task.
+- 10100 package without the planning roads: `package:build` gained `--skip-layers a,b`
+  (`Project.skipLayers`, filtered by output layer before validation; test in areas.test.ts, 98
+  domain tests). Built from `DATA_DIR\inputs\ACAD-ACAD-LDIP-RCRC-SAP-01-AQ-ROD-DWG-10100-000-0A.dxf`
+  with `--skip-layers road_centerline`: plots 6,555 (5,944 numbered, NAME), blocks 171, road reserve
+  1, asphalt 9; copied to `DATA_DIR\exports\Al-Qairawan-10100-shp-v4` (the old v3 had 5,815 plots and
+  no name field). Warnings as before (units feet, 7 duplicate plot numbers, 113 open lines).
+- **Proposals.** The roads model has InfraWorks proposals, stored as branches of the `.files` Git
+  repo (master, Networks, Plots, Imagery, EGL, Engineering1); the sqlite holds the ACTIVE proposal
+  only. Session 10's networks went into proposal Networks (branched at the wet import, 8 Nov 14:30).
+  The first 10100 import (9 Nov 08:24) went into a new proposal Plots, branched from the 14:24 state
+  (no networks; asphalt missing, road_reserve twice, once as Right of Way), and 5 more Grading Limit
+  edits went into master / Engineering1 / Plots (8 Nov 16:16-16:17, 9 Nov 08:39-08:40; R.12.G.6,
+  R.1.F.1, R.0.D.8, R.0.C.2 rebuilt there, junction 312, junction 41's outline). Nothing written then.
+  Autodesk help "To create or open a proposal": click a proposal in the Toolbar's Proposals list to
+  make it active; changes do not carry over between proposals.
+- User switched to Networks and imported the four 10100 files there (9 Nov 08:52-09:06). Networks:
+  27 sources with full counts; road / junction / roundabout tables byte-identical to session 10's
+  installed state (only CONSTRAINED_DEFINITIONS grew: InfraWorks adds one PARCELS definition per
+  plot); no road edit in the log. But the 234 junction body rows pruned in session 10 were back: a
+  direct sqlite write is lost when InfraWorks rebuilds the file from `.files` on a proposal switch
+  (the kerb radii, also written directly, survived). Written (copy first, hash of the working file
+  checked unchanged): `model:names` with 10100 v4 (5,944 plot names), `model:intersections` (234 body
+  rows). Installed; integrity ok.
+- Result, proposal **Networks** = the single Al Qairawan model: 235 roads, 303 intersections, 6
+  roundabouts, 23 utility sources, plots / blocks / road reserve / asphalt. G3 with each of the six
+  packages and with --layout: **PASS, 0 warnings** (report `g3-single-model-2026-11-09.md`).
+- Open: proposals master, Plots, Imagery, EGL, Engineering1 hold other road states without the full
+  data (the user decides whether to keep or delete them); junction pits 298 / 299; after any proposal
+  switch, rerun G3 --layout (leftover body rows may return; `model:intersections` cleans them).
