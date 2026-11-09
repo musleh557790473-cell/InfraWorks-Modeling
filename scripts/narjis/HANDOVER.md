@@ -131,6 +131,17 @@ wider terrain, as in Al Qairawan.
 
 The water and irrigation `.wtg.sqlite` are extracted beside it, waiting for a cover source.
 
+### Sewer imported (9 Nov 2026)
+
+- User (13:32): `sewer_pipes` (Pipelines) and `sewer_manholes` (Pipeline Connectors) from
+  `exports\Al-Narjis-sewer-shp-v1\shp`, UTM84-38N; seen on the grading surface along the roads.
+- Model closed, proposal `master` (the only one), `.files` clean. `model:names` with the package
+  zip into a scratchpad copy: NAME, sizes, depth, network, offsets filled (manholes 21, pipes 20;
+  outfall O-1 has no size: none in the SewerGEMS model). G3 on the copy: **PASS, 0 warnings**
+  (21/21 manholes, 20/20 pipes, 1 251 m, offset 0.00 m, all named). Installed after checking the
+  working file was unchanged (hash E86B62D8... -> 60630133...); integrity ok; G3 rerun on the
+  working copy: PASS, 0 warnings.
+
 ### Order proposed
 
 1. Copy the submission into `DATA_DIR\inputs\narjis` (stable shared place).
