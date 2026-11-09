@@ -71,6 +71,29 @@ Prerequisite checked: main at `4cf5a20` (PR #26: `--skip-layers`, `--tie-ends`, 
 | Design report (depths) | `Vol. 02_Reports\SAPL-DSN-LDN-RPT-000003.pdf` | present, not read (no PDF tool here); Al Narjis or shared report? |
 | - | BOQ `Vol. 07_BOQ\Package 1_Al Narjis_30% CD Rev.00.xlsx` | present (quantities to cross-check) |
 
+### Existing Al Narjis model (Sep 2026)
+
+`TAWAZUN PROGRAM\Infraworks\ALNARJIS\Al Narjis.sqlite` (OneDrive, 10 Sep; a stale `.lock` of
+16 Sep), UTM84-38N. Sources: Model Builder (`elevation`, `imagery`, OSM `roads` 92 / `landuse` /
+`waterways`), the survey surface `Narjis Survey C3D - SURFACES` (E 663 577-664 226, N 2 756 541-
+2 757 558: a wide terrain around the whole site), `Al Narjis grading.tif` (surface + textures),
+and 12 `NRJ_*_SHIFTED` layers (plots 112, facilities 14, parking, landscape, road areas).
+- The `_SHIFTED` layers came from the land-subdivision plan `20260114_LSD_Al Narjis Land
+  Subdivision Plan_v00.dwg`, whose new layer tree sat 1 108.09 m off (dE -1 107.5615, dN +34.3112,
+  no rotation or scale; README in `Claude outputs\NRJ_Shifted_to_Survey.zip`). After the shift the
+  boundary is E 663 754.3-664 130 / N 2 756 689-2 757 231: exactly the 30% CD project boundary.
+  So **the 30% CD submission is already in place on the survey; no shift for it.**
+- Base for the new model: its survey + DEM terrain (as Al Qairawan's base model); its OSM roads and
+  `_SHIFTED` layers do not belong in the design model.
+
+### Packages built
+
+| Package | Source | Content | Validation |
+| --- | --- | --- | --- |
+| `DATA_DIR\exports\Al-Narjis-sewer-shp-v1` (+ zip) | `inputs\narjis\hydraulic\AL-NARJIS_option 5.stsw.sqlite` (from the submission zip) | 20 pipes (200 mm HDPE-Corrugated, depths 1.60-7.08 m), 21 manholes (rim 671.87-675.63, depth 1.70-7.18), network "Sewer - AL-NARJIS_option 5" | OK, no warnings |
+
+The water and irrigation `.wtg.sqlite` are extracted beside it, waiting for a cover source.
+
 ### Order proposed
 
 1. Copy the submission into `DATA_DIR\inputs\narjis` (stable shared place).
