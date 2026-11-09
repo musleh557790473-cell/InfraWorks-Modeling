@@ -11,8 +11,11 @@ Prerequisite checked: main at `4cf5a20` (PR #26: `--skip-layers`, `--tie-ends`, 
 ### Where the data is
 
 - Parsons' 30% CD submission, Package 1 Al Narjis, district code **NRJS**:
-  `C:\Users\m.bazamol\Downloads\01 Submission Folder` (173 files, DWG + PDF, no DXF). Not yet in
-  `DATA_DIR\inputs`.
+  OneDrive `Documents\03 WIP\TAWAZUN PROGRAM\03_Parsons\Submission\Narjis` (179 files, both
+  laptops): `Files_01 Submission Folder_2026-09-16_07-30-44am` (173 files, DWG + PDF, no DXF; the
+  same names and sizes as the copy in this laptop's `Downloads\01 Submission Folder`) and `Al-Narjis
+  Rough Grading Plan (19-08-26)` (grading plan LAI-LDIP-01-CIV-DWG-00001, its CRS reply, and the
+  designer's grading LandXML + DWG). Read in place; not copied to `DATA_DIR\inputs`.
 - Early trials: `C:\Temp\iwg3\narjis` (sheet `10001-0A.dxf`, truncated; package of 11 centrelines +
   project boundary, G3 PASS on model `Nurjis test`), `C:\Temp\iwg3\narjis2` (despite the name, Al
   Qairawan 10100: 332 centrelines at x 657 096-660 125).
@@ -54,7 +57,7 @@ Prerequisite checked: main at `4cf5a20` (PR #26: `--skip-layers`, `--tie-ends`, 
 | Profiles 40000 | IRO-DWG-00-40001, 40002 | DWG only: DXF needed |
 | Typical sections 30000 | IRO-DWG-00-30001 | DWG only: DXF needed |
 | Plots / blocks 10100 | none as a separate drawing; xref `Ladun AlNarjis Baseplan` in 10001 | partial: plot-type blocks only; DXF needed (or the baseplan drawing) |
-| Grading surface (LandXML) | none; Vol. 04 MOD-00001..00003 (Civil 3D DWG / IFC meshes) | missing as LandXML; which model is the finished grade? |
+| Grading surface (LandXML) | `Al-Narjis Rough Grading Plan (19-08-26)\Grading Files From Designer (Attachment)\AL-Narjis Grading_ Roads TOS.xml` (surface "Compiled Grading", Civil 3D 2024, 17 Aug 2026) | present: 7 788 points, 15 413 faces, E 663 748-664 132, N 2 756 684-2 757 238 (covers the project boundary), Z 670.42-677.75, CRS UTM84-38N in the file |
 | SewerGEMS `.stsw.sqlite` | `Sewer\Hydraulic Model.zip` | present (20 pipes, 21 MH) |
 | WaterGEMS water `.wtg.sqlite` + cover source | `Potable Water\Hydraulic Model.zip` | present; cover source missing (Al Qairawan: PWT-10000 note 5) |
 | WaterGEMS irrigation + cover source | `Irrigation\Hydraulic Model_IRRNarjis.zip` | present; cover source missing |
