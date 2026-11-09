@@ -36,6 +36,11 @@ export interface ProjectRecord {
    * "all": every drawing is read and combined, e.g. one sheet per utility network.
    */
   cadMode?: "latest" | "all";
+  /**
+   * Output layers left out of the package (e.g. "road_centerline" for a model that already holds
+   * component roads, where planning roads would duplicate them).
+   */
+  skipLayers?: string[];
   createdAt: string;
   updatedAt: string;
 }

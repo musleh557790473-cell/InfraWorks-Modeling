@@ -37,9 +37,25 @@ test("drawn road names come from the 0-Alignment Name texts, formatting codes st
 
 test("a sound road model passes G3-020..025 (merged pairs count through their Description; RA rings are not roads)", () => {
   const r = by(roadModelFindings(model(), layout));
-  assert.deepEqual(Object.entries(r).map(([k, v]) => [k, v.severity]), [["G3-020", "info"], ["G3-021", "info"], ["G3-022", "info"], ["G3-023", "info"], ["G3-024", "info"], ["G3-025", "info"]]);
+  assert.deepEqual(Object.entries(r).map(([k, v]) => [k, v.severity]), [["G3-020", "info"], ["G3-021", "info"], ["G3-022", "info"], ["G3-023", "info"], ["G3-024", "info"], ["G3-025", "info"], ["G3-026", "info"]]);
   assert.match(r["G3-020"]!.message, /All 3 drawn roads/);
   assert.match(r["G3-025"]!.message, /1 corners: 0 at the drawn radius, 0 differ, 1 without a drawn arc/);
+});
+
+test("G3-026: a road through a roundabout centre without an arm there blocks (RA-3 lost R.0.D.11, 9 Nov)", () => {
+  const db = model();
+  // the junction becomes a roundabout; R.0.D.4 (cd-A) passes through its centre, R.6.G.18 (cd-B) starts there
+  db.exec("update INTERSECTIONS set INTERSECTION_TYPE = 1 where ID = 1");
+  db.exec("insert into ROUNDABOUTS (GUID, FK_PARENT_GUID, STANDARD_NAME, INSCRIBED_CIRCLE_DIAMETER, ISLAND_DIAMETER, APRON_WIDTH, LANES) values ('ro', 'j', 's', 54.95, 24, 0.975, 2)");
+  db.exec("update INTERSECTION_ARMS set ARM_INDEX = rowid, BLEND_POINT_ENTRY_OFFSET = 60, STATUS = 0");
+  assert.equal(by(roadModelFindings(db, layout))["G3-026"]!.severity, "info");
+  db.exec("delete from INTERSECTION_ARMS where FK_ASSET_GUID = 'cd-B'");
+  const r = by(roadModelFindings(db, layout))["G3-026"]!;
+  assert.equal(r.severity, "blocking");
+  assert.match(r.message, /junction 1 R\.6\.G\.18/);
+  // a road far from the centre is not expected there
+  db.prepare("insert into ROADS (GUID, NAME, FK_PARENT_GUID, GEOMETRY) values ('rc', 'R.9.G.9', 'cd-C', ?)").run(lineBlob([[0, 50, 0], [100, 50, 0]]));
+  assert.doesNotMatch(by(roadModelFindings(db, layout))["G3-026"]!.message, /R\.9\.G\.9/);
 });
 
 test("a drawn road missing from the model blocks; a dangling link blocks; leftovers, unbuilt arms and undrawn kerbs warn", () => {

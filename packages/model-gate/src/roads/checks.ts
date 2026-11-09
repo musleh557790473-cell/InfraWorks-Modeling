@@ -48,6 +48,29 @@ export function levelProblems(db: DatabaseSync, roads: RoadRow[]): string[] {
 
 export interface JunctionStep { road: string; at: "start" | "end"; on: string; z: number; zOn: number; step: number }
 
+/**
+ * `--tie-ends R.4.G.2@R.0.D.11,...`: for each road, the end lying on the named road and the level to
+ * give it (the named road's level there). Refuses a missing junction or a step over `maxStep`.
+ */
+export function parseTieEnds(spec: string): { road: string; on: string }[] {
+  return spec.split(",").map((s) => s.trim()).filter(Boolean).map((s) => {
+    const [road, on] = s.split("@");
+    if (!road || !on) throw new Error(`--tie-ends: "${s}" is not ROAD@ROAD_IT_ENDS_ON`);
+    return { road, on };
+  });
+}
+
+export function tieLevels(roads: RoadRow[], ties: { road: string; on: string }[], maxStep = 0.1): Map<string, { startZ?: number; endZ?: number; step: number; on: string }> {
+  const steps = junctionSteps(roads), out = new Map<string, { startZ?: number; endZ?: number; step: number; on: string }>();
+  for (const t of ties) {
+    const j = steps.find((s) => s.road === t.road && s.on === t.on);
+    if (!j) throw new Error(`--tie-ends: ${t.road} has no end on ${t.on}`);
+    if (Math.abs(j.step) > maxStep) throw new Error(`--tie-ends: ${t.road} is ${j.step.toFixed(3)} m off ${t.on}, more than ${maxStep} m: not a small disagreement`);
+    out.set(t.road, { ...(j.at === "start" ? { startZ: j.zOn } : { endZ: j.zOn }), step: j.step, on: t.on });
+  }
+  return out;
+}
+
 /** Every road end lying (within 1 m) on another road's centreline, with the level step there. */
 export function junctionSteps(roads: RoadRow[]): JunctionStep[] {
   const near = (q: P3[], x: P3) => {

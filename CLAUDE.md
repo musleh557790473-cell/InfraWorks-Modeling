@@ -43,6 +43,7 @@ holds how we work and what has been learned the hard way.
 pnpm install && pnpm build && pnpm test          # expect 0 failures
 pnpm package:build "<drawing.dxf | model.stsw.sqlite | model.wtg.sqlite>" [--profile parsons-ldip-roads]
 #   WaterGEMS: --utility <Water|Irrigation> --cover <m> --cover-source "<where the cover comes from>"
+#   --skip-layers road_centerline   leave layers out (10100 for a model that already has component roads)
 pnpm gate:model "<model>.sqlite" --package <package.zip>      # Gate G3, on a closed model (or a copy)
 pnpm gate:model "<model>.sqlite" --layout <10200.dxf>         # G3 for a road model written by model:roads (G3-020..025)
 pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"]
@@ -54,6 +55,7 @@ pnpm model:intersections "<model>.sqlite" [--dry]               # drop intersect
 #   --shorten-arms --arm-gap 14.4 --arm-ids 309 | --heal-arms 309 | --arm-room [--standard ...] (read-only)
 #   --curb-returns <10200.dxf>      kerb return radii from the drawn -RD_Edges arcs (D8)
 pnpm model:roads ... --merge R.0.D.4=R.0.D.3+R.0.D.4 | --split R.0.D.4=R.0.D.3+R.0.D.4 | --only R.6.G.18
+pnpm model:roads ... --only R.4.G.2,R.5.G.1 --tie-ends R.4.G.2@R.0.D.11,R.5.G.1@R.0.D.11   # end level = through road (D13)
 ```
 Every write: model closed (`.lock` gone), a copy in the scratchpad first, `--dry` first, verify after
 (integrity, counts, orphans). Deviations from Parsons' drawings go to `scripts/road-pilot/parsons-deviations.md`
@@ -82,6 +84,11 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
 ## InfraWorks facts (verified in InfraWorks 2026 models)
 
 - A model is `<name>.sqlite` + `<name>.files`; `<name>.lock` while open. Work on copies only.
+- Proposals are branches of the `.files` Git repo; the sqlite holds the ACTIVE proposal only
+  (`git -C <model>.files rev-parse --abbrev-ref HEAD` names it). Before writing, check which proposal
+  is active and that it is the one the user works in. A switch rebuilds the sqlite from `.files`:
+  data imported in another proposal "disappears", and direct sqlite deletes (body rows) can come back.
+  Rerun G3 after a switch. Autodesk help "To create or open a proposal" (Toolbar > Proposals list).
 - Keep ONE working copy per task and update it in place; do not make a new copy for each fix
   (the user asked: too many copies cause confusion). Never write while its `.lock` exists: ask the
   user to close the model first. Road pilot working copy: `C:\IW\Al Qairawan Roads (Parsons 6 junctions)`.
@@ -143,7 +150,14 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
   afterwards run `model:intersections --curb-returns <10200.dxf> --junctions <ids>` (prunes the rows
   too) and G3 --layout. InfraWorks' log (`%APPDATA%\Autodesk\Autodesk InfraWorks\logs`, UTC) records
   each such edit as "Regen time after setting grading property: gradingLimit": check it when road
-  tables change unexpectedly (`scripts/road-pilot/roadprint.cjs` fingerprints them).
+  tables change unexpectedly (`scripts/road-pilot/roadprint.cjs` fingerprints them). One edit can
+  rebuild junctions several roads away (R.9.G.5 -> R.0.D.12 -> R.0.D.15 -> RA-3 lost its R.0.D.11
+  arm, 9 Nov): rerun G3 --layout after every edit (G3-026 catches a missing roundabout arm); a Grading
+  Limit edit on the road that lost the arm brought it back. `.files` keeps one undo commit per edit
+  (`git reflog`): it tells which edit changed what.
+- Junction "pits" (whole junction body and grading down to 250-640 m) came where two roads ending on a
+  square crossing sat 4-5 cm off the through road's level; tying their ends to it (`--tie-ends`, D13)
+  and a Grading Limit edit on each made InfraWorks build them at road level (298, 299; 9 Nov).
 - Roundabouts (7 Nov 2026, InfraWorks 2026.0.2.119): a junction is converted in the Stack (Junction
   Type > Roundabout, then the Standard drop-down). InfraWorks clamps each arm before the next
   junction on the road (`IW_ARM_CLAMP_SEEN`); the standard's arm geometry must fit under that clamp
@@ -219,9 +233,14 @@ Qairawan, all in UTM 38N, checked by Gate G3 and seen in InfraWorks unless noted
 - One model (8 Nov, HANDOVER session 10): all these networks are now also in the roads working copy
   `C:\IW\Al Qairawan Roads (Parsons 6 junctions)`: 23 data sources from five packages in
   `DATA_DIR\exports` (sewer / water / irrigation `-shp-v1`, wet v3, dry v4), names and attributes by
-  model:names; G3 with each package and with --layout PASS, 0 warnings. The 10100 layers are not in
-  it (their road_centerline would duplicate the component roads). Pre-import copy:
+  model:names; G3 with each package and with --layout PASS, 0 warnings. Pre-import copy:
   `... (Parsons 6 junctions) (قبل استيراد الشبكات)`.
+- Single model (9 Nov, session 11): proposal **Networks** of that working copy also holds the 10100
+  layers from `exports\Al-Qairawan-10100-shp-v4` (built with `--skip-layers road_centerline`): plots
+  6,555 (5,944 numbered), blocks, road reserve, asphalt. G3 with all six packages and --layout PASS,
+  0 warnings. Other proposals (master, Plots, Imagery, EGL, Engineering1) hold older road states
+  without the full data. Junction pits 298 / 299 fixed the same day (D13, Parsons question 17); G3
+  (with G3-026) PASS, 0 warnings after the fix.
 
 Open points: confirm the irrigation cover with Parsons; depths of telecom, security and
 street-lighting ducts (not in the Parsons documents, drawn on the terrain); the full Al Narjis road layout

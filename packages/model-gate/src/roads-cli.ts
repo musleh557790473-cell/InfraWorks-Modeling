@@ -8,7 +8,7 @@ import {
   readDxfBlock, readProfileViews, type NamedStart, type Section,
 } from "@infraworks/domain";
 
-import { junctionSteps, levelProblems, roadRows } from "./roads/checks.js";
+import { junctionSteps, levelProblems, parseTieEnds, roadRows, tieLevels } from "./roads/checks.js";
 import { planRoad } from "./roads/plan.js";
 import { repointLinks, splitLinks } from "./roads/intersections.js";
 import { parseFgf } from "@infraworks/imx-gate";
@@ -37,6 +37,8 @@ model-roads - Parsons roads as InfraWorks component roads, written into a model 
                                   them and move each junction link to the part it lies on)
       [--roundabouts-as-roads]   (write RA rings as closed roads; by default they are left to
                                   InfraWorks as intersections of the roads through their centres)
+      [--tie-ends R.4.G.2@R.0.D.11,...]   (with --only: give the end of each road lying on the named road
+                                  that road's level there, when the profiles disagree by up to 0.10 m)
 
 Reads the profiles (FG line, PVI and curve labels), chains each road's centreline (its length must
 equal its profile length), checks every road's direction against the grading surface and the levels at
@@ -209,9 +211,16 @@ function main(argv: string[]): number {
     let written = 0;
     const choice = roadsToWrite(al.roads, new Set(raOf.keys()), { only, roundaboutsAsRoads: args.includes("--roundabouts-as-roads") });
     if (choice.skipped.length) say(`not written: ${choice.skipped.map((s) => s.name).join(" ")} (roundabouts are InfraWorks intersections; --roundabouts-as-roads writes them as roads)`);
+    // --tie-ends: levels read from the model as it is, before any road is rewritten
+    const ties = flag("--tie-ends") ? tieLevels(roadRows(db), parseTieEnds(flag("--tie-ends")!)) : new Map();
+    for (const [n, t] of ties) {
+      if (!choice.write.some((a) => a.name === n)) throw new Error(`--tie-ends: ${n} is not among the roads written (add it to --only)`);
+      say(`tie ${n}: ${t.startZ != null ? "start" : "end"} on ${t.on}, step ${t.step.toFixed(3)} m -> 0`);
+    }
     for (const a of choice.write) {
       try {
-        const plan = planRoad(a, pv.roads[a.name] ?? []);
+        const plan = planRoad(a, pv.roads[a.name] ?? [], ties.get(a.name) ?? {});
+        for (const note of plan.notes) say(`  ${a.name}: ${note}`);
         writer.write(plan, sectionOf(a.name));
         written++;
       } catch (e) { failed.push(`${a.name}: ${e instanceof Error ? e.message : String(e)}`); }

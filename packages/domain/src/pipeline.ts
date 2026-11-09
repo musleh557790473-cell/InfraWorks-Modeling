@@ -248,6 +248,10 @@ export async function runBuildPipeline(
       }
     }
 
+    // Layers the project leaves out (the 10100 road centrelines for a model with component roads).
+    const skip = new Set(project.skipLayers ?? []);
+    if (skip.size) kept = kept.filter((f) => !skip.has(f.outputLayer ?? f.infraFeatureClass));
+
     const collection: DomainFeatureCollection = {
       type: "FeatureCollection",
       schemaVersion: "1.0.0",
