@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { buildSection, type Alignment } from "@infraworks/domain";
 
-import { junctionSteps } from "../src/roads/checks.js";
+import { junctionSteps, parseTieEnds, tieLevels } from "../src/roads/checks.js";
 import { planRoad } from "../src/roads/plan.js";
 import { bodyRows } from "../src/roads/write.js";
 
@@ -37,6 +37,27 @@ test("PVIs past the road end (next profile on the sheet) are dropped; a first PV
   assert.ok(Math.abs(p.pvis[0]!.z - (683.613 - ((684 - 683.613) / (50 - 0.254)) * 0.254)) < 1e-9);
   assert.equal(p.notes.length, 2);
   assert.throws(() => planRoad(al, [{ s: 0, z: 680, L: 0 }, { s: 90, z: 681, L: 0 }]), /PVIs 0\.\.90 vs alignment 0\.\.100/);
+});
+
+test("--tie-ends: a road end a few cm off the road it ends on takes that road's level (pits 298 / 299)", () => {
+  const roads = [
+    { name: "R.0.D.11", guid: "t", line: [[0, 0, 688.0], [100, 0, 688.2]] as [number, number, number][] },
+    { name: "R.4.G.2", guid: "a", line: [[50, -60, 689], [50, 0, 688.141]] as [number, number, number][] },
+    { name: "R.5.G.1", guid: "b", line: [[50, 0, 688.141], [50, 60, 689]] as [number, number, number][] },
+  ];
+  const t = tieLevels(roads, parseTieEnds("R.4.G.2@R.0.D.11, R.5.G.1@R.0.D.11"));
+  assert.ok(Math.abs(t.get("R.4.G.2")!.endZ! - 688.1) < 1e-9 && t.get("R.4.G.2")!.startZ === undefined);
+  assert.ok(Math.abs(t.get("R.5.G.1")!.startZ! - 688.1) < 1e-9);
+  assert.throws(() => tieLevels(roads, parseTieEnds("R.0.D.11@R.4.G.2")), /no end on/);
+  assert.throws(() => tieLevels(roads, parseTieEnds("R.4.G.2@R.0.D.11"), 0.01), /more than 0.01 m/);
+  assert.throws(() => parseTieEnds("R.4.G.2"), /ROAD@ROAD_IT_ENDS_ON/);
+  // planRoad takes the tied level on the end PVI and the 3D line ends there
+  const al: Alignment = { name: "R.4.G.2", length: 60, segs: [{ a: [50, -60], b: [50, 0], bulge: 0 }] };
+  const p = planRoad(al, [{ s: 0, z: 689, L: 0 }, { s: 60, z: 688.141, L: 0 }], { endZ: 688.1 });
+  assert.equal(p.pvis.at(-1)!.z, 688.1);
+  assert.equal(p.line.at(-1)![2], 688.1);
+  assert.equal(p.pvis[0]!.z, 689);
+  assert.match(p.notes.join(), /end level 688.141 -> 688.100/);
 });
 
 test("junction steps: a road end on another road's centreline reports the level step", () => {

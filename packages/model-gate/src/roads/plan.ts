@@ -23,7 +23,11 @@ export interface RoadPlan {
   notes: string[];
 }
 
-export function planRoad(al: Alignment, pv: Pvi[]): RoadPlan {
+/**
+ * `ends` sets the level of the first / last PVI (a road end tied to the road it ends on, when the two
+ * profiles disagree by a few centimetres there and InfraWorks builds that junction badly: 298 / 299).
+ */
+export function planRoad(al: Alignment, pv: Pvi[], ends: { startZ?: number; endZ?: number } = {}): RoadPlan {
   const name = al.name, notes: string[] = [];
   const pvis = pv.map((p) => ({ s: p.s, z: p.z as number, L: p.L || 0 }));
   if (pvis.some((p) => p.z == null)) throw new Error(`${name}: a PVI has no level`);
@@ -68,6 +72,12 @@ export function planRoad(al: Alignment, pv: Pvi[]): RoadPlan {
     pvis.unshift({ s: 0, z: z0, L: 0 });
   }
   if (Math.abs(pvis[0]!.s) > 1e-3 || Math.abs(pvis[pvis.length - 1]!.s - total) > 0.01) throw new Error(`${name}: PVIs ${pvis[0]!.s}..${pvis[pvis.length - 1]!.s} vs alignment 0..${total.toFixed(3)}`);
+  for (const [k, z] of [[0, ends.startZ], [pvis.length - 1, ends.endZ]] as const) {
+    if (z == null) continue;
+    const p = pvis[k]!;
+    notes.push(`${k ? "end" : "start"} level ${p.z.toFixed(3)} -> ${z.toFixed(3)} (tied to the road it ends on)`);
+    pvis[k] = { ...p, z };
+  }
   const zAt = (s: number): number => {
     for (let i = 1; i < pvis.length - 1; i++) {
       const p = pvis[i]!; if (!p.L) continue;
