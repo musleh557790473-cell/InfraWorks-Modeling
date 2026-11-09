@@ -96,7 +96,8 @@ Sources, Remove Data Source), add the grading LandXML on top of the survey surfa
 
 Other copies found (compared read-only with `C:\IW\Al Narjis`, 9 Nov):
 - `C:\IW\Al Narjis\Al Narjis.sqlite` + `.files`: byte-identical sqlite, same `.files` commit; a
-  duplicate of the working copy (one copy per task: to delete).
+  duplicate of the working copy; deleted (user, 9 Nov). The working copy stays at
+  `C:\IW\Al Narjis.sqlite` (user's decision).
 - `Documents\Autodesk InfraWorks Models\Autodesk 360\2266988\Al Narjis.sqlite` (29 Oct, the cloud
   model's local cache): the same model plus the trial `road_centerline` source (11 planning roads,
   ROADS 92 -> 103, 2 intersections). Nothing in it that the 30% CD path does not redo.
