@@ -74,6 +74,11 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
 - Depths missing from drawings come from the design report `LDIP-RCRC-SAP-01-AQ-DES-RPT-00001`
   (Vol. 02_Reports): storm min cover 1.2 m (§8), LV 0.65 m / MV 0.80 m to cable centre (§3.3.3).
   Utility corridor sections (UTL-DWG-30000) give widths only, no depths.
+- Al Narjis (district code NRJS, Package 1, 30% CD): Parsons' submission is DWG + PDF only, in
+  `Downloads\01 Submission Folder` (log: `scripts/narjis/HANDOVER.md`). Its numbers and layers differ
+  from Al Qairawan: layout IRO-10001 (`RD_CL`, `__ROW`, `RD_Edge`, `RD_CURB_RETURN`), profiles
+  IRO-40001/2, sections IRO-30001; utilities ISW, ISE, IPW, IRW, ILV, IMV, ISL, ITE, IIC, IUC. The
+  site is small (376 x 542 m, 11 centrelines): the "one sheet window" is the whole layout.
 - Projects are in UTM 38N (EPSG:32638, InfraWorks `UTM84-38N`): Riyadh (Al Narjis, Al Qairawan).
   NEOM is UTM 36N. A model created in the wrong zone fails G3-002 / G3-006.
 - Prefer the designer's own data to drawing labels: SewerGEMS / WaterGEMS models

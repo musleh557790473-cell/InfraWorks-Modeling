@@ -1,0 +1,78 @@
+# Al Narjis: session log
+
+Goal: one Al Narjis InfraWorks model (Riyadh, UTM 38N, InfraWorks `UTM84-38N`) on the path proven
+for Al Qairawan (`scripts/road-pilot/HANDOVER.md`): component roads, junctions, utility networks,
+plots, each checked by Gate G3.
+
+## Session 1 (9 Nov 2026): inventory of Parsons' deliverables (read only)
+
+Prerequisite checked: main at `4cf5a20` (PR #26: `--skip-layers`, `--tie-ends`, G3-026).
+
+### Where the data is
+
+- Parsons' 30% CD submission, Package 1 Al Narjis, district code **NRJS**:
+  `C:\Users\m.bazamol\Downloads\01 Submission Folder` (173 files, DWG + PDF, no DXF). Not yet in
+  `DATA_DIR\inputs`.
+- Early trials: `C:\Temp\iwg3\narjis` (sheet `10001-0A.dxf`, truncated; package of 11 centrelines +
+  project boundary, G3 PASS on model `Nurjis test`), `C:\Temp\iwg3\narjis2` (despite the name, Al
+  Qairawan 10100: 332 centrelines at x 657 096-660 125).
+- `Nurjis test.sqlite` (OneDrive `03 WIP\Neom\10_AI Tools & Scripts\InfraWorks Test Model`, 1.5 MB,
+  29 Oct): the trial import only. Not a base for the real model.
+- This laptop: AutoCAD 2026 + Civil 3D 2026 Object Enabler, InfraWorks; no Civil 3D, no ODA File
+  Converter, no PDF text tool (PDF sheets could not be read in this session).
+
+### What the data says
+
+- **The site is small.** Project boundary 376 x 542 m (x 663 754-664 130, y 2 756 689-2 757 231).
+  The bound xref `Xref Road Layout Al Narjis` in sheet 10001 holds the whole layout drawing (a bound
+  xref carries all of it): 7 roads on `RD_CL`, 4 on `RD_CL External Road` (11 centrelines, 3.09 km),
+  ROW `__ROW`, edges `RD_Edge`, kerb returns `RD_CURB_RETURN`, `Project Boundary`. All three hydraulic
+  models fall inside the same window. So Parsons question 11 ("one sheet window only") is most
+  likely answered: there is no larger layout. To confirm on the sheet index (IRO-00002) or with
+  Parsons.
+- Layer names differ from Al Qairawan (`RD_PR_CNRL`, `RD_ROW`, `-RD_Edges`, `0-Alignment Name`):
+  model:roads and the gate's `--layout` read Al Qairawan's names, so they need an Al Narjis profile.
+- The 10001 DXF is cut off (`DXF_TRUNCATED`): only sub-blocks of `Xref Dim_Names Al Narjis` (road
+  names) and `Xref Ladun AlNarjis Baseplan` (plot types Townhouse, Single-Side Duplex, Villa A / B)
+  survived, so names and plots need a clean DXF export.
+- Hydraulic models (read with `readHydraulicModel`, dry; all `quick_check` ok, UTM 38N):
+  | Model | Live | Deleted | Notes |
+  | --- | --- | --- | --- |
+  | Sewer `AL-NARJIS_option 5.stsw.sqlite` | 20 pipes (1.25 km), 21 manholes / outfalls | 46 pipes | inverts and rims present |
+  | Water `alnarjes hydraulic model REV02.wtg.sqlite` | 41 pipes (1.38 km), reservoir | 42 pipes | scenario "Peak Daily + FF (Static)"; no cover |
+  | Irrigation `Narjis Model.wtg.sqlite` | 47 pipes (1.25 km), 3 valves, pump, reservoir | 133 pipes, 2 switched off | scenario "Peak Distibution"; no cover |
+- Roads 3D models `Vol. 04_Models\Roads` MOD-00001..00003 (DWG, IFC2X3, NWC, DWFx, 14 Sep 2026):
+  IFC meshes only (9 266 / 44 051 / 17 182 faces, Z up to 679.6 / 677.8 / 676.4 m), unnamed
+  proxies. Probably Civil 3D surfaces / corridors; which is the finished grade is not stated in
+  the files. No LandXML in the submission.
+
+### Inventory (Al Qairawan input -> Al Narjis)
+
+| Al Qairawan input | Al Narjis file | State |
+| --- | --- | --- |
+| Road layout 10200 (centrelines, names, ROW, kerb edges) | IRO-DWG-00-10001 / 10002 (xref `Road Layout Al Narjis`, names in `Dim_Names`) | partial: geometry read (11 CL, ROW, edges, kerb returns); names lost in the truncated DXF; needs a clean DXF |
+| Profiles 40000 | IRO-DWG-00-40001, 40002 | DWG only: DXF needed |
+| Typical sections 30000 | IRO-DWG-00-30001 | DWG only: DXF needed |
+| Plots / blocks 10100 | none as a separate drawing; xref `Ladun AlNarjis Baseplan` in 10001 | partial: plot-type blocks only; DXF needed (or the baseplan drawing) |
+| Grading surface (LandXML) | none; Vol. 04 MOD-00001..00003 (Civil 3D DWG / IFC meshes) | missing as LandXML; which model is the finished grade? |
+| SewerGEMS `.stsw.sqlite` | `Sewer\Hydraulic Model.zip` | present (20 pipes, 21 MH) |
+| WaterGEMS water `.wtg.sqlite` + cover source | `Potable Water\Hydraulic Model.zip` | present; cover source missing (Al Qairawan: PWT-10000 note 5) |
+| WaterGEMS irrigation + cover source | `Irrigation\Hydraulic Model_IRRNarjis.zip` | present; cover source missing |
+| STO storm | ISW-DWG-00-00001..10003 | DWG only |
+| SWN sewer drawings | ISE-DWG-00-00001..10002 | DWG only (model above preferred) |
+| PWT / IRR drawings (valves, hydrants) | IPW-DWG-00-*, IRW-DWG-00-* | DWG only |
+| ELV / EMV | ILV-DWG-00-*, IMV-DWG-00-* | DWG only |
+| SLT | ISL-DWG-00-* | DWG only |
+| TEL / SEC | ITE-DWG-00-*, IIC-DWG-00-* (Digital Infrastructure) | DWG only; which is telecom / security to confirm |
+| Utility corridor sections (UTL-30000) | IUC-DWG-00-30001 | DWG / PDF |
+| Design report (depths) | `Vol. 02_Reports\SAPL-DSN-LDN-RPT-000003.pdf` | present, not read (no PDF tool here); Al Narjis or shared report? |
+| - | BOQ `Vol. 07_BOQ\Package 1_Al Narjis_30% CD Rev.00.xlsx` | present (quantities to cross-check) |
+
+### Order proposed
+
+1. Copy the submission into `DATA_DIR\inputs\narjis` (stable shared place).
+2. Model `C:\IW\Al Narjis` in UTM84-38N with a wide terrain; the grading surface on top once a
+   LandXML (or the right Vol. 04 surface) is available.
+3. Sewer now (model complete); water and irrigation once the cover is sourced.
+4. DXF exports (AUDIT, EXPORTTOAUTOCAD, DXFOUT to `C:\Temp\dxf`) of 10001, 40001, 40002, 30001 and the
+   utility plan sheets: then names, plots, dry networks, storm, and the roads.
