@@ -156,6 +156,15 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   (5/5, 47/47, 1 251 m, all named). Installed (hash B5B2860B... -> E3680A78...); integrity ok;
   G3 on the working copy with the irrigation and the sewer packages: both PASS, 0 warnings.
 
+### Water package (10 Nov 2026)
+
+- Cover from the user (AICC, 10 Nov): **1.20 m from the finished road surface to the pipe crown,
+  NWC typical value**. The model terrain there is Parsons' grading (Roads TOS), so the offsets are
+  taken from it.
+- `exports\Al-Narjis-water-shp-v1` (+ zip) from `alnarjes hydraulic model REV02.wtg.sqlite`:
+  41 pipes (HDPE SDR11: 22 x 160, 15 x 200, 4 x 250 mm; nominal from inside diameter), 1 structure
+  (reservoir), centre 1.280-1.325 m below terrain. Validation OK, no warnings. Waiting for the import.
+
 ### Order proposed
 
 1. Copy the submission into `DATA_DIR\inputs\narjis` (stable shared place).
