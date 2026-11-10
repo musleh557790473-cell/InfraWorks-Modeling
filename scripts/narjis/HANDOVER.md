@@ -280,3 +280,10 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
 - Off site, kept as drawn (to ask Parsons): an LV group ~450 m south of the site (substation SSNA001
   1000 kVA, DP1-1: a pillar, 19 house connections, 9 cables), one substation and a storm line with an
   outfall ~200 m east of the site.
+
+### Storm and dry networks imported (10 Nov 2026)
+
+- User imported both packages (12 data sources). Model closed, proposal master. model:names with the
+  storm package, then the dry one, on chained scratchpad copies: every size, network, depth and offset
+  column filled. G3 on the copy with --layout and all seven packages (11000, sewer, irrigation, water,
+  storm, dry): PASS, 0 warnings; integrity ok, 27 data sources. Installed (018340F1... -> BD157E7A...).
