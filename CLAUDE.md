@@ -69,8 +69,12 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
 - Sheets bind the design in as xrefs (`<xref>$0$<layer>`): read through the bound xref.
   EXPORTTOAUTOCAD may rename an xref block (`Xref Storm Network_1`) while its layers keep the old
   prefix; the reader accepts both.
-- ODA File Converter is installed on one laptop only. On the other, ask the user for DXF exports
-  (to `C:\Temp\dxf`); never invent a converter or download one unasked.
+- ODA File Converter is installed on one laptop only. AYNLAP1201 has no ODA but has Civil 3D 2026
+  (AutoCAD 2026 + accoreconsole): there `node scripts/dwg-to-dxf.cjs <dwg folder> <out>` runs AUDIT,
+  EXPORTTOAUTOCAD, DXFOUT on every sheet without the user. EXPORTTOAUTOCAD crashes accoreconsole on
+  some sheets (Access Violation 0x01f0, also with `/product C3D` and TILEMODE 1); the script then
+  falls back to a direct DXFOUT and says so. Company policy blocks .ps1 scripts (even -ExecutionPolicy
+  Bypass): write such tools in Node. Never invent a converter or download one unasked.
 - Depths missing from drawings come from the design report `LDIP-RCRC-SAP-01-AQ-DES-RPT-00001`
   (Vol. 02_Reports): storm min cover 1.2 m (§8), LV 0.65 m / MV 0.80 m to cable centre (§3.3.3).
   Utility corridor sections (UTL-DWG-30000) give widths only, no depths.

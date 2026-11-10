@@ -170,6 +170,20 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   (1/1, 41/41, 1 378 m). Installed (hash 72BF2107... -> 0BB60C02...); integrity ok; G3 on the
   working copy with the water, irrigation and sewer packages: all PASS, 0 warnings.
 
+### DXF exports (10 Nov 2026, AYNLAP1201)
+
+- The 77 DWGs of `Vol. 01_Drawings` copied with robocopy to `C:\Temp\narjis-dwg`, converted by
+  `scripts/dwg-to-dxf.cjs` to `C:\Temp\dxf\narjis` (same folders). 69 through EXPORTTOAUTOCAD (IRO-10001:
+  AUDIT fixed 573 errors, Civil 3D surface and styles inside); 8 crashed accoreconsole in
+  EXPORTTOAUTOCAD and are direct DXFOUT: ILV/IMV-10001/10002, ISW-10001/10002/10003, IRO-60001.
+- The 1:500 cut sheets 10001/10002 hold the same bound network as the 10000 general plan (same counts
+  per layer on LV): read the 10000 sheets.
+- The plans bind `Ladun AlNarjis Baseplan` (plots MP-PLT-LIN 192 lines, MP-PLT-TXT 123 numbers, as Al
+  Qairawan) and `Ladun AlNarjis Road Layout`; IRO-10001 binds `Xref Road Layout Al Narjis` (RD_CL,
+  __ROW, RD_Edge, RD_CURB_RETURN) and `Xref Dim_Names Al Narjis`.
+- ODA comparison asked of the other laptop: samples in `DATA_DIR\inputs\narjis\dxf-acad`, result to
+  `oda-compare.md` there.
+
 ### Order proposed
 
 1. Copy the submission into `DATA_DIR\inputs\narjis` (stable shared place).
