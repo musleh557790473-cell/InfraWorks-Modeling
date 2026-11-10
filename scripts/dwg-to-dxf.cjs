@@ -40,7 +40,7 @@ fs.mkdirSync(work, { recursive: true });
 const w = (n) => path.join(work, n);
 
 const core = (dwg, scr, log) => {
-  const r = spawnSync(acad, ["/i", dwg, "/s", scr, "/l", "en-US", ...extra], { timeout: TIMEOUT_MS, windowsHide: true, maxBuffer: 1 << 28 });
+  const r = spawnSync(acad, ["/i", dwg, "/s", scr, "/l", "en-US", ...extra], { cwd: work, timeout: TIMEOUT_MS, windowsHide: true, maxBuffer: 1 << 28 }); // acad.err lands in cwd
   fs.writeFileSync(log, (r.stdout ?? Buffer.alloc(0)).toString("utf16le").replace(/\0/g, ""));
   return !r.error;
 };

@@ -356,8 +356,9 @@ export const PARSONS_LDIP_ROADS_PROFILE: MappingProfile = {
   name: "Parsons / LDIP road layout",
   team: "Parsons",
   layers: [
-    { dwgLayer: "RD_CL*", infraFeatureClass: "road_centerline" },
-    // Road names (R.6.G.12) are MTEXT 2-10 m beside each centreline, usually twice per road.
+    // Road names are MTEXT 2-10 m beside each centreline on "0-Alignment Name": R.6.G.12 on Al Qairawan,
+    // "ROAD-01 (18m R.O.W)" on Al Narjis (bound in the cut sheets 11000-14002, not in 10001).
+    { dwgLayer: "RD_CL*", infraFeatureClass: "road_centerline", labels: { layers: ["0-Alignment Name"], attribute: "road_name", maxDistance: 10 } },
     { dwgLayer: "RD_PR_CNRL*", infraFeatureClass: "road_centerline", labels: { layers: ["0-Alignment Name"], attribute: "road_name", maxDistance: 10 } },
     { dwgLayer: "Project Boundary", infraFeatureClass: "coverage" },
     { dwgLayer: "Boundary", infraFeatureClass: "coverage", outputLayer: "road_reserve", subtract: ["RD_ROW"] },

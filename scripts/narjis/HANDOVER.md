@@ -184,6 +184,21 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
 - ODA comparison asked of the other laptop: samples in `DATA_DIR\inputs\narjis\dxf-acad`, result to
   `oda-compare.md` there.
 
+### Roads and plots package (10 Nov 2026)
+
+- Road names are MTEXT on `0-Alignment Name` in the bound `Xref Dim_Names Al Narjis`, present in the
+  cut sheets 11000-14002 only (10001 has L1-L9 dimension labels instead). The reader now opens an xref
+  that holds only label texts, and `RD_CL*` reads names like `RD_PR_CNRL` (test in sheet.test.ts).
+- `exports\Al-Narjis-11000-shp-v1` (+ zip) from `C:\Temp\dxf\narjis\Roads\BIND\...IRO-DWG-00-11000-0A.dxf`:
+  - 11 centrelines (Roads), all named: ROAD-01 (15m / 18m R.O.W), ROAD-02 (15m / 18m), ROAD-03, -04,
+    -05 (18m) and 4 x EXTERNAL ROAD. Lengths match the profile EPs (ROAD-01 18m 492.1 vs 0+492.073,
+    ROAD-05 114.3 vs 0+114.345, ROAD-02 15m 88.7 vs 0+088.706).
+  - 145 plots (Parcels) from MP-PLT-LIN, 123 numbered (300-8,596 m2, no duplicates); 22 without a
+    number on the plan (20 strips of 70-148 m2, one 328 m2, two of 3,706 / 4,118 m2).
+  - Project Boundary (Coverage Areas). Validation OK; warnings: 22 plots without a number,
+    50 DIMENSION entities skipped, unmapped layers.
+- Not shipped yet: blocks / road reserve (Al Narjis draws the ROW on `__ROW`, not RD_ROW).
+
 ### Order proposed
 
 1. Copy the submission into `DATA_DIR\inputs\narjis` (stable shared place).
