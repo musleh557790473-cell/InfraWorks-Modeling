@@ -245,3 +245,15 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   INTERSECTIONS row (made by InfraWorks at the ROAD-01 conversion; G3-022 warned of them).
 - `model:intersections` on a copy removed the 20 rows; G3 --layout PASS, 0 warnings; installed
   (7AB8AFD4... -> B3ADB366...). model:roads now prunes such rows after every write.
+
+### Junctions and kerb returns (10 Nov 2026)
+
+- After the cleanup the user's Grading Limit edits worked on every road: InfraWorks built 7 junctions
+  (21 arms, 14 corners); G3 --layout PASS, 0 warnings.
+- Kerb returns: Al Narjis draws them on RD_CURB_RETURN at the dimensioned radii (R12.00, R11.00; the
+  RD_Edge arcs lie 0.30 m out); `kerbLayer` picks that layer when present (Al Qairawan has none, keeps
+  -RD_Edges; test in curb-returns.test.ts). `model:intersections --curb-returns <11000.dxf>
+  --layout-block "Xref Road Layout Al Narjis"` on a copy: 12 corners set (11 x 12 m, 1 x 11 m), 1
+  already 11 m, 1 without a drawn arc (junction 4, region 7: ROAD-05's end on ROAD-03, corner at 200
+  deg; InfraWorks' 9 m kept; to ask Parsons). Installed (41A3FE5A... -> E6BE04FB...). G3 --layout PASS
+  (G3-025: 13 at the drawn radius, 1 without an arc), 11000 / sewer / irrigation / water PASS, 0 warnings.
