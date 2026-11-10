@@ -163,7 +163,12 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   taken from it.
 - `exports\Al-Narjis-water-shp-v1` (+ zip) from `alnarjes hydraulic model REV02.wtg.sqlite`:
   41 pipes (HDPE SDR11: 22 x 160, 15 x 200, 4 x 250 mm; nominal from inside diameter), 1 structure
-  (reservoir), centre 1.280-1.325 m below terrain. Validation OK, no warnings. Waiting for the import.
+  (reservoir), centre 1.280-1.325 m below terrain. Validation OK, no warnings.
+- Imported by the user (`water_pipes` Pipelines, `water_structures` Pipeline Connectors). Model
+  closed, proposal `master`, `.files` HEAD unchanged. `model:names` on a scratchpad copy: 1 + 41
+  rows filled (NAME, sizes, material, network, ELEV_FROM/TO). G3 on the copy: **PASS, 0 warnings**
+  (1/1, 41/41, 1 378 m). Installed (hash 72BF2107... -> 0BB60C02...); integrity ok; G3 on the
+  working copy with the water, irrigation and sewer packages: all PASS, 0 warnings.
 
 ### Order proposed
 
