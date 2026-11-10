@@ -586,5 +586,23 @@ export const PARSONS_NRJS_DRY_PROFILE: MappingProfile = {
   assetKeys: AssetKeyConfig.parse({}),
 };
 
+/**
+ * Al Narjis blocks and road reserve (IRO-11000, bound "Xref Road Layout Al Narjis"): the right-of-way
+ * lines (__ROW) close around the 8 blocks between the roads, some drawn closed, some with meeting ends;
+ * the road reserve is the Project Boundary less those blocks (as Al Qairawan's Boundary less RD_ROW).
+ * A profile of its own, shipped beside the roads package that already carries the boundary.
+ */
+export const PARSONS_NRJS_AREAS_PROFILE: MappingProfile = {
+  id: "parsons-nrjs-areas",
+  name: "Parsons / Al Narjis blocks and road reserve",
+  team: "Parsons",
+  layers: [
+    { dwgLayer: "Project Boundary", infraFeatureClass: "coverage", outputLayer: "road_reserve", subtract: ["__ROW"] },
+    { dwgLayer: "__ROW", infraFeatureClass: "coverage", outputLayer: "blocks" },
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
 /** Profiles shipped with the tool: listed first, and never overwritten or deleted by a save. */
-export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, PARSONS_NRJS_DRY_PROFILE];
+export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_AREAS_PROFILE];

@@ -287,3 +287,12 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   storm package, then the dry one, on chained scratchpad copies: every size, network, depth and offset
   column filled. G3 on the copy with --layout and all seven packages (11000, sewer, irrigation, water,
   storm, dry): PASS, 0 warnings; integrity ok, 27 data sources. Installed (018340F1... -> BD157E7A...).
+
+### Blocks and road reserve package (10 Nov 2026)
+
+- __ROW (IRO-11000, bound road layout) closes around 8 blocks: some drawn closed, some with meeting
+  ends; the rest are loose edges, left out. Profile `parsons-nrjs-areas`: blocks = closed __ROW,
+  road reserve = Project Boundary less the blocks (test in areas.test.ts).
+- `exports\Al-Narjis-areas-shp-v1`: blocks 8 (3,252-27,265 m2, none overlapping), road reserve 1
+  (21,577 m2 plus two slivers of 12 and 8 m2 between block edges and the boundary). OK; warnings:
+  8 open __ROW lines left out, unmapped layers. Both import as Coverage Areas.
