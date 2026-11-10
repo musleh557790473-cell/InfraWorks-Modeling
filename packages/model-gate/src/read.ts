@@ -10,6 +10,7 @@ import type { Extent2d, PackageInfo, PackageLayer } from "./types.js";
 
 /* ------------------------------------------------------------------ package */
 
+export { grow as growExtent };
 function grow(e: Extent2d | null, x: number, y: number): Extent2d {
   if (!e) return { minX: x, minY: y, maxX: x, maxY: y };
   return { minX: Math.min(e.minX, x), minY: Math.min(e.minY, y), maxX: Math.max(e.maxX, x), maxY: Math.max(e.maxY, y) };
@@ -190,6 +191,35 @@ export function importedStats(h: ModelHandle, table: string, dataSourceGuid: str
       if (g.type === "LineString" || g.type === "MultiLineString") for (const part of g.parts) out.length += partLength2d(part);
     } catch {
       out.unreadable += 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * Component roads (a road definition, no data source) named as a package's roads: a planning road
+ * converted in InfraWorks, or replaced by model:roads, leaves its data source (Al Narjis, 10 Nov 2026:
+ * 7 of 11 centrelines). Names already on a row of the source are not counted twice.
+ */
+export function componentRoadStats(h: ModelHandle, names: ReadonlySet<string>, dataSourceGuid: string) {
+  const out = { count: 0, extent: null as Extent2d | null, length: 0, names: [] as string[] };
+  if (!h.tables.has("ROADS")) return out;
+  const cols = (h.db.prepare(`pragma table_info("ROADS")`).all() as { name: string }[]).map((c) => c.name);
+  if (!["FK_PARENT_GUID", "NAME", "GEOMETRY", "DATA_SOURCE_ID"].every((c) => cols.includes(c))) return out;
+  const own = new Set(importedNames(h, "ROADS", dataSourceGuid));
+  const rows = h.db.prepare("select NAME, GEOMETRY from ROADS where FK_PARENT_GUID is not null and DATA_SOURCE_ID is null").all() as { NAME: unknown; GEOMETRY: Buffer | null }[];
+  for (const r of rows) {
+    const name = r.NAME == null ? "" : String(r.NAME).trim();
+    if (!name || !names.has(name) || own.has(name)) continue;
+    out.count += 1;
+    out.names.push(name);
+    if (!r.GEOMETRY?.length) continue;
+    try {
+      const g = parseFgf(r.GEOMETRY);
+      for (const p of g.points) out.extent = grow(out.extent, p[0]!, p[1]!);
+      if (g.type === "LineString" || g.type === "MultiLineString") for (const part of g.parts) out.length += partLength2d(part);
+    } catch {
+      /* counted, length unknown */
     }
   }
   return out;

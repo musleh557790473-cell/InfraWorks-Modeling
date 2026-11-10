@@ -44,6 +44,11 @@ export interface NameFillLayer {
   columns: ColumnFill[];
   /** Why the layer was left alone, when it was. */
   skipped?: string;
+  /**
+   * Records with no row of the source left: a road converted to a component road in InfraWorks
+   * leaves its data source (Al Narjis ROAD-01, 10 Nov 2026), the others still match by record number.
+   */
+  missing?: number;
 }
 
 export interface NameFillResult {
@@ -163,10 +168,16 @@ export function fillNames(modelPath: string, packagePath: string, outPath: strin
         const rows = db.prepare(`select ID, EXTERNAL_ID${select.map((c) => `, "${c}"`).join("")} from "${table}" where DATA_SOURCE_ID = ?`).all(src.GUID) as unknown as Record<string, unknown>[];
         entry.rows = rows.length;
         const records = dbf.readUInt32LE(4);
-        if (rows.length !== records) {
+        // Fewer rows than records is fine when each row still carries its own record number (a feature
+        // converted or deleted in InfraWorks); more rows, or numbers out of range or repeated, mean the
+        // file is not the one imported.
+        const ids = rows.map((r) => Number(r.EXTERNAL_ID));
+        const own = ids.every((i) => Number.isInteger(i) && i >= 1 && i <= records) && new Set(ids).size === ids.length;
+        if (rows.length > records || !own) {
           entry.skipped = `${rows.length} row(s) in the model against ${records} record(s) in the file: re-import it before filling`;
           continue;
         }
+        if (rows.length < records) entry.missing = records - rows.length;
         for (const [column, field] of wanted) {
           const fill: ColumnFill = { column, field, filled: 0, kept: 0 };
           entry.columns.push(fill);

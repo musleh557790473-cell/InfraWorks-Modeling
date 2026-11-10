@@ -20,7 +20,9 @@ const zsOf = (v: unknown, out: number[] = []): number[] => {
 export interface RoadRow { name: string; guid: string; line: P3[] }
 
 export function roadRows(db: DatabaseSync, like = "R%"): RoadRow[] {
-  return (db.prepare("select NAME, GUID, GEOMETRY from ROADS where NAME like ?").all(like) as { NAME: string; GUID: string; GEOMETRY: Uint8Array }[]).map((r) => ({ name: r.NAME, guid: r.GUID, line: lineOf(r.GEOMETRY) }));
+  // Component roads only: planning roads (no definition, 2D geometry) such as Al Narjis' "EXTERNAL ROAD"
+  // stay outside the level checks.
+  return (db.prepare("select NAME, GUID, GEOMETRY from ROADS where NAME like ? and FK_PARENT_GUID is not null").all(like) as { NAME: string; GUID: string; GEOMETRY: Uint8Array }[]).map((r) => ({ name: r.NAME, guid: r.GUID, line: lineOf(r.GEOMETRY) }));
 }
 
 /** Roads with NaN in their body rows, or levels far from their own centreline range. */

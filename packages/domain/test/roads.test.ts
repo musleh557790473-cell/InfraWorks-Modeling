@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   applySectionDecisions, parseSectionDecisions, type SectionClass,
-  assemblePvis, buildAlignments, buildRoundaboutSection, buildSection, crossfallSides, measureRoundabouts, orientRoads, pieceLen, readDxfBlock, readProfileViews, trimTo,
+  assemblePvis, buildAlignments, buildRoundaboutSection, buildSection, classifySections, crossfallSides, measureRoundabouts, orientRoads, pieceLen, readDxfBlock, readProfileViews, trimTo,
   type Alignment, type DxfEnt, type ProfileView, type Seg,
 } from "../src/index.js";
 
@@ -102,6 +102,55 @@ test("PVIs: a neighbouring profile's label inside the window is dropped (R.3.G.6
   assert.deepEqual(r.roads["R.P"]!.map((p) => p.s), [0, 50, 100]);
   assert.ok(Math.abs(r.roads["R.P"]![1]!.z! - 681) < 1e-3, "curve PVI level from the tangents");
   assert.deepEqual(r.issues, []);
+});
+
+test("PVIs: PVC / PVT labels split into TEXTs with their ELEV beside them are read (Al Narjis ROAD-03's sag)", () => {
+  // EXPORTTOAUTOCAD left "PVC 0+045.188" and "ELEV 673.594" as two TEXTs on one line, ~6 m apart:
+  // read as NaN, the curve was dropped and ROAD-03 went straight 0.97 m above ROAD-05's end
+  const ents = profileEnts({ curveLabels: false });
+  const t = (x: number, y: number, txt: string): DxfEnt => ({ ...mtext("RD_C_PROF_LABL", x, y, txt), type: "TEXT" });
+  const x0 = 54, yOf = (z: number) => 100 - 16 + 5 + (z - 678) * 10;
+  ents.push(t(x0 + 40, yOf(680.8) + 3, "PVC 0+040.000"), t(x0 + 45.8, yOf(680.8) + 3, "ELEV 680.800"));
+  ents.push(t(x0 + 60, yOf(680.9) + 3, "PVT 0+060.000"), t(x0 + 65.8, yOf(680.9) + 3, "ELEV 680.900"));
+  const { views } = readProfileViews(ents);
+  const p = assemblePvis(ents, views).roads["R.P"]!.find((q) => q.L)!;
+  assert.deepEqual([p.pvc, p.pvt], [[40, 680.8], [60, 680.9]]);
+  assert.equal(p.pvcFromFG, undefined, "levels from the labels, not the FG line");
+});
+
+test("DXF reader: blocks joined with |, and model space with each insert placed (Al Narjis' exploded profile views)", () => {
+  const dxf = ["0", "SECTION", "2", "BLOCKS",
+    "0", "BLOCK", "2", "A", "10", "0", "20", "0", "0", "LINE", "8", "A$0$RD_CL", "10", "1", "20", "2", "11", "3", "21", "4", "0", "ENDBLK",
+    "0", "BLOCK", "2", "B", "10", "0", "20", "0", "0", "MTEXT", "8", "B$0$0-Alignment Name", "10", "5", "20", "6", "1", "ROAD-01", "0", "ENDBLK",
+    "0", "BLOCK", "2", "*U7", "10", "10", "20", "0", "0", "LWPOLYLINE", "8", "RD_C_PROF_FG", "10", "10", "20", "0", "10", "20", "20", "5", "0", "ENDBLK",
+    "0", "ENDSEC", "0", "SECTION", "2", "ENTITIES",
+    "0", "INSERT", "8", "C-ROAD-PROF-VIEW", "2", "*U7", "10", "1000", "20", "2000",
+    "0", "MTEXT", "8", "RD_C_PROF_TITL", "10", "990", "20", "2010", "1", "ROAD-01",
+    "0", "ENDSEC", "0", "EOF"].join("\n");
+  const two = readDxfBlock(dxf, "A|B");
+  assert.deepEqual(two.map((e) => e.layer), ["RD_CL", "0-Alignment Name"]);
+  assert.deepEqual(two[0]!.end, [3, 4], "a LINE keeps its end point");
+  const ms = readDxfBlock(dxf, "*Model_Space");
+  const fg = ms.find((e) => e.layer === "RD_C_PROF_FG")!;
+  assert.deepEqual([fg.x, fg.y], [[1000, 1010], [2000, 2005]], "block content moved by the insert, less the block base");
+  assert.ok(ms.some((e) => e.layer === "RD_C_PROF_TITL"));
+});
+
+test("alignments: Al Narjis centrelines on RD_CL, one of them a LINE; External Road pieces left out", () => {
+  const line = (layer: string, a: [number, number], b: [number, number]): DxfEnt => ({ type: "LINE", layer, x: [a[0]], y: [a[1]], bulge: [0], txt: "", end: b });
+  const layout = [pline("RD_CL", [[0, 0], [60, 0]]), line("RD_CL", [60, 0], [100, 0]), pline("RD_CL External Road", [[100, 0], [140, 0]]), mtext("RD_C_CHAIN_TEXT", 0, 2, "0+000")];
+  const r = buildAlignments(layout, [view("ROAD-01 (18m R.O.W)", 100)], [{ name: "ROAD-01 (18m R.O.W)", start: [0, 0] }]);
+  assert.equal(r.roads.length, 1);
+  assert.ok(Math.abs(r.roads[0]!.length - 100) < 1e-9);
+  assert.equal(buildAlignments(layout, [view("ROAD-X", 140)], [{ name: "ROAD-X", start: [0, 0] }]).roads.length, 0, "the external road is no piece");
+});
+
+test("sections: Al Narjis' right of way on __ROW types an 18 m road A2 and a 15 m road A1 (IRO-30001)", () => {
+  const road = straight("ROAD-03 (18m R.O.W)", 100);
+  const a2 = classifySections([pline("__ROW", [[0, 9], [100, 9]]), pline("__ROW", [[0, -9], [100, -9]])], [road]);
+  assert.equal(a2[road.name]!.type, "A2");
+  const a1 = classifySections([pline("__ROW", [[0, 7.5], [100, 7.5]]), pline("__ROW", [[0, -7.5], [100, -7.5]])], [road]);
+  assert.equal(a1[road.name]!.type, "A1");
 });
 
 test("PVIs: a curve without printed PVC / PVT takes their levels from the FG line (R.14.G.11, R.7.G.8)", () => {

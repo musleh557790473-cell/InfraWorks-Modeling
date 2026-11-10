@@ -199,6 +199,35 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
     50 DIMENSION entities skipped, unmapped layers.
 - Not shipped yet: blocks / road reserve (Al Narjis draws the ROW on `__ROW`, not RD_ROW).
 
+### Component roads (10 Nov 2026)
+
+- User imported `Al-Narjis-11000-shp-v1` (Roads, Parcels, Coverage Areas) and converted ROAD-01
+  (18m R.O.W) to a component road (right-click > Convert to Component Road): the template, CD GUID
+  `05049575-6277-44fc-8952-2e38f48b0df7`. The conversion took the road out of its data source
+  (EXTERNAL_ID and DATA_SOURCE_ID null, no name), and InfraWorks made 12 arms + 8 regions linking it to
+  the planning roads it crosses, by their ROADS.GUID.
+- Tool changes (each with a test): model:names fills a source with fewer rows than records when every
+  row keeps its own record number; `readDxfBlock` reads "A|B" and "*Model_Space" (the profile sheets
+  explode each Civil 3D view into an anonymous *U block); alignments read RD_CL (and LINE pieces);
+  sections read __ROW / RD_Edge; PVC / PVT labels split into two TEXTs ("PVC 0+045.188", "ELEV
+  673.594") are paired (ROAD-03's sag was dropped, leaving a 0.97 m step at ROAD-05's end); the writer
+  replaces a planning road of the same name, its definition taking the planning road's GUID so those
+  junction rows stay valid, and picks template terrain operations by type (the converted road has
+  3 x Grading, Grading, CutOut); G3-013 counts component roads of the same name as arrived.
+- Inputs: layout `IRO-DWG-00-11000-0A.dxf` blocks "Xref Road Layout Al Narjis|Xref Dim_Names Al
+  Narjis_1"; profiles `IRO-DWG-00-40001-0A.dxf` "*Model_Space" (40002 is the same sheet); surface
+  `AL-Narjis Grading_ Roads TOS.xml` "Compiled Grading". 7 profiles, 0 PVI issues; 7 of 7 alignments
+  equal their profile length; none reversed. Sections A1 (15 m) / A2 (18 m) per IRO-30001 (same as
+  Al Qairawan: lanes 3.30, kerb 0.30, 2 %); 6 typed from __ROW, ROAD-02 (15m R.O.W) = A1 from its name
+  and the plan's "15.00m R.O.W." label (its ROW is not drawn as polylines). Crossfall from the surface.
+- On a scratchpad copy: model:names, template named, then
+  `model:roads ... --section "ROAD-02 (15m R.O.W)=A1"`: 7 written, 6 planning roads replaced, 0 level
+  problems, 0 junction steps >= 0.3 m. The 4 "EXTERNAL ROAD" stay planning roads (no profile).
+  Installed (hash EE644B06... -> 75141E48...); integrity ok. G3 on the working copy: --layout PASS
+  (1 warning: G3-022, the 20 arm / region rows InfraWorks made without INTERSECTIONS rows, already
+  there before the write); 11000 (11/11 roads, 145/145 plots), sewer, irrigation, water: PASS, 0
+  warnings. Do not Refresh `road_centerline`: it would bring the replaced planning roads back.
+
 ### Order proposed
 
 1. Copy the submission into `DATA_DIR\inputs\narjis` (stable shared place).

@@ -74,6 +74,8 @@ const json = (b: unknown) => JSON.parse(Buffer.from(b as Uint8Array).toString("u
 export class RoadWriter {
   private readonly tCD: Row; private readonly tRoad: Row; private readonly tH: Row; private readonly tV: Row;
   private readonly tLoc: Row[]; private readonly tRps: Row; private readonly tPrim: Row[]; private readonly tTop: Row[];
+  /** Planning roads (imported centrelines) replaced by a component road of the same name. */
+  readonly replacedPlanning: string[] = [];
 
   /**
    * src: where the template road is read (default the model itself). Once InfraWorks has rebuilt the
@@ -171,14 +173,20 @@ export class RoadWriter {
   write(plan: RoadPlan, sec: Section | null) {
     const { name, H, pvis, total, line } = plan;
     if (this.isTemplate(name)) { this.refreshTemplate(plan, sec); return; }
-    const old = this.all("select GUID, FK_PARENT_GUID from ROADS where NAME=? order by ID", name);
+    // A planning road of that name (imported centreline, no definition: Al Narjis, 10 Nov 2026) is
+    // replaced by the component road. Junction rows InfraWorks made when a crossing road was converted
+    // point at the planning road's ROADS.GUID (Al Narjis: 12 arms, 8 regions on ROAD-01's crossings),
+    // so the new definition takes that GUID and the links stay valid.
+    const plan0 = this.all("select GUID from ROADS where NAME=? and FK_PARENT_GUID is null order by ID", name)[0];
+    const old = this.all("select GUID, FK_PARENT_GUID from ROADS where NAME=? and FK_PARENT_GUID is not null order by ID", name);
     const linked = old.slice(1).filter((r) => this.intersectionLinks(String(r.FK_PARENT_GUID)) > 0);
     if (linked.length) throw new Error(`${name}: ${old.length} rows, and ${linked.length} piece(s) besides the first carry intersections; not replaced`);
     this.db.exec("SAVEPOINT road_write");
     try {
+      if (this.db.prepare("delete from ROADS where NAME=? and FK_PARENT_GUID is null").run(name).changes) this.replacedPlanning.push(name);
       if (old.length) this.remove(name);
       const style = this.styleOf(sec);
-      const gCD = old[0] ? String(old[0].FK_PARENT_GUID) : randomUUID(), gRoad = old[0] ? String(old[0].GUID) : randomUUID(), gRps = randomUUID();
+      const gCD = old[0] ? String(old[0].FK_PARENT_GUID) : plan0 ? String(plan0.GUID) : randomUUID(), gRoad = old[0] ? String(old[0].GUID) : randomUUID(), gRps = randomUUID();
       const start = line[0]!, end = line[line.length - 1]!;
       this.insert("CONSTRAINED_DEFINITIONS", this.tCD, { GUID: gCD, NAME: name, FK_DEFAULT_ASSET_GUID: gRoad, REFERENCE_POINT: pt3Blob(...start) });
       this.insert("ROADS", this.tRoad, { GUID: gRoad, NAME: name, FK_PARENT_GUID: gCD, GEOMETRY: lineBlob(line), ...style });
@@ -238,9 +246,14 @@ export class RoadWriter {
     const K = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
     const bbox3 = (pts: XYZ[]) => [0, 1, 2].map((k) => Math.min(...pts.map((p) => p[k]!))).concat([0, 1, 2].map((k) => Math.max(...pts.map((p) => p[k]!))));
     const gradingJson = (coords: XYZ[], comp: unknown) => `{"type": "Grading","footprint": {"type": "LineString","bbox": [ ${bbox3(coords).map(num).join(", ")} ],"coordinates": ${jpts(coords)}},"gradingComponent": ${JSON.stringify(comp)}}`;
-    // template order: start transition, end transition, right edge, left edge, CutOut
-    const [tS, tE, tR, tL, tC] = this.tTop.slice().sort((a, b) => Number(a.ID) - Number(b.ID));
-    if (!tC) throw new Error("template road: expected 5 terrain operations");
+    // Template rows by type: Al Qairawan's R.6.E.1 has 4 Gradings (start, end, right, left) then a
+    // CutOut; Al Narjis' ROAD-01, converted in InfraWorks 2026 on 10 Nov, has 3 x (Grading, Grading,
+    // CutOut). The rows differ only in their operation, which is written here.
+    const ops = this.tTop.slice().sort((a, b) => Number(a.ID) - Number(b.ID));
+    const typeOf = (t: Row) => json(t.TERRAIN_OPERATION).type;
+    const gr = ops.filter((t) => typeOf(t) === "Grading"), tC = ops.find((t) => typeOf(t) === "CutOut");
+    if (!gr.length || !tC) throw new Error("template road: expected Grading and CutOut terrain operations");
+    const [tS, tE, tR, tL] = [0, 1, 2, 3].map((k) => gr[k] ?? gr[0]!);
     const compOf = (t: Row) => json(t.TERRAIN_OPERATION).gradingComponent;
     const rows: [Row, string, XYZ[], string | null, string | null][] = [
       [tS!, gradingJson(d.startT, compOf(tS!)), d.startT, K[0]!, K[1]!],

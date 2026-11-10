@@ -43,6 +43,7 @@ Exit code `0` = no blocking finding, `1` = blocking findings, `2` = bad usage.
 | G3-008 | Design roads were built over their full length (sections per region vs the IMX) | blocking |
 | G3-009 | Every road in the IMX arrived in the model (matched by name) | warning |
 | G3-012 | Attributes arrived: each column the layer fills (`fields` in the manifest: SIZE_X, PIPE_MATERIAL, HEIGHT...) has values in the model; says whether it is mapped | warning |
+| G3-013 | Roads now component roads: package roads missing from their data source but in the model as component roads of the same name (converted in InfraWorks, or written by `model:roads`) count as arrived, and are listed | info |
 | G3-011 | Each package layer is imported once (a second data source on the same file doubles its features) | warning |
 | G3-010 | Names arrived: the layer's name field (checklist: *Common → Name*) is in the model's `NAME` and matches the package | warning |
 

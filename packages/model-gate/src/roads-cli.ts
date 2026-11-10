@@ -226,6 +226,7 @@ function main(argv: string[]): number {
       } catch (e) { failed.push(`${a.name}: ${e instanceof Error ? e.message : String(e)}`); }
     }
     say(`written ${written} roads${failed.length ? `; failed ${failed.length}:\n  ${failed.join("\n  ")}` : ""}`);
+    if (writer.replacedPlanning.length) say(`planning roads replaced by component roads: ${writer.replacedPlanning.length} (do not Refresh their data source: it would bring them back)`);
     const rows = roadRows(db);
     const lv = levelProblems(db, rows), js = junctionSteps(rows).filter((j) => Math.abs(j.step) >= 0.3);
     say(`checks: ${rows.length} roads, ${lv.length} with level problems, ${js.length} junction steps >= 0.3 m`);

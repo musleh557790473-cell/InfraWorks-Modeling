@@ -37,7 +37,7 @@ function model(): DatabaseSync {
   ins("CONSTRAINED_DEF_RPSYSTEMS", { GUID: "tpl-rps", FK_PARENT_GUID: TPL, JSON_RANGE_HASH: Buffer.from(`{"Value": "${"A".repeat(32)}"}`) });
   ins("PRIMITIVES", { GUID: "p1", FK_PARENT_GUID: "tpl-road", GROUP_URN: "urn:rps:tpl-rps", JSON_DATA: J({ type: "multiMorphingCrossSection", crossSections: [[[-4, 0], [4, 0]]] }) });
   ins("PRIMITIVES", { GUID: "p2", FK_PARENT_GUID: "tpl-road", GROUP_URN: "urn:rps:tpl-rps", JSON_DATA: J({ type: "symbolizedPath" }) });
-  for (let k = 0; k < 4; k++) ins("TERRAIN_OPERATIONS", { GUID: `t${k}`, FK_PARENT_GUID: "tpl-road", GROUP_URN: "urn:rps:tpl-rps", TERRAIN_OPERATION: J({ gradingComponent: { gradingType: "FixedWidth" } }) });
+  for (let k = 0; k < 4; k++) ins("TERRAIN_OPERATIONS", { GUID: `t${k}`, FK_PARENT_GUID: "tpl-road", GROUP_URN: "urn:rps:tpl-rps", TERRAIN_OPERATION: J({ type: "Grading", gradingComponent: { gradingType: "FixedWidth" } }) });
   ins("TERRAIN_OPERATIONS", { GUID: "t4", FK_PARENT_GUID: "tpl-road", GROUP_URN: "urn:rps:tpl-rps", TERRAIN_OPERATION: J({ type: "CutOut" }) });
   return db;
 }
@@ -87,10 +87,36 @@ test("restyling a road replaces only its section: other style settings, geometry
 });
 test("the template road can be read from another model (the working model's one was rebuilt by InfraWorks)", () => {
   const base = model(), work = model();
-  // in the working model InfraWorks rebuilt the template: 4 terrain operations
-  work.prepare("delete from TERRAIN_OPERATIONS where GUID='t0'").run();
-  assert.throws(() => new RoadWriter(work, TPL).write(plan("R.X"), buildSection("A1")), /expected 5 terrain operations/);
+  // in the working model the template lost its CutOut
+  work.prepare("delete from TERRAIN_OPERATIONS where GUID='t4'").run();
+  assert.throws(() => new RoadWriter(work, TPL).write(plan("R.X"), buildSection("A1")), /expected Grading and CutOut terrain operations/);
   new RoadWriter(work, TPL, base).write(plan("R.X"), buildSection("A1"));
   assert.equal(one(work, "select count(*) n from ROADS where NAME='R.X'").n, 1);
   assert.equal(one(base, "select count(*) n from ROADS where NAME='R.X'").n, 0, "the base model is only read");
+});
+
+const opsOf = (db: DatabaseSync, name: string) =>
+  (db.prepare("select TERRAIN_OPERATION t from TERRAIN_OPERATIONS where FK_PARENT_GUID=(select GUID from ROADS where NAME=?) order by ID").all(name) as { t: Uint8Array }[])
+    .map((r) => JSON.parse(Buffer.from(r.t).toString("utf8")));
+
+test("a template converted in InfraWorks 2026 with 3 x (Grading, Grading, CutOut) still gives 4 Gradings and a CutOut (Al Narjis)", () => {
+  const db = model();
+  db.exec("delete from TERRAIN_OPERATIONS");
+  const ins = db.prepare("insert into TERRAIN_OPERATIONS (GUID, FK_PARENT_GUID, GROUP_URN, TERRAIN_OPERATION) values (?, 'tpl-road', 'urn:rps:tpl-rps', ?)");
+  for (let k = 0; k < 9; k++) ins.run(`t${k}`, k % 3 === 2 ? J({ type: "CutOut" }) : J({ type: "Grading", gradingComponent: { gradingType: "FixedWidth", gradingLimit: 5 } }));
+  new RoadWriter(db, TPL).write(plan("ROAD-03"), buildSection("A2"));
+  const ops = opsOf(db, "ROAD-03");
+  assert.deepEqual(ops.map((o) => o.type), ["Grading", "Grading", "Grading", "Grading", "CutOut"]);
+  assert.ok(ops.slice(0, 4).every((o) => o.gradingComponent?.gradingType === "FixedWidth"), "every Grading carries the template's grading");
+});
+
+test("a planning road of the same name (imported centreline) is replaced by the component road", () => {
+  const db = model(), w = new RoadWriter(db, TPL);
+  db.prepare("insert into ROADS (GUID, NAME, GEOMETRY) values ('planning', 'ROAD-05', x'00')").run();
+  w.write(plan("ROAD-05"), buildSection("A2"));
+  const rows = db.prepare("select GUID, FK_PARENT_GUID from ROADS where NAME='ROAD-05'").all() as { GUID: string; FK_PARENT_GUID: string | null }[];
+  assert.equal(rows.length, 1);
+  assert.notEqual(rows[0]!.GUID, "planning");
+  assert.equal(rows[0]!.FK_PARENT_GUID, "planning", "the definition takes the planning road's GUID, which InfraWorks' junction rows hold");
+  assert.deepEqual(w.replacedPlanning, ["ROAD-05"]);
 });

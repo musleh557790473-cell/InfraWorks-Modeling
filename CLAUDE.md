@@ -148,6 +148,13 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
   ROADS.GUID. model:roads keeps both GUIDs when it replaces a road, so they stay valid.
 - `<model>.files` keeps every InfraWorks edit as text rows (`exploded/<TABLE>/<n>`): diff its Git
   history to see what InfraWorks wrote, read-only, without opening the model.
+- "Convert to Component Road" (InfraWorks 2026, Al Narjis 10 Nov) takes the road out of its data
+  source (EXTERNAL_ID, DATA_SOURCE_ID and NAME null) and writes junction arms / regions to the planning
+  roads it crosses by their ROADS.GUID. model:roads then replaces each planning road of the same name,
+  its definition taking that GUID; never Refresh the centreline source after (planning roads return).
+- EXPORTTOAUTOCAD explodes Civil 3D profile views into anonymous blocks (`--profiles-block "*Model_Space"`)
+  and may split a label into TEXTs ("PVC 0+045.188" + "ELEV 673.594"): check every road's PVIs against
+  its FG line (a dropped curve showed as a 0.97 m junction step).
 - InfraWorks rebuilds a component road (body, and the intersections where it meets other roads)
   only on a single-road edit. Rebuilding RA-1 split it into 4 pieces between its arms and created
   9 intersections; the one-piece closed ring model:roads writes draws a stray band until then.
