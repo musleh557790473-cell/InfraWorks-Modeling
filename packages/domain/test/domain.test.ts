@@ -352,7 +352,7 @@ test("team profiles are saved, listed after the built-in ones, and built-in prof
   assert.throws(() => store.saveProfile(store.getProfile("parsons-ldip-roads")!), /cannot be overwritten/);
   assert.equal(store.deleteProfile("parsons"), true);
   assert.equal(store.deleteProfile("parsons-ldip-roads"), false, "built-in profiles are not stored, so not deleted");
-  assert.deepEqual(store.listProfiles().map((p) => p.id), ["ldip-default", "parsons-ldip-roads", "parsons-ldip-wet-utilities", "parsons-ldip-dry-utilities"]);
+  assert.deepEqual(store.listProfiles().map((p) => p.id), ["ldip-default", "parsons-ldip-roads", "parsons-ldip-wet-utilities", "parsons-ldip-dry-utilities", "parsons-nrjs-wet-utilities", "parsons-nrjs-dry-utilities"]);
 });
 
 test("layer names are suggested in English NCS style and in Arabic", () => {
