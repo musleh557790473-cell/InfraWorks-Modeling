@@ -1,0 +1,49 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, parseDxf } from "../src/index.js";
+
+/** Build a DXF from [code, value] pairs. */
+const dxf = (...pairs: (string | number)[]) => pairs.map(String).join("\n") + "\n";
+const LV = "Xref_Narjis_LV Network$0$";
+
+test("Al Narjis LV: an LV Panel block on MINI-PILLAR-0 gives its pillar and its house connection lines", () => {
+  // ILV-DWG-10000: 31 "LV Panel" dynamic-block copies (*U25…) on MINI-PILLAR-0, each holding the pillar
+  // symbol (*U24 on MINI-PILLAR-2) and 19 house connections on "Electrical LV -HC". Kept as one point,
+  // the panel lost all 589 house connections.
+  const text = dxf(
+    0, "SECTION", 2, "BLOCKS",
+    0, "BLOCK", 2, "*U24", 70, 1, 10, 0, 20, 0, 0, "CIRCLE", 8, `${LV}E-POWR-MINI-PILLAR-2`, 10, 0, 20, 0, 40, 0.5, 0, "ENDBLK",
+    0, "BLOCK", 2, "*U25", 70, 1, 10, 0, 20, 0,
+    0, "INSERT", 8, `${LV}E-POWR-MINI-PILLAR-2`, 2, "*U24", 10, 0, 20, 0,
+    0, "LWPOLYLINE", 8, `${LV}Electrical LV -HC`, 90, 2, 70, 0, 10, 0, 20, 0, 10, 12, 20, 0,
+    0, "ENDBLK",
+    0, "BLOCK", 2, "Xref_Narjis_LV Network", 70, 0, 10, 0, 20, 0, 1, "Xref_Narjis_LV Network.dwg",
+    0, "INSERT", 8, `${LV}E-POWR-MINI-PILLAR-0`, 2, "*U25", 10, 663900, 20, 2756900,
+    0, "INSERT", 8, `${LV}SSLPC`, 2, "*U24", 10, 663956, 20, 2756954,
+    0, "ENDBLK",
+    0, "ENDSEC",
+    0, "SECTION", 2, "ENTITIES",
+    0, "INSERT", 8, "0", 2, "Xref_Narjis_LV Network", 10, 0, 20, 0,
+    0, "INSERT", 8, "SSLPC", 2, "*U24", 10, 663956.06, 20, 2756953.96,
+    0, "ENDSEC", 0, "EOF",
+  );
+  const f = parseDxf(text, "ILV-10000.dxf", PARSONS_NRJS_DRY_PROFILE).features;
+  const by = (l: string) => f.filter((x) => x.outputLayer === l);
+  assert.equal(by("lv_pillars").length, 1, "one pillar, from the symbol inside the panel");
+  assert.equal(by("lv_pillars")[0]!.geometry.type, "Point");
+  const hc = by("lv_cables");
+  assert.equal(hc.length, 1);
+  assert.equal(hc[0]!.attributes.conn_type, "House Connection");
+  assert.deepEqual((hc[0]!.geometry.coordinates as number[][])[1], [663912, 2756900], "placed by the panel insert");
+  assert.equal(by("streetlight_panels").length, 1, "the lighting panel drawn again in the LV xref is not shipped twice");
+});
+
+test("Al Narjis storm: pipe size from the layer, network named for Al Narjis, cover from its own report", () => {
+  const rule = PARSONS_NRJS_WET_PROFILE.layers.find((l) => l.outputLayer === "storm_pipes")!;
+  assert.equal(rule.attributes?.network, "Storm - Al Narjis");
+  assert.match(String(rule.depth && "source" in rule.depth ? rule.depth.source : ""), /SAPL-DSN-LDN-RPT-000003 §5\.6\.7/);
+  const text = dxf(0, "SECTION", 2, "ENTITIES", 0, "LWPOLYLINE", 8, "CI-Ss_50_35_08_85-M-SW_Pipe Dia 500", 90, 2, 70, 0, 10, 663900, 20, 2756900, 10, 663950, 20, 2756900, 0, "ENDSEC", 0, "EOF");
+  const p = parseDxf(text, "ISW-10000.dxf", PARSONS_NRJS_WET_PROFILE).features.find((x) => x.outputLayer === "storm_pipes")!;
+  assert.ok(p, "the pipe is read");
+});

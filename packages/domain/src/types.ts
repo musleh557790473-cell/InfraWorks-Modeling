@@ -506,5 +506,85 @@ export const PARSONS_LDIP_DRY_PROFILE: MappingProfile = {
   assetKeys: AssetKeyConfig.parse({}),
 };
 
+/**
+ * Al Narjis (NRJS, 30% CD, Sep 2026): the same Parsons networks as Al Qairawan under other xref names,
+ * and its own concept design report, which gives the same values: SAPL-DSN-LDN-RPT-000003 "30% Concept
+ * Design Report for Al Narjis" §2.3.3 burial depth to the cable centre 0.65 m LV / 0.80 m MV, §2.3.9 MV
+ * conduits 200 mm, §2.3.23.2.2.1 street lighting ducts 110 mm O.D. uPVC, §5.6.7 storm soil cover above
+ * the top of pipe not less than 1.2 m.
+ */
+const NRJS_REPORT = "SAPL-DSN-LDN-RPT-000003";
+const netN = (utility: string, conn_type?: string) => ({ utility, network: `${utility} - Al Narjis`, ...(conn_type ? { conn_type } : {}) });
+const NRJS_STORM_COVER = { coverM: 1.2, source: `${NRJS_REPORT} §5.6.7 soil cover above top of pipe not less than 1.2 m` };
+
+/**
+ * Al Narjis storm drainage (ISW-DWG-10000; no storm model was issued): the network is block SYSTEM-01
+ * of the sheet, pipes on "…M-SW_Pipe Dia <mm>" (400-800), manholes as SW_CI_Manhole1500 inserts,
+ * outfalls on C-STRM-STRC. The cut sheets 10001-10003 hold the same network.
+ */
+export const PARSONS_NRJS_WET_PROFILE: MappingProfile = {
+  id: "parsons-nrjs-wet-utilities",
+  name: "Parsons / Al Narjis storm drainage (drawings)",
+  team: "Parsons",
+  layers: [
+    {
+      dwgLayer: "*SW_Pipe Dia *",
+      infraFeatureClass: "pipeline",
+      outputLayer: "storm_pipes",
+      attributes: { ...netN("Storm") },
+      fields: { ...PIPE_COLUMNS, ...LINE_DEPTH_COLUMNS },
+      size: { fromLayer: String.raw`Dia\s*(\d+)` },
+      depth: NRJS_STORM_COVER,
+    },
+    { dwgLayer: "*SW_CI_Manhole*", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: netN("Storm", "Manhole"), fields: { ...CONNECTOR_COLUMNS, ...NODE_DEPTH_COLUMNS }, depth: { fromPipes: 2, source: NRJS_STORM_COVER.source } },
+    { dwgLayer: "C-STRM-STRC", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: netN("Storm", "Outfall"), fields: { ...CONNECTOR_COLUMNS, ...NODE_DEPTH_COLUMNS }, depth: { fromPipes: 2, source: NRJS_STORM_COVER.source } },
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
+/**
+ * Al Narjis dry utilities, one general sheet per network (ILV / IMV / ISL / ITE -10000, IIC-13000).
+ * Substations (DSS) and the MV loop are drawn in both the LV and MV xrefs: read from the MV one only.
+ * Street lighting has its poles and panel only (no cable lines drawn). Telecom and security ducts are
+ * "Primary Duct" and "Seconday Duct" (sic), handholes TEL_HH / SEC_HH inserts.
+ */
+const NLV = "Xref_Narjis_LV Network$0$";
+const NMV = "Xref_Narjis_MV Network$0$";
+const NTEL = "Narjes Overall Primary Telecom Network$0$";
+const NSEC = "Narjes Overall Primary Security Network$0$";
+const buriedN = (centreM: number, kind: string) => ({
+  fields: { ...cable.fields, ...LINE_DEPTH_COLUMNS },
+  depth: { centreM, source: `${NRJS_REPORT} §2.3.3 burial depth to the cable centre, ${kind}` },
+});
+export const PARSONS_NRJS_DRY_PROFILE: MappingProfile = {
+  id: "parsons-nrjs-dry-utilities",
+  name: "Parsons / Al Narjis dry utilities (drawings)",
+  team: "Parsons",
+  layers: [
+    { dwgLayer: `${NLV}E-POWER-CABL*`, ...cable, ...buriedN(0.65, "LV"), outputLayer: "lv_cables", attributes: netN("Electrical LV") },
+    { dwgLayer: `${NLV}Electrical LV -HC`, ...cable, ...buriedN(0.65, "LV"), outputLayer: "lv_cables", attributes: netN("Electrical LV", "House Connection") },
+    // Each pillar is an "LV Panel" dynamic block on MINI-PILLAR-0 holding the pillar symbol (on
+    // MINI-PILLAR-2) and its 19 house connection lines: opened, so both are read.
+    { dwgLayer: `${NLV}E-POWR-MINI-PILLAR-0`, ...node, explode: true, outputLayer: "lv_pillars", attributes: netN("Electrical LV", "Mini Pillar") },
+    { dwgLayer: `${NLV}E-POWR-MINI-PILLAR-*`, ...node, outputLayer: "lv_pillars", attributes: netN("Electrical LV", "Mini Pillar") },
+    // the lighting panel is drawn in the street lighting sheet and again in the LV xref
+    { dwgLayer: `${NLV}SSLPC`, infraFeatureClass: "unmapped" },
+    { dwgLayer: `${NMV}MV Cables*`, ...cable, ...buriedN(0.8, "MV"), size: { fixed: { mm: 200, source: `${NRJS_REPORT} §2.3.9: MV conduits, 200 mm maximum diameter` } }, outputLayer: "mv_cables", attributes: netN("Electrical MV") },
+    { dwgLayer: `${NMV}DSS`, ...node, outputLayer: "substations", attributes: netN("Electrical MV", "Distribution Substation") },
+    { dwgLayer: "AAM", infraFeatureClass: "annotation", outputLayer: "street_lights", attributes: netN("Street Lighting", "Street Light") },
+    { dwgLayer: "SSLPC", ...node, outputLayer: "streetlight_panels", attributes: netN("Street Lighting", "Lighting Panel") },
+    { dwgLayer: `${NTEL}Primary Duct`, ...cable, outputLayer: "telecom_ducts", attributes: netN("Telecom", "Primary Duct") },
+    { dwgLayer: `${NTEL}Seconday Duct`, ...cable, outputLayer: "telecom_ducts", attributes: netN("Telecom", "Secondary Duct") },
+    { dwgLayer: `${NTEL}*TEL_HH`, ...node, outputLayer: "telecom_handholes", attributes: netN("Telecom", "Handhole") },
+    { dwgLayer: `${NSEC}Primary Duct`, ...cable, outputLayer: "security_ducts", attributes: netN("Security", "Primary Duct") },
+    { dwgLayer: `${NSEC}Seconday Duct`, ...cable, outputLayer: "security_ducts", attributes: netN("Security", "Secondary Duct") },
+    { dwgLayer: `${NSEC}*TEL_HH`, ...node, outputLayer: "security_handholes", attributes: netN("Security", "Handhole") },
+    { dwgLayer: `${NSEC}*SEC_HH`, ...node, outputLayer: "security_handholes", attributes: netN("Security", "Handhole") },
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
 /** Profiles shipped with the tool: listed first, and never overwritten or deleted by a save. */
-export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE];
+export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, PARSONS_NRJS_DRY_PROFILE];

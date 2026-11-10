@@ -257,3 +257,26 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   already 11 m, 1 without a drawn arc (junction 4, region 7: ROAD-05's end on ROAD-03, corner at 200
   deg; InfraWorks' 9 m kept; to ask Parsons). Installed (41A3FE5A... -> E6BE04FB...). G3 --layout PASS
   (G3-025: 13 at the drawn radius, 1 without an arc), 11000 / sewer / irrigation / water PASS, 0 warnings.
+
+### Dry networks and storm packages (10 Nov 2026)
+
+- Depths and sizes from Al Narjis' own report `SAPL-DSN-LDN-RPT-000003` ("30% Concept Design Report
+  for Al Narjis", Vol. 02_Reports; text pulled from the PDF's streams): §2.3.3 burial depth to the cable
+  centre 0.65 m LV / 0.80 m MV; §2.3.9 MV conduits 200 mm; §2.3.23.2.2.1 street lighting ducts 110 mm
+  O.D. uPVC; §5.6.7 storm soil cover over the crown >= 1.2 m. Same values as Al Qairawan's report.
+- New profiles `parsons-nrjs-dry-utilities` / `parsons-nrjs-wet-utilities` (Al Qairawan's untouched;
+  networks named "<utility> - Al Narjis"; tests in narjis.test.ts).
+- `exports\Al-Narjis-storm-shp-v1` from ISW-10000 (block SYSTEM-01): 54 pipes (400-800 mm from the layer
+  names, cover 1.2 m), 44 manholes + 2 outfalls (depth to the deepest pipe within 2 m). OK, 1 warning
+  (unmapped layers).
+- `exports\Al-Narjis-dry-shp-v1` from ILV / IMV / ISL / ITE -10000 and IIC-13000: LV 60 cables + 589
+  house connections (0.65 m), 31 mini pillars, MV 10 cables (0.80 m, 200 mm), 4 substations, 37 street
+  lights + 1 panel (no cable lines drawn), telecom 150 ducts + 13 handholes, security 142 ducts + 9
+  handholes. Telecom / security / LV sizes 0.1 m for display; their depths are not in the documents
+  (drawn on the terrain). OK, 2 warnings (HATCH skipped, unmapped layers).
+- Each pillar is an "LV Panel" dynamic block on MINI-PILLAR-0 holding the pillar symbol (MINI-PILLAR-2)
+  and 19 house connections: opened (`explode: true`). The lighting panel is drawn again in the LV xref:
+  that copy is left out.
+- Off site, kept as drawn (to ask Parsons): an LV group ~450 m south of the site (substation SSNA001
+  1000 kVA, DP1-1: a pillar, 19 house connections, 9 cables), one substation and a storm line with an
+  outfall ~200 m east of the site.
