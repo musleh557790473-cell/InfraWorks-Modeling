@@ -236,3 +236,12 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
 3. Sewer now (model complete); water and irrigation once the cover is sourced.
 4. DXF exports (AUDIT, EXPORTTOAUTOCAD, DXFOUT to `C:\Temp\dxf`) of 10001, 40001, 40002, 30001 and the
    utility plan sheets: then names, plots, dry networks, storm, and the roads.
+
+### Crash on the first Grading Limit edit (10 Nov 2026)
+
+- The user's Grading Limit edit (5.000 -> 5.1) crashed InfraWorks three times: access violation in
+  AIM_ModelRoad.dll+0xa7f28 (read near null; dump `%LOCALAPPDATA%\Temp\InfraWorks_error.dmp` 14:11,
+  read with `scripts/road-pilot/minidump.cjs`). The model held 12 arms + 8 regions with no
+  INTERSECTIONS row (made by InfraWorks at the ROAD-01 conversion; G3-022 warned of them).
+- `model:intersections` on a copy removed the 20 rows; G3 --layout PASS, 0 warnings; installed
+  (7AB8AFD4... -> B3ADB366...). model:roads now prunes such rows after every write.

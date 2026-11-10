@@ -152,6 +152,9 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
   source (EXTERNAL_ID, DATA_SOURCE_ID and NAME null) and writes junction arms / regions to the planning
   roads it crosses by their ROADS.GUID. model:roads then replaces each planning road of the same name,
   its definition taking that GUID; never Refresh the centreline source after (planning roads return).
+  Those arms / regions had no INTERSECTIONS row, and the next Grading Limit edit crashed InfraWorks
+  (access violation, AIM_ModelRoad.dll+0xa7f28; dump `%LOCALAPPDATA%\Temp\InfraWorks_error.dmp`).
+  model:roads now prunes junction rows without a junction after writing.
 - EXPORTTOAUTOCAD explodes Civil 3D profile views into anonymous blocks (`--profiles-block "*Model_Space"`)
   and may split a label into TEXTs ("PVC 0+045.188" + "ELEV 673.594"): check every road's PVIs against
   its FG line (a dropped curve showed as a 0.97 m junction step).
