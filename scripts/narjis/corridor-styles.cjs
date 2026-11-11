@@ -25,7 +25,8 @@ let n = 0;
 if (!dry) db.exec("begin");
 try {
   for (const s of sources) {
-    const m = /^corridor_(band_)?(.+)$/.exec(String(s.NAME));
+    // "corridor_irrigation (2)": the same file imported a second time
+    const m = /^corridor_(band_)?(.+?)(?: \(\d+\))?$/.exec(String(s.NAME));
     if (!m || !COLOURS[m[2]]) continue;
     const [hex, pipe] = COLOURS[m[2]];
     const style = m[1] ? `x${hex}FF` : `Pipeline/${pipe}`;

@@ -78,8 +78,9 @@ const put = (dir, name, json, hex) => {
   writeFileSync(join(S, dir, `${name}.png`), png(hex));
 };
 for (const [name, hex] of Object.values(CORRIDORS)) {
+  // InfraWorks also wrote a copy under Material\CORRIDOR color; the pipe styles use only the one under
+  // Material\Colors, and the user removed the other (11 Nov 2026): not written.
   put(join("Material", "Colors", "CORRIDOR color"), name, material(name, hex, `/Styles/Material/Colors/CORRIDOR color/${name}`), hex);
-  put(join("Material", "CORRIDOR color"), name, material(name, hex, `/Styles/Material/CORRIDOR color/${name}`), hex);
   put("Pipeline", name, pipeline(name), hex);
 }
 console.log(`${made} style file(s) ${dry ? "would be " : ""}written, ${kept} already there`);

@@ -389,3 +389,9 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   `scripts/narjis/corridor-style-library.cjs` writes the 14 "IUC <name>" styles the same way (its Telecom
   matches InfraWorks' own file for file); `corridor-styles.cjs` now gives each corridor line
   'Pipeline/IUC <name>'. 39 style files written into the working copy; corridors not yet all imported.
+- Corridors imported by the user (13 + 13; corridor_irrigation twice: "corridor_irrigation (2)" to
+  remove, G3-011). The user removed the Material\CORRIDOR color copy; the library script no longer
+  writes it. corridor-styles.cjs on a copy: 27 sources styled (Pipeline/IUC <name> on the lines, the
+  exact colour code on the bands); then model:names with irrigation-dwg and corridors-v2 (NETWORKNAME,
+  sizes, ELEV_FROM/TO = the 1.0 m lift). Installed (9D3AD37B... -> 11CF6921... -> 50BB736A...). G3: layout
+  and every package PASS, 0 warnings, except corridors-v2: G3-011 for the duplicate source.
