@@ -264,6 +264,13 @@ Qairawan, all in UTM 38N, checked by Gate G3 and seen in InfraWorks unless noted
   without the full data. Junction pits 298 / 299 fixed the same day (D13, Parsons question 17); G3
   (with G3-026) PASS, 0 warnings after the fix.
 
+- Al Narjis (11 Nov 2026, `scripts/narjis/HANDOVER.md`): working copy `C:\IW\Al Narjis\Al Narjis.sqlite`
+  (proposal master, 29 data sources) holds sewer, water (cover 1.20 m, NWC typical, AICC), irrigation
+  (0.80 m assumed), storm and dry networks (depths from SAPL-DSN-LDN-RPT-000003), plots (145, 123
+  numbered), blocks, road reserve, 7 component roads (A1/A2) with 7 InfraWorks junctions and drawn kerb
+  radii on 13 of 14 corners. G3 with --layout and all eight packages: PASS, 0 warnings. Open questions:
+  `scripts/narjis/parsons-questions.md`.
+
 Open points: confirm the irrigation cover with Parsons; depths of telecom, security and
 street-lighting ducts (not in the Parsons documents, drawn on the terrain); the full Al Narjis road layout
 (`Xref Road Layout Al Narjis.dwg`) from Parsons; Al Narjis and other districts through the same path.

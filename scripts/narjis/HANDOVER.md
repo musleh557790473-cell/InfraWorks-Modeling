@@ -296,3 +296,10 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
 - `exports\Al-Narjis-areas-shp-v1`: blocks 8 (3,252-27,265 m2, none overlapping), road reserve 1
   (21,577 m2 plus two slivers of 12 and 8 m2 between block edges and the boundary). OK; warnings:
   8 open __ROW lines left out, unmapped layers. Both import as Coverage Areas.
+
+### Blocks and road reserve imported; all checks (11 Nov 2026)
+
+- User imported `Al-Narjis-areas-shp-v1` (blocks, road_reserve as Coverage Areas). Model closed,
+  proposal master, 29 data sources, integrity ok. G3 on the working copy with --layout and the eight
+  packages (areas, 11000, sewer, irrigation, water, storm, dry): all PASS, 0 warnings (G3-025: 13 of 14
+  corners at the drawn radius, 1 without a drawn arc). Questions for Parsons: `parsons-questions.md`.
