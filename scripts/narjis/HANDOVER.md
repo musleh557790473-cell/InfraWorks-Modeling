@@ -395,3 +395,14 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   exact colour code on the bands); then model:names with irrigation-dwg and corridors-v2 (NETWORKNAME,
   sizes, ELEV_FROM/TO = the 1.0 m lift). Installed (9D3AD37B... -> 11CF6921... -> 50BB736A...). G3: layout
   and every package PASS, 0 warnings, except corridors-v2: G3-011 for the duplicate source.
+
+### Networks in Parsons' utility colours (11 Nov 2026)
+
+- The network sheets colour by layer (telecom and security alike: primary duct blue, secondary red);
+  IUC-DWG-10000 is the submission's one per-network colour scheme. `scripts/narjis/network-styles.cjs`
+  gives pipes and cables "Pipeline/IUC <name>" and the network nodes (sewer / storm manholes, water and
+  irrigation structures) new "PipeConnector/IUC <name>" styles (Circle, tube and cap in the colour, as
+  InfraWorks' Orange Circle), written into the model's style library. Valves, hydrants, pillars,
+  handholes, substations, street lights keep their 3D shapes; security keeps its own (no IUC corridor).
+- On a copy: 12 sources restyled, integrity ok; installed (50BB736A... -> C8C2E56D...), 4 PipeConnector
+  styles added. G3 with the network packages PASS.

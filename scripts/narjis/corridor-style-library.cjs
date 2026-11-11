@@ -57,7 +57,14 @@ const pipeline = (name) => ({
   EmbeddedData: { styleType: "Pipeline", type: "Circle", geometry: { size: [0.5, 0.5], heightOffset: 0 }, materials: { tube: `Material/Colors/CORRIDOR color/${name}`, cap: "" } },
 });
 
-module.exports = { CORRIDORS };
+/** a PipeConnector style in a model colour, as InfraWorks' own "Orange Circle" (tube and cap) */
+const pipeConnector = (name) => ({
+  ...head(name, `/Styles/PipeConnector/${name}`, "PipeConnector"),
+  References: [{ Uri: `/Styles/Material/Colors/CORRIDOR color/${name}.ACItem` }],
+  EmbeddedData: { styleType: "PipeConnector", type: "Circle", geometry: { size: [0.5, 0.5], orientation: 170, capOffset: 0 }, materials: { tube: `Material/Colors/CORRIDOR color/${name}`, cap: `Material/Colors/CORRIDOR color/${name}` } },
+});
+
+module.exports = { CORRIDORS, png, pipeConnector };
 if (require.main !== module) return;
 
 const [files, ...rest] = process.argv.slice(2);
