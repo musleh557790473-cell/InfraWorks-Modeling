@@ -553,6 +553,12 @@ export const PARSONS_NRJS_WET_PROFILE: MappingProfile = {
     { dwgLayer: "Xref Irrigation$0$*C-PW-AIR VALVE", ...node, outputLayer: "irrigation_valves", attributes: netN("Irrigation", "Air Valve") },
     { dwgLayer: "Xref Irrigation$0$*C-PW-WASHOUT VALVE", ...node, outputLayer: "irrigation_valves", attributes: netN("Irrigation", "Washout Valve") },
     { dwgLayer: "Xref Irrigation$0$*L-IRRG-CHMB", ...node, outputLayer: "irrigation_valves", attributes: netN("Irrigation", "Flow Sensor and Master Valve") },
+    // The rest of the IRW-10000 legend: pull boxes, quick couplings, tie-ins, and the two-wire decoder
+    // cable (a control cable, no depth in the documents: on the terrain, display size).
+    { dwgLayer: "Xref Irrigation$0$Pull-box", ...node, outputLayer: "irrigation_structures_dwg", attributes: netN("Irrigation", "Pull Box") },
+    { dwgLayer: "Xref Irrigation$0$*LI-EQPM-DRIP", ...node, outputLayer: "irrigation_structures_dwg", attributes: netN("Irrigation", "Quick Coupling") },
+    { dwgLayer: "Xref Irrigation$0$00_Tie-ins_ROW", ...node, outputLayer: "irrigation_structures_dwg", attributes: netN("Irrigation", "Tie-in") },
+    { dwgLayer: "Xref Irrigation$0$*IR-ELEC CABLE", ...cable, outputLayer: "irrigation_control_cable", attributes: netN("Irrigation", "Two-Wire Decoder Cable") },
   ],
   reportJoins: [],
   assetKeys: AssetKeyConfig.parse({}),
@@ -619,5 +625,45 @@ export const PARSONS_NRJS_AREAS_PROFILE: MappingProfile = {
   assetKeys: AssetKeyConfig.parse({}),
 };
 
+/**
+ * Al Narjis utility corridors (IUC-DWG-10000, bound "Xref_Al Narjis_Utilities Corridor"): one open line
+ * per network where its run lies in the road reserve ("-05- Potable Water", "-10- Electrical LV"…),
+ * shipped as display-only Pipelines named "Corridor - <utility>" (no depth, 5 cm) to compare with the
+ * modelled networks. Rules carry the xref prefix: the legend repeats every layer outside it.
+ */
+const NIUC = "Xref_Al Narjis_Utilities Corridor$0$";
+const corridor = (layer: string, utility: string) => ({
+  dwgLayer: `${NIUC}${layer}`,
+  infraFeatureClass: "pipeline" as const,
+  explode: false,
+  outputLayer: "utility_corridors",
+  fields: { NETWORKNAME: "network", SIZE_X: "size_m", SIZE_Y: "size_y_m" },
+  size: { fixed: { mm: 50, source: "display only: corridor line of IUC-DWG-10000" } },
+  attributes: { utility, network: `Corridor - ${utility}`, conn_type: "Corridor line", corridor_layer: layer },
+});
+export const PARSONS_NRJS_CORRIDORS_PROFILE: MappingProfile = {
+  id: "parsons-nrjs-corridors",
+  name: "Parsons / Al Narjis utility corridors (IUC)",
+  team: "Parsons",
+  layers: [
+    corridor("-01- Storm Water", "Storm"),
+    corridor("-01- Storm CB", "Storm Catch Basins"),
+    corridor("-02- Sewerage", "Sewer"),
+    corridor("-04- Irrigation", "Irrigation"),
+    corridor("-04-Irrigation Secondary", "Irrigation Secondary"),
+    corridor("-05- Potable Water", "Water"),
+    corridor("07- Telecom", "Telecom"),
+    corridor("-08- Electrical HV", "Electrical HV"),
+    corridor("-09- Electrical MV", "Electrical MV"),
+    corridor("-10- Electrical LV", "Electrical LV"),
+    corridor("-15- House Connection", "House Connection"),
+    corridor("-00-Tree_SL", "Trees and Street Lighting"),
+    corridor("-00-Tree_IRS", "Trees and Irrigation"),
+    corridor("-00-Tree_IRS_SL", "Trees, Irrigation and Street Lighting"),
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
 /** Profiles shipped with the tool: listed first, and never overwritten or deleted by a save. */
-export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_AREAS_PROFILE];
+export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_AREAS_PROFILE, PARSONS_NRJS_CORRIDORS_PROFILE];

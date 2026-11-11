@@ -340,3 +340,16 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   sources. Installed (8DDA3526... -> 4B574D37...). Not modelled: irrigation pull boxes, quick
   couplings, two-wire decoder cable and tie-ins; utility corridor sheets (IUC, widths only). Open
   items for Parsons: parsons-questions.md.
+
+### Irrigation extras and utility corridors (11 Nov 2026)
+
+- `parsons-nrjs-wet-utilities` also reads IRW-10000's pull boxes (25), quick couplings (8), tie-ins (18)
+  and the two-wire decoder cable (24 lines, on the terrain). `exports\Al-Narjis-irrigation-dwg-shp-v1`
+  (built with --skip-layers irrigation_valves, already imported): irrigation_structures_dwg 51
+  (Pipeline Connectors), irrigation_control_cable 24 (Pipelines).
+- New profile `parsons-nrjs-corridors`: the IUC-10000 corridor lines of the bound
+  "Xref_Al Narjis_Utilities Corridor" (legend copies left out) as display-only Pipelines
+  "Corridor - <utility>" (5 cm, no depth). `exports\Al-Narjis-corridors-shp-v1`: 414 lines, 13 corridors.
+- `corridorFit` (domain) and `scripts/narjis/corridor-check.mts`: share of each network within 1 / 2 m
+  of its corridor. Results and reading in `corridor-check.md`: sewer and MV follow theirs; water and
+  irrigation (WaterGEMS) follow the sewer corridor; storm a third. Parsons questions 12, 13.

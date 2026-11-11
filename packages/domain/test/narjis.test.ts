@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, parseDxf } from "../src/index.js";
+import { PARSONS_NRJS_CORRIDORS_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, corridorFit, parseDxf } from "../src/index.js";
 
 /** Build a DXF from [code, value] pairs. */
 const dxf = (...pairs: (string | number)[]) => pairs.map(String).join("\n") + "\n";
@@ -87,6 +87,36 @@ test("Al Narjis irrigation: valves in the bound xref and its nested network xref
     ["Air Valve", "Irrigation - Al Narjis", "Point"],
     ["Isolation Valve", "Irrigation - Al Narjis", "Point"],
   ]);
+});
+
+test("corridor fit: the share of a network lying within the tolerance of its IUC corridor line", () => {
+  const corridor = [[[0, 0], [100, 0]]];
+  // 60 m on the corridor (0.4 m off), then 40 m running 3 m away; and a line far off
+  const net = [[[0, 0.4], [60, 0.4], [60, 3], [100, 3]], [[0, 50], [10, 50]]];
+  const r = corridorFit(net, corridor, { tolerance: 1, step: 1 });
+  assert.ok(Math.abs(r.length - 112.6) < 0.01, String(r.length));
+  assert.ok(Math.abs(r.onCorridor - 61.0) < 0.6, String(r.onCorridor));
+  assert.equal(r.linesOff, 1, "the far line never meets its corridor");
+  assert.ok(r.median < 3.1);
+  assert.deepEqual(corridorFit([], corridor).share, 0);
+});
+
+test("Al Narjis corridors: lines of the IUC xref ship as display-only corridor lines; the legend copies do not", () => {
+  const X = "Xref_Al Narjis_Utilities Corridor$0$";
+  const text = dxf(
+    0, "SECTION", 2, "BLOCKS",
+    0, "BLOCK", 2, "Xref_Al Narjis_Utilities Corridor", 70, 0, 10, 0, 20, 0, 1, "Corridor.dwg",
+    0, "LWPOLYLINE", 8, `${X}-05- Potable Water`, 90, 2, 70, 0, 10, 663900, 20, 2756900, 10, 663950, 20, 2756900,
+    0, "ENDBLK",
+    0, "ENDSEC",
+    0, "SECTION", 2, "ENTITIES",
+    0, "INSERT", 8, "0", 2, "Xref_Al Narjis_Utilities Corridor", 10, 0, 20, 0,
+    0, "LWPOLYLINE", 8, "-05- Potable Water", 90, 2, 70, 0, 10, 695, 20, 466, 10, 734, 20, 466, // legend
+    0, "ENDSEC", 0, "EOF",
+  );
+  const f = parseDxf(text, "IUC-10000.dxf", PARSONS_NRJS_CORRIDORS_PROFILE).features.filter((x) => x.outputLayer === "utility_corridors");
+  assert.equal(f.length, 1);
+  assert.equal(f[0]!.attributes.network, "Corridor - Water");
 });
 
 test("Al Narjis storm: pipe size from the layer, network named for Al Narjis, cover from its own report", () => {
