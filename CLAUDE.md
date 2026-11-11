@@ -268,8 +268,8 @@ Qairawan, all in UTM 38N, checked by Gate G3 and seen in InfraWorks unless noted
   (proposal master, 29 data sources) holds sewer, water (cover 1.20 m, NWC typical, AICC), irrigation
   (0.80 m assumed), storm and dry networks (depths from SAPL-DSN-LDN-RPT-000003), plots (145, 123
   numbered), blocks, road reserve, 7 component roads (A1/A2) with 7 InfraWorks junctions and drawn kerb
-  radii on 13 of 14 corners. G3 with --layout and all eight packages: PASS, 0 warnings. Not done yet:
-  water valves and hydrants from IPW-10000 (package `Al-Narjis-water-fittings-shp-v1`, to import),
+  radii on 13 of 14 corners, water valves (21, 19 of them off site) and fire hydrants (12) from
+  IPW-10000. G3 with --layout and all nine packages: PASS, 0 warnings (31 data sources). Not done yet:
   irrigation valves from IRW-10000. Open questions: `scripts/narjis/parsons-questions.md`.
 
 Open points: confirm the irrigation cover with Parsons; depths of telecom, security and
