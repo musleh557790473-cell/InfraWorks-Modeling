@@ -322,3 +322,13 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   Connectors). model:names on a copy: NETWORKNAME filled (12 + 21). G3 on the copy with --layout and the
   nine packages: PASS, 0 warnings; integrity ok, 31 data sources. Installed (1767DCA2... -> ABAF6226...).
 - Still to do: irrigation valves from IRW-10000 (Parsons question 11).
+
+### Irrigation valves package (11 Nov 2026)
+
+- IRW-10000 (block "Xref Irrigation_1", nested network xrefs): rules in `parsons-nrjs-wet-utilities`
+  for isolation valves (layer "Isolation valve", each a block holding the gate and butterfly symbols),
+  air valve, washout valve, flow sensor / master valve chambers (L-IRRG-CHMB). Test in narjis.test.ts.
+  Not taken: pull boxes, quick couplings, two-wire decoder cable, tie-ins (no valves).
+- `exports\Al-Narjis-irrigation-valves-shp-v1`: 13 (9 isolation, 2 flow sensor / master valve, 1 air,
+  1 washout); 2 isolation valves 100-300 m south of the site (Parsons question 11). OK; warnings:
+  DIMENSION / HATCH / LEADER skipped, unmapped layers.

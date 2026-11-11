@@ -546,6 +546,13 @@ export const PARSONS_NRJS_WET_PROFILE: MappingProfile = {
     { dwgLayer: "Xref Potable$0$C-PW-AIR VALVE", ...node, outputLayer: "water_valves", attributes: netN("Water", "Air Valve") },
     { dwgLayer: "Xref Potable$0$C-STRM-STRC", ...node, outputLayer: "water_valves", attributes: netN("Water", "Washout Valve") },
     { dwgLayer: "C-PW-FIRE HYDRANT COVER CATCH", ...node, asPoint: true, outputLayer: "water_hydrants", attributes: netN("Water", "Fire Hydrant") },
+    // Irrigation fittings (IRW-DWG-10000, bound "Xref Irrigation" with nested network xrefs; the WaterGEMS
+    // model has 3 of the 9 isolation valves): isolation valves, air valve, washout valve, and the flow
+    // sensor / master valve chambers (legend "FLOW SENSOR AND MASTER VALVE").
+    { dwgLayer: "Xref Irrigation$0$Isolation valve", ...node, outputLayer: "irrigation_valves", attributes: netN("Irrigation", "Isolation Valve") },
+    { dwgLayer: "Xref Irrigation$0$*C-PW-AIR VALVE", ...node, outputLayer: "irrigation_valves", attributes: netN("Irrigation", "Air Valve") },
+    { dwgLayer: "Xref Irrigation$0$*C-PW-WASHOUT VALVE", ...node, outputLayer: "irrigation_valves", attributes: netN("Irrigation", "Washout Valve") },
+    { dwgLayer: "Xref Irrigation$0$*L-IRRG-CHMB", ...node, outputLayer: "irrigation_valves", attributes: netN("Irrigation", "Flow Sensor and Master Valve") },
   ],
   reportJoins: [],
   assetKeys: AssetKeyConfig.parse({}),

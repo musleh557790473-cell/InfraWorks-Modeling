@@ -14,5 +14,5 @@ the model uses until Parsons answers.
 | 7 | Off site east | One distribution substation and a storm line ending at an outfall lie about 200 m east of the site. Please confirm both. | Kept as drawn |
 | 8 | Duct depths | No burial depth for telecom, security or street lighting ducts in the drawings or SAPL-DSN-LDN-RPT-000003. What depths apply? | Drawn on the terrain, 0.1 m display size (street lighting: no cable lines drawn) |
 | 10 | Water valves | IPW-10000 draws 19 valves (C-WATR-APPT) about 1 km south-east of the site, over some 400 m, with no water pipe drawn there; the site network shows only an air valve and a washout. Where are the valves of the site network, and what are these 19? | The 19 kept as drawn; on site: air valve, washout, 12 fire hydrants |
-| 11 | Irrigation valves | IRW-10000 draws 9 isolation valves and butterfly valves; the WaterGEMS model has 3 isolation valves. Not yet modelled from the drawing. | WaterGEMS valves only |
+| 11 | Irrigation valves | IRW-10000 draws 9 isolation valves, 2 of them south of the site (100-300 m); the WaterGEMS model has 3. Please confirm which hold, and the two off site. | All 9 kept as drawn, with the air valve, washout and 2 flow sensor / master valve chambers |
 | 9 | Street lighting cables | ISL-10000 shows the poles and the panel but no cable routes. Are they to be issued? | Poles and panel only |

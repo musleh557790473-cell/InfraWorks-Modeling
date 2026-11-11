@@ -63,6 +63,32 @@ test("Al Narjis water: a hydrant block on layer 0 gives one hydrant at its circl
   assert.equal(f.filter((x) => x.outputLayer === "storm_manholes").length, 0);
 });
 
+test("Al Narjis irrigation: valves in the bound xref and its nested network xrefs, each kept as one point", () => {
+  // IRW-DWG-10000: block "Xref Irrigation_1" (renamed by EXPORTTOAUTOCAD), layers "Xref Irrigation$0$…",
+  // the air valve two xrefs deeper; each isolation valve block holds the butterfly valve symbol too.
+  const deep = "Xref Irrigation$0$Xref irrigation Network Plan$0$Xref irrigation Network Plan$0$X-ref Irrigation Distribution Network$0$";
+  const text = dxf(
+    0, "SECTION", 2, "BLOCKS",
+    0, "BLOCK", 2, "BF", 70, 0, 10, 0, 20, 0, 0, "CIRCLE", 8, "Xref Irrigation$0$C-IRR-BUTTERFLY VALVE", 10, 0, 20, 0, 40, 0.3, 0, "ENDBLK",
+    // as drawn: the gate valve's own lines on C-IRR-VALVE beside the butterfly symbol
+    0, "BLOCK", 2, "*U427", 70, 1, 10, 0, 20, 0,
+    0, "LWPOLYLINE", 8, "Xref Irrigation$0$C-IRR-VALVE", 90, 2, 70, 0, 10, -0.5, 20, 0, 10, 0.5, 20, 0,
+    0, "INSERT", 8, "Xref Irrigation$0$C-IRR-BUTTERFLY VALVE", 2, "BF", 10, 0, 20, 0,
+    0, "ENDBLK",
+    0, "BLOCK", 2, "Xref Irrigation_1", 70, 0, 10, 0, 20, 0, 1, "Xref Irrigation.dwg",
+    0, "INSERT", 8, "Xref Irrigation$0$Isolation valve", 2, "*U427", 10, 663900, 20, 2756900,
+    0, "INSERT", 8, `${deep}C-PW-AIR VALVE`, 2, "BF", 10, 663950, 20, 2756950,
+    0, "ENDBLK",
+    0, "ENDSEC",
+    0, "SECTION", 2, "ENTITIES", 0, "INSERT", 8, "0", 2, "Xref Irrigation_1", 10, 0, 20, 0, 0, "ENDSEC", 0, "EOF",
+  );
+  const v = parseDxf(text, "IRW-10000.dxf", PARSONS_NRJS_WET_PROFILE).features.filter((x) => x.outputLayer === "irrigation_valves");
+  assert.deepEqual(v.map((x) => [x.attributes.conn_type, x.attributes.network, x.geometry.type]).sort(), [
+    ["Air Valve", "Irrigation - Al Narjis", "Point"],
+    ["Isolation Valve", "Irrigation - Al Narjis", "Point"],
+  ]);
+});
+
 test("Al Narjis storm: pipe size from the layer, network named for Al Narjis, cover from its own report", () => {
   const rule = PARSONS_NRJS_WET_PROFILE.layers.find((l) => l.outputLayer === "storm_pipes")!;
   assert.equal(rule.attributes?.network, "Storm - Al Narjis");
