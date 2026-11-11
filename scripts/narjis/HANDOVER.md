@@ -332,3 +332,10 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
 - `exports\Al-Narjis-irrigation-valves-shp-v1`: 13 (9 isolation, 2 flow sensor / master valve, 1 air,
   1 washout); 2 isolation valves 100-300 m south of the site (Parsons question 11). OK; warnings:
   DIMENSION / HATCH / LEADER skipped, unmapped layers.
+
+### Irrigation valves imported (11 Nov 2026)
+
+- User imported `Al-Narjis-irrigation-valves-shp-v1` (13, Pipeline Connectors). model:names on a
+  copy: NETWORKNAME 13. G3 with --layout and the ten packages: PASS, 0 warnings; integrity ok, 32 data
+  sources. Installed (8DDA3526... -> 4B574D37...). Every network and layer of the submission now in the model;
+  open items are Parsons' answers (parsons-questions.md).
