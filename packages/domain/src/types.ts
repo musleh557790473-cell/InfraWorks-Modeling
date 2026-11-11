@@ -160,6 +160,8 @@ export const LayerMapping = z.object({
       coverM: z.number().positive().optional(),
       centreM: z.number().positive().optional(),
       fromPipes: z.number().positive().optional(),
+      /** display lines lifted this far above the terrain (Al Narjis corridors, else hidden under the road body) */
+      liftM: z.number().positive().optional(),
       source: z.string().min(1),
     })
     .optional(),
@@ -632,34 +634,38 @@ export const PARSONS_NRJS_AREAS_PROFILE: MappingProfile = {
  * modelled networks. Rules carry the xref prefix: the legend repeats every layer outside it.
  */
 const NIUC = "Xref_Al Narjis_Utilities Corridor$0$";
-const corridor = (layer: string, utility: string) => ({
+// One Shapefile per corridor, so each data source takes its own colour in InfraWorks (one Rule Style per
+// source); lifted 1.0 m above the terrain, as the roads stand ~0.6 m above the grading surface and hid
+// the lines. `colour`: the layer's colour in IUC-DWG-10000 (AutoCAD index, as RGB).
+const corridor = (layer: string, utility: string, slug: string, colour: string) => ({
   dwgLayer: `${NIUC}${layer}`,
   infraFeatureClass: "pipeline" as const,
   explode: false,
-  outputLayer: "utility_corridors",
-  fields: { NETWORKNAME: "network", SIZE_X: "size_m", SIZE_Y: "size_y_m" },
-  size: { fixed: { mm: 50, source: "display only: corridor line of IUC-DWG-10000" } },
-  attributes: { utility, network: `Corridor - ${utility}`, conn_type: "Corridor line", corridor_layer: layer },
+  outputLayer: `corridor_${slug}`,
+  fields: { NETWORKNAME: "network", SIZE_X: "size_m", SIZE_Y: "size_y_m", ELEV_FROM: "off_start_m", ELEV_TO: "off_end_m" },
+  size: { fixed: { mm: 150, source: "display only: corridor line of IUC-DWG-10000" } },
+  depth: { liftM: 1.0, source: "display only: corridor line lifted 1.0 m above the terrain to show above the road" },
+  attributes: { utility, network: `Corridor - ${utility}`, conn_type: "Corridor line", corridor_layer: layer, colour },
 });
 export const PARSONS_NRJS_CORRIDORS_PROFILE: MappingProfile = {
   id: "parsons-nrjs-corridors",
   name: "Parsons / Al Narjis utility corridors (IUC)",
   team: "Parsons",
   layers: [
-    corridor("-01- Storm Water", "Storm"),
-    corridor("-01- Storm CB", "Storm Catch Basins"),
-    corridor("-02- Sewerage", "Sewer"),
-    corridor("-04- Irrigation", "Irrigation"),
-    corridor("-04-Irrigation Secondary", "Irrigation Secondary"),
-    corridor("-05- Potable Water", "Water"),
-    corridor("07- Telecom", "Telecom"),
-    corridor("-08- Electrical HV", "Electrical HV"),
-    corridor("-09- Electrical MV", "Electrical MV"),
-    corridor("-10- Electrical LV", "Electrical LV"),
-    corridor("-15- House Connection", "House Connection"),
-    corridor("-00-Tree_SL", "Trees and Street Lighting"),
-    corridor("-00-Tree_IRS", "Trees and Irrigation"),
-    corridor("-00-Tree_IRS_SL", "Trees, Irrigation and Street Lighting"),
+    corridor("-01- Storm Water", "Storm", "storm", "ACI 170 blue 0,0,255"),
+    corridor("-01- Storm CB", "Storm Catch Basins", "storm_cb", "ACI 160 blue 0,63,255"),
+    corridor("-02- Sewerage", "Sewer", "sewer", "ACI 210 magenta 255,0,255"),
+    corridor("-04- Irrigation", "Irrigation", "irrigation", "ACI 90 green 0,255,0"),
+    corridor("-04-Irrigation Secondary", "Irrigation Secondary", "irrigation_secondary", "ACI 94 dark green 0,153,0"),
+    corridor("-05- Potable Water", "Water", "water", "ACI 140 sky blue 0,191,255"),
+    corridor("07- Telecom", "Telecom", "telecom", "olive green 124,165,0"),
+    corridor("-08- Electrical HV", "Electrical HV", "hv", "as drawn"),
+    corridor("-09- Electrical MV", "Electrical MV", "mv", "ACI 21 salmon 255,159,127"),
+    corridor("-10- Electrical LV", "Electrical LV", "lv", "ACI 44 dark gold 153,115,0"),
+    corridor("-15- House Connection", "House Connection", "house_connection", "ACI 242 crimson 204,0,51"),
+    corridor("-00-Tree_SL", "Trees and Street Lighting", "trees_sl", "ACI 8 grey 128,128,128"),
+    corridor("-00-Tree_IRS", "Trees and Irrigation", "trees_irs", "ACI 81 pale green 191,255,127"),
+    corridor("-00-Tree_IRS_SL", "Trees, Irrigation and Street Lighting", "trees_irs_sl", "ACI 151 pale blue 127,191,255"),
   ],
   reportJoins: [],
   assetKeys: AssetKeyConfig.parse({}),

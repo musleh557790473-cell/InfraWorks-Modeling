@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PARSONS_NRJS_CORRIDORS_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, corridorFit, parseDxf } from "../src/index.js";
+import { PARSONS_NRJS_CORRIDORS_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, corridorFit, depthNetworks, parseDxf } from "../src/index.js";
 
 /** Build a DXF from [code, value] pairs. */
 const dxf = (...pairs: (string | number)[]) => pairs.map(String).join("\n") + "\n";
@@ -114,9 +114,13 @@ test("Al Narjis corridors: lines of the IUC xref ship as display-only corridor l
     0, "LWPOLYLINE", 8, "-05- Potable Water", 90, 2, 70, 0, 10, 695, 20, 466, 10, 734, 20, 466, // legend
     0, "ENDSEC", 0, "EOF",
   );
-  const f = parseDxf(text, "IUC-10000.dxf", PARSONS_NRJS_CORRIDORS_PROFILE).features.filter((x) => x.outputLayer === "utility_corridors");
+  const f = parseDxf(text, "IUC-10000.dxf", PARSONS_NRJS_CORRIDORS_PROFILE).features.filter((x) => x.outputLayer?.startsWith("corridor_"));
   assert.equal(f.length, 1);
+  assert.equal(f[0]!.outputLayer, "corridor_water", "one Shapefile per corridor, so each takes its own colour");
   assert.equal(f[0]!.attributes.network, "Corridor - Water");
+  // lifted 1.0 m above the terrain (else hidden under the road body)
+  const lifted = depthNetworks(f, PARSONS_NRJS_CORRIDORS_PROFILE).features[0]!;
+  assert.deepEqual([lifted.attributes.off_start_m, lifted.attributes.off_end_m, lifted.attributes.lift_m], [1, 1, 1]);
 });
 
 test("Al Narjis storm: pipe size from the layer, network named for Al Narjis, cover from its own report", () => {

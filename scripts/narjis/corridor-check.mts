@@ -1,11 +1,11 @@
 /**
  * Al Narjis: does each modelled network run in its utility corridor (IUC-DWG-10000)? Reads the network
- * layers of the shipped packages and the corridor lines of Al-Narjis-corridors-shp-v1 (DATA_DIR\exports),
+ * layers of the shipped packages and the corridor lines of Al-Narjis-corridors-shp-v2 (DATA_DIR\exports),
  * and prints, per network, the share of its length within 1 m and 2 m of its corridor line.
  *
  *   pnpm exec tsx scripts/narjis/corridor-check.mts [--out scripts/narjis/corridor-check.md]
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { corridorFit, resolveDataDir, type Line } from "@infraworks/domain";
@@ -16,7 +16,9 @@ type Feature = { geometry: { type: string; coordinates: unknown }; properties: R
 const layer = (pkg: string, name: string): Feature[] => JSON.parse(readFileSync(join(exportsDir, pkg, "layers", `${name}.geojson`), "utf8")).features;
 const lines = (fs: Feature[]): Line[] => fs.flatMap((f) => (f.geometry.type === "LineString" ? [f.geometry.coordinates as Line] : f.geometry.type === "MultiLineString" ? (f.geometry.coordinates as Line[]) : []));
 
-const corridors = layer("Al-Narjis-corridors-shp-v1", "utility_corridors");
+// one layer per corridor (corridor_<utility>) in v2
+const corridorPkg = "Al-Narjis-corridors-shp-v2";
+const corridors = readdirSync(join(exportsDir, corridorPkg, "layers")).filter((f) => f.startsWith("corridor_")).flatMap((f) => layer(corridorPkg, f.replace(/\.geojson$/, "")));
 const corridorOf = (...networks: string[]) => lines(corridors.filter((f) => networks.includes(String(f.properties.network))));
 
 const checks: { network: string; source: string; features: Feature[]; corridor: string[] }[] = [

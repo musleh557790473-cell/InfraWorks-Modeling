@@ -353,3 +353,7 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
 - `corridorFit` (domain) and `scripts/narjis/corridor-check.mts`: share of each network within 1 / 2 m
   of its corridor. Results and reading in `corridor-check.md`: sewer and MV follow theirs; water and
   irrigation (WaterGEMS) follow the sewer corridor; storm a third. Parsons questions 12, 13.
+- Corridors v1 (one Shapefile) showed every corridor in one colour, hidden under the road body (user,
+  11 Nov). `exports\Al-Narjis-corridors-shp-v2`: one Shapefile per corridor (13), 0.15 m wide, lifted
+  1.0 m above the terrain (new `depth.liftM`; roads stand ~0.6 m above the grading surface), each with
+  its IUC layer colour in `CORRIDOR_COLOURS.txt`. The v1 source is to be removed from the model.
