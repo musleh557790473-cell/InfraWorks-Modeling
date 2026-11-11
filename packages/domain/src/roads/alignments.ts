@@ -31,8 +31,10 @@ const stripCodes = (t: string) => t.replace(/\\[A-Za-z][^;]*;|[{}]/g, "").trim()
 
 export function buildAlignments(layout: DxfEnt[], views: ProfileView[], packageNames: NamedStart[] = []): AlignmentResult {
   // Al Qairawan draws centrelines on RD_PR_CNRL, Al Narjis on RD_CL (one of them a LINE); "RD_CL
-  // External Road" are roads outside the site, with no profile.
-  const plines = layout.filter((o) => (o.type === "LWPOLYLINE" || (o.type === "LINE" && o.end)) && (o.layer.endsWith("RD_PR_CNRL") || o.layer === "RD_CL"));
+  // External Road" are roads outside the site, with no profile. Namar (ROD-10200, 10-2026) draws them on
+  // "_CL".
+  const plines = layout.filter((o) => (o.type === "LWPOLYLINE" || (o.type === "LINE" && o.end)) && (o.layer.endsWith("RD_PR_CNRL") || o.layer === "RD_CL" || o.layer === "_CL"));
+  const rings = layout.filter((o) => o.type === "CIRCLE" && o.r && (o.layer === "_CL" || o.layer === "RD_CL" || o.layer.endsWith("RD_PR_CNRL"))).map((o) => ({ c: [o.x[0]!, o.y[0]!] as P2, r: o.r! }));
   const chainTexts = layout.filter((o) => o.type === "MTEXT" && o.layer.endsWith("RD_C_CHAIN_TEXT"));
   const chain0: P2[] = chainTexts.filter((o) => /(^|;)0\+000(\.0+)?\}?$/.test(o.txt.replace(/\{|\}/g, ""))).map((o) => [o.x[0]!, o.y[0]!]);
   const chainLabels = chainTexts.flatMap((o) => { const m = stripCodes(o.txt).match(/(\d+)\+(\d+\.\d+)$/); return m ? [{ x: o.x[0]!, y: o.y[0]!, s: +m[1]! * 1000 + +m[2]! }] : []; });
@@ -114,9 +116,21 @@ export function buildAlignments(layout: DxfEnt[], views: ProfileView[], packageN
     // pass 3: one own piece longer than the profile by <= 2.5 m, cut at the profile end
     if (pieces.length === 1) {
       const s = openLoop(pieces[0]!), L = pieceLen(s), o = tickDist(first(s).a) <= tickDist(last(s).b) ? s : reverseSegs(s);
-      if (L > plen && L - plen <= 2.5) {
+      // ... or longer by any amount when its far end lies inside a roundabout ring drawn as a centreline
+      // circle: the profile stops at the ring (Namar RD-M-01: 8.22 m into RA-01)
+      const inRing = rings.find((c) => dist(last(o).b, c.c) < c.r + 1);
+      if (L > plen && (L - plen <= 2.5 || (inRing && L - plen < inRing.r + 1))) {
         const t = trimTo(o, plen);
-        chained.set(name, { c: { segs: t, len: pieceLen(t), used: 1, nOwn: 1, keys: [pk(pieces[0]!)] }, how: `piece ${L.toFixed(3)} m cut to the profile end (${(L - plen).toFixed(3)} m)` });
+        chained.set(name, { c: { segs: t, len: pieceLen(t), used: 1, nOwn: 1, keys: [pk(pieces[0]!)] }, how: `piece ${L.toFixed(3)} m cut to the profile end (${(L - plen).toFixed(3)} m${L - plen > 2.5 ? ", inside a roundabout ring" : ""})` });
+        continue;
+      }
+      // a piece up to 2 cm short of its profile, ending straight: its last line extended to the profile end
+      // (Namar RD-32: plan 541.603, profile end label 0+541.614)
+      const end = last(o);
+      if (L < plen && plen - L <= 0.02 && !end.bulge) {
+        const d = dist(end.a, end.b), f = (d + plen - L) / d;
+        const t = [...o.slice(0, -1), { ...end, b: [end.a[0] + (end.b[0] - end.a[0]) * f, end.a[1] + (end.b[1] - end.a[1]) * f] as P2 }];
+        chained.set(name, { c: { segs: t, len: pieceLen(t), used: 1, nOwn: 1, keys: [pk(pieces[0]!)] }, how: `piece ${L.toFixed(3)} m extended ${(plen - L).toFixed(3)} m to the profile end` });
         continue;
       }
     }

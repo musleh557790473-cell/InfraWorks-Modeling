@@ -268,8 +268,9 @@ export function applySectionDecisions(sections: Record<string, SectionClass>, de
  */
 export function classifySections(layout: DxfEnt[], roads: Alignment[]): Record<string, SectionClass> {
   const segsOf = (layer: string) => layout.filter((e) => e.layer === layer && e.x.length > 1).flatMap((e) => e.x.slice(1).map((x, i) => [e.x[i]!, e.y[i]!, x, e.y[i + 1]!] as [number, number, number, number]));
-  // Al Qairawan: RD_ROW / -RD_Edges; Al Narjis: __ROW / RD_Edge (IRO-10001). Polylines only, as before.
-  const ROW = [...segsOf("RD_ROW"), ...segsOf("__ROW")], EDGE = [...segsOf("-RD_Edges"), ...segsOf("RD_Edge")];
+  // Al Qairawan: RD_ROW / -RD_Edges; Al Narjis: __ROW / RD_Edge (IRO-10001); Namar: __ROW / "Road edge"
+  // (ROD-10200). Polylines only, as before.
+  const ROW = [...segsOf("RD_ROW"), ...segsOf("__ROW")], EDGE = [...segsOf("-RD_Edges"), ...segsOf("RD_Edge"), ...segsOf("Road edge")];
   const TYPES = (Object.entries(SECTION_TYPES) as [SectionType, { row: number }][]).map(([t, v]) => [v.row, t] as const);
   // nearest crossing of the normal line with a segment set, on each side (within 30 m)
   const cross = (segs: [number, number, number, number][], p: P2, u: P2) => {
