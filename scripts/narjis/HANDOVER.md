@@ -382,3 +382,10 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   are not imported yet.
 - Coverage Areas drape on the terrain (Draping Options: Drape or one Set Elevation): they cannot follow
   the road surface; the lifted Pipelines are the corridors seen above the roads.
+- Exact colours (11 Nov): the user made one style in the Style Palette ("IUC Telecom", x7CA500FF).
+  InfraWorks keeps such styles in the model: `<model>.files\unver\Content\Styles\Material\Colors\CORRIDOR
+  color\`, `...\Material\CORRIDOR color\` and `...\Pipeline\` (.ACItem JSON + .png). The Pipeline style is a
+  copy of Green Circle whose tube material is the new colour; "ambient" is half the colour.
+  `scripts/narjis/corridor-style-library.cjs` writes the 14 "IUC <name>" styles the same way (its Telecom
+  matches InfraWorks' own file for file); `corridor-styles.cjs` now gives each corridor line
+  'Pipeline/IUC <name>'. 39 style files written into the working copy; corridors not yet all imported.

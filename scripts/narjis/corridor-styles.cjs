@@ -4,28 +4,16 @@
  * DATA_SOURCES.CONFIG propertyMappings.RULE_STYLE = { expression: "'<style>'" }, and the same value in
  * RULE_STYLE of each feature row of that source.
  * - Coverage Areas (corridor_band_*): a colour code 'xRRGGBBAA' (exact IUC colour).
- * - Pipelines (corridor_*): a library style 'Pipeline/<name>'; InfraWorks ships 11, so the nearest one.
+ * - Pipelines (corridor_*): the model's own style 'Pipeline/IUC <name>' in the exact colour.
  * Usage (model closed, on a copy first):  node scripts/narjis/corridor-styles.cjs "<model>.sqlite" [--dry]
  */
 const { DatabaseSync } = require("node:sqlite");
 const { existsSync } = require("node:fs");
 
-const COLOURS = {
-  storm: ["0000FF", "Blue Pipe"],
-  storm_cb: ["003FFF", "Blue Pipe"],
-  sewer: ["FF00FF", "Purple Pipe"],
-  irrigation: ["00FF00", "Green Circle"],
-  irrigation_secondary: ["009900", "Green Circle"],
-  water: ["00BFFF", "Light Blue Pipe"],
-  telecom: ["7CA500", "Yellow Pipe"],
-  hv: ["808080", "Metal Pipe"],
-  mv: ["FF9F7F", "Orange Pipe"],
-  lv: ["997300", "Orange Pipe"],
-  house_connection: ["CC0033", "Red Pipe"],
-  trees_sl: ["808080", "Concrete Pipe"],
-  trees_irs: ["BFFF7F", "Green Circle"],
-  trees_irs_sl: ["7FBFFF", "Light Blue Pipe"],
-};
+// Exact IUC colours: the lines take the model's own "IUC <name>" pipe styles, made by
+// scripts/narjis/corridor-style-library.cjs (run it first); the bands take the colour code.
+const { CORRIDORS } = require("./corridor-style-library.cjs");
+const COLOURS = Object.fromEntries(Object.entries(CORRIDORS).map(([slug, [name, hex]]) => [slug, [hex, name]]));
 
 const [model, ...rest] = process.argv.slice(2);
 const dry = rest.includes("--dry");
