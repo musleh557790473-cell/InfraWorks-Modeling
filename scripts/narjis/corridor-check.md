@@ -40,3 +40,11 @@ apart (IUC-30001), so the nearest line is the place the plan gives that metre.
 - Storm: 36 % in its place, 54 % more than 2 m from every corridor (includes the line off site to the east).
 - MV 92 %; LV cables 64 %; house connections 50 % (27 % in the telecom place); telecom 71 %; security 70 %
   (compared with the telecom corridor, IUC has none for security).
+
+## Model against drawing, line by line (11 Nov 2026)
+
+- Irrigation: the WaterGEMS pipes follow the IRW drawing (94 % within 0.5 m, median 0.00 m); the drawing has
+  ~180 m more (50 mm secondary, 75 mm tie-ins). Both lie mostly in the sewer place of IUC.
+- Potable water: the WaterGEMS pipes run beside the IPW drawing, about 4.4 m off (median 4.38 m; 72 % within
+  5 m, 1 % within 1 m), in the sewer / storm place where the drawing is in the water place; the drawing has
+  ~400 m more.
