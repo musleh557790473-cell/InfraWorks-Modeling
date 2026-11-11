@@ -90,6 +90,12 @@ for (const f of files) {
   }
   for (const x of ["exp.log", "dxf.log"]) fs.rmSync(w(x), { force: true });
 }
-fs.rmSync(work, { recursive: true, force: true });
+// accoreconsole may still hold a file in the work folder (EPERM, Namar 11 Nov 2026): the DXFs are
+// written by then, so leave the folder and say so rather than fail the run.
+try {
+  fs.rmSync(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 2000 });
+} catch (e) {
+  console.log(`work folder ${work} left in place (${e.code ?? e.message}); delete it later`);
+}
 console.log(`${files.length - failed} of ${files.length} converted or present, ${failed} failed`);
 process.exitCode = failed ? 1 : 0;

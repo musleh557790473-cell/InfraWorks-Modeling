@@ -1,0 +1,185 @@
+﻿# Namar (Dahiyat Namar): session log
+
+Goal: one Namar InfraWorks model (Riyadh, UTM 38N, InfraWorks `UTM84-38N`) on the path of Al Narjis
+(`scripts/narjis/HANDOVER.md`): component roads, junctions, utility networks, plots, corridors, each
+checked by Gate G3.
+
+## Session 1 (11 Nov 2026): inventory of Parsons' deliverables (read only)
+
+Prerequisite: main at `1ac4750` (PR #28). Branch `feat/namar-start` made locally; `git pull` failed on
+the company network (CRYPT_E_NO_REVOCATION_CHECK), to redo on the hotspot before pushing.
+
+### Where the data is
+
+OneDrive `Documents\03 WIP\TAWAZUN PROGRAM\03_Parsons\Submission\Namar` (615 files), two submissions:
+
+- **`10-2026`** (sheets dated 11 Oct 2026): sheet names `LDIP-RCRC-SAP-03-DN-<DISC>-DWG-<nnnnn>-<sss>-<rev>`,
+  district code **DN** (Dahiyat Namar, Package 3). Disciplines ROD, SWN, STO, PWT, IRR, ELV, EMV, SLT,
+  TEL, SEC, UTL. The newest and most complete set (adds the utility corridor sheets): the proposed base.
+  `Drawings.zip` / `Reports.zip` in the same folder are the same files zipped (266 entries).
+- `2026.09.08_30% Concept Design Submission D Namar` (Sep 2026): the first 30% CD, names
+  `LDIP-RCRC-SAP-03-NMAR-<IRO|ISE|...>-DWG-00-<nnnnn>` (code **NMAR**, as Al Narjis' NRJS), plus
+  `Models\Roads` (3 x DWG / IFC / NWC / DWFx), the BOQ (`Package 1_Dahiyat Namar _ 30% CD Rev.00.xlsx`)
+  and report `SAPL-DSN-LDN-RPT-000002.pdf` (Sep). Superseded by 10-2026 except the BOQ.
+- `(WF's of 30% Concept Design for Dahiyat Namar.zip`: 12 transmittal PDFs (one per package).
+- `to infraworks\PARSONS_SAPL_NMAR_Submission*`: an earlier AICC extraction (9 Sep) of one DWG
+  (`...NMAR-IRO-DWG-001-0001.dwg`) into 15 Shapefiles (765 plots, 46 centrelines, ROW, asphalt...).
+  Pre-30% CD; not a source for this model.
+
+### Inventory (Al Narjis input -> Namar, 10-2026 set)
+
+| Discipline | Namar files (10-2026) | Count | Notes |
+| --- | --- | --- | --- |
+| Roads: index / legend / notes | ROD-DWG-00001..00003 | 3 | |
+| Roads: layout plans | ROD-DWG-10200 (key plan -000 + cut sheets -001..005) | 6 | Al Narjis IRO-11000 equivalent (to confirm on DXF) |
+| Roads: further plan series | ROD-DWG-10300, 10400, 10500, 10600 (each -000..005) | 24 | titles to read on DXF / PDF (signage, marking, grading?); 10600 is 34-58 MB per sheet |
+| Roads: typical sections | ROD-DWG-30000-001 | 1 | |
+| Roads: profiles | ROD-DWG-40000-001..014 | 14 | |
+| Roads: other | ROD-DWG-50000-001, 50200-001, 60000-001..003 | 5 | details |
+| Roads: 3D models | ROD-MOD-90000-001 NGL, -002 Site Grading, -003 Roads Surface (DWG, IFC, NWC, DWFx) | 3 | Civil 3D surfaces in DWG; **no LandXML**. InfraWorks 2026 reads Civil 3D 2026 DWG on this laptop (Civil 3D 2026 installed), or a LandXML export |
+| Sewer | SWN-DWG-00001/00002, 10000-000..005 + SewerGEMS `Rev.01_Op.4.stsw.sqlite` (SWN-MOD-00001) | 8 + 1 | model preferred |
+| Potable water | PWT-DWG-00001/00002, 10000-000..005 + WaterGEMS `PW_CD_Model.wtg.sqlite` (PWT-MOD-00001) | 8 + 1 | cover source needed |
+| Irrigation | IRR-DWG-00001/00002, 10000-000..005 + WaterGEMS `Nemer Hydraulic Model.wtg.sqlite` (IRR-MOD-00001) | 8 + 1 | cover source needed |
+| Storm | STO-DWG-00001/00002, 10000-000..005 | 8 | drawing only |
+| LV | ELV-DWG-00001/00002, 10000-000..005, 60000-001 | 9 | one file name starts with `'` |
+| MV | EMV-DWG-00001/00002, 10000-000..005, 60000-001 | 9 | |
+| Street lighting | SLT-DWG-00001/00002, 10000-000..005, 60000-001 | 9 | |
+| Telecom | TEL-DWG-00001/00002, 10000-000, 10100-000 | 4 | |
+| Security | SEC-DWG-00001/00002, 10000-000, 10100-000 | 4 | |
+| Utility corridors | UTL-DWG-00001/00002, 10000-000..005, 30000-001/002 | 10 | |
+| Design report | `10-2026\Reports\LDIP-RCRC-SAP-03-DN-DES-RPT-00001.pdf` (78 MB) | 1 | depths, sizes, covers |
+| BOQ | Sep `BOQ\Package 1_Dahiyat Namar _ 30% CD Rev.00.xlsx` | 1 | quantities to cross-check |
+
+Total 10-2026: 130 DWG (+ the same as PDF), 3 hydraulic models, 3 road surface models, 1 report.
+
+### Existing Namar InfraWorks model
+
+`TAWAZUN PROGRAM\Infraworks\Package 3 - Site 04 Dahiyat Namar.sqlite` + `.files` (OneDrive, 1 Oct
+2026, 9.7 MB, no `.lock`), with backups of 13 Sep. Read only: data sources `Namar Topo C3D - SURFACES`
+(survey), `Dahiyat Namar Site Grading - SURFACES` (Sep grading), and Sep-era layers
+`NMR_Plots_Residential_v02`, `SAP_Facilities`, `SAP_Asphalt_Areas`, `NMR_Survey_Wadi_Edges`,
+`NMR_Official_Boundary_S7`, `NMR_Road_Hierarchy_v02`, `NMR_ROW_Areas_v02` (43 roads, 767 parcels, no
+pipes). Terrain surfaces `NAMAR` (off) and `Nemer Mass Grading` (on). As for Al Narjis: base = its
+survey terrain; the Sep layers do not belong in the design model; the grading to be replaced by the
+10-2026 Site Grading / Roads Surface model.
+
+### Agreed order (user, 11 Nov 2026)
+
+The 10-2026 (DN) set, in the order proposed: DXF conversion; model `C:\IW\Namar`; sewer; roads and
+plots, component roads, junctions, kerbs; storm, dry networks, water / irrigation fittings; corridors
+and colours; water and irrigation once the cover is agreed.
+
+### DXF conversion (started 11 Nov 2026)
+
+The 130 DWGs of `10-2026\Drawings` copied with robocopy to `C:\Temp\namar-dwg` (713 MB); converting with
+`node scripts/dwg-to-dxf.cjs C:\Temp\namar-dwg C:\Temp\dxf\namar` (log `C:\Temp\dxf\namar-convert.log`).
+
+### Hydraulic models (read dry, 11 Nov 2026)
+
+Extracted to `DATA_DIR\inputs\namar\hydraulic` from the 10-2026 zips (all inside E 656 662-657 939,
+N 2 714 038-2 714 883: one site of about 1.3 x 0.85 km, UTM 38N):
+
+| Model | Live | Left out | Sizes |
+| --- | --- | --- | --- |
+| Sewer `Rev.01_Op.4.stsw.sqlite` (SWN-MOD-00001) | 164 pipes (9.26 km), 166 manholes / outfalls | 22 deleted | corrugated HDPE 149 x 200, 15 x 250 mm; 1 node without a usable rim |
+| Water `PW_CD_Model.wtg.sqlite` (PWT-MOD-00001), scenario "Peak Daily + FF" | 121 pipes (10.87 km), reservoir | 113 deleted | HDPE 105 x 160, 15 x 200, 1 x 250 |
+| Irrigation `Nemer Hydraulic Model.wtg.sqlite` (IRR-MOD-00001), scenario "Peak Distribution" | 291 pipes (9.45 km), 8 structures (reservoir, 3 air valves, 3 isolation valves, pump) | 2 switched off | HDPE 157 x 90, 109 x 75, 11 x 110, 10 x 160, 3 x 200, 1 x 71 (odd size); 26 labels used twice |
+
+### Depths and sizes from Namar's report (11 Nov 2026)
+
+`10-2026\Reports\LDIP-RCRC-SAP-03-DN-DES-RPT-00001.pdf` ("30% Concept Design Report for Dahiyat Namar",
+Sep 2026). Text pulled from the PDF streams; its subset TrueType fonts store glyph ids, read as
+id + 29 = ASCII (the bullets of §5.3.14 are in that font).
+
+| Item | Value | Section |
+| --- | --- | --- |
+| LV / MV burial depth (to the cable centre) | 0.65 m / 0.80 m | §2.3.3 (design parameters table) |
+| MV ducts | concrete-encased duct banks, 200 mm | §2.3.9.3 |
+| LV road crossings | concrete-encased 110 mm ducts | §2.3.10.3 |
+| Street lighting ducts | 110 mm O.D. uPVC duct banks | §2.3.12.2.4.1 |
+| Potable water cover | >= 1.2 m under traffic, >= 1.0 m outside traffic (or the maker's, whichever is greater) | §5.3.14 |
+| Sewer cover to the pipe top | 1.2 m without protection, 0.5 m with | §6.3.3, Table 6.2 (the model has inverts) |
+| Irrigation cover | mainline and secondary 1.2 m (NWC), tertiary 0.6 m | §8.2.2 design criteria table; tertiary laterals are designed in LANDFX, not in the WaterGEMS model |
+| Storm soil cover over the crown | >= 1.2 m | §10.2.7 |
+
+Same values as Al Narjis' and Al Qairawan's reports. Water: which of 1.2 / 1.0 m applies is for AICC
+(pipes in the road reserve).
+
+### Sewer package (11 Nov 2026)
+
+`exports\Namar-sewer-shp-v1` (+ zip) from `Rev.01_Op.4.stsw.sqlite`: 164 pipes, 166 manholes / outfalls,
+network "Sewer - Rev.01_Op.4". Validation OK, no warnings.
+
+### Working model (11 Nov 2026)
+
+`C:\IW\Namar\Package 3 - Site 04 Dahiyat Namar.sqlite` + `.files`: robocopy of the OneDrive model
+(1 + 1 882 files; same sqlite hash 64F8942C...), integrity ok, proposal `master` (the only one), `.files`
+clean. Every data source in UTM84-38N. Terrain: `NAMAR` survey (Z 666.7-785.2, hidden) and `Nemer Mass
+Grading` (Sep, Z 750.9-781.6, visible).
+Surfaces of the 10-2026 set extracted to `C:\IW\data\namar`: `...ROD-MOD-90000-002.dwg` (Site Grading,
+4.6 MB) and `...ROD-MOD-90000-003.dwg` (Roads Surface, 14.8 MB), to add as Civil 3D DWG (Civil 3D 2026
+on this laptop; Autodesk "To add Autodesk Civil 3D data to an InfraWorks Model").
+
+### Water and irrigation packages (11 Nov 2026)
+
+- Cover chosen by the user (AICC, 11 Nov): water **1.2 m** (report §5.3.14, under traffic: the pipes run in
+  the road reserve); irrigation **1.2 m** (§8.2.2, mainline and secondary). Each pipe keeps its source in
+  `cover_src`.
+- `exports\Namar-water-shp-v1` (+ zip) from `PW_CD_Model.wtg.sqlite`: 121 pipes (HDPE 160 / 200 / 250),
+  1 structure (reservoir), network "Water - PW_CD_Model", centre 1.280-1.325 m below the terrain. OK, no
+  warnings.
+- `exports\Namar-irrigation-shp-v1` (+ zip) from `Nemer Hydraulic Model.wtg.sqlite`: 291 pipes, 8 structures,
+  network "Irrigation - Nemer Hydraulic Model", centre 1.235-1.300 m below the terrain. OK; warning
+  ASSET_ID_DUPLICATE: 26 pipe labels used twice in Parsons' model (P-46, P-47, ... Tie In- 140): Parsons
+  question.
+
+### DXF conversion done (11 Nov 2026)
+
+130 of 130 sheets to `C:\Temp\dxf\namar` (same folders as `C:\Temp\namar-dwg`). 120 through EXPORTTOAUTOCAD;
+10 crashed accoreconsole there and are direct DXFOUT (Civil 3D objects stay custom objects): IRR-10000-001..005
+(cut sheets; the 10000-000 general plan is clean), ROD-60000-001..003 (details), UTL-30000-001/002 (corridor
+sections). The run ended on EPERM removing `_work` (a file still held): `dwg-to-dxf.cjs` now retries and
+leaves the folder with a message instead of failing.
+
+### Road layout DXF, first look (11 Nov 2026)
+
+`ROD-DWG-10200-000` binds `Xref Road Layout Dahiyat Nemar` (insert `..._1`) and `Xref Dim_Names Dahiyat Nemar`
+(spelt "Nemar"; the title block says "Namar"). Layers differ from Al Narjis again: centrelines `_CL`
+(45 LWPOLYLINE, not RD_CL), ROW `__ROW` (43), edges `Road edge` (not RD_Edge), kerbs `__Curb` (ARC / LINE /
+LWPOLYLINE; no RD_CURB_RETURN layer). Names: `0-Alignment Name` MTEXT (90) in Dim_Names; ROW widths
+15 / 18 / 25 m as blocks `15MROW` / `18MROW` / `25MROW`. No plot baseplan xref in 10200 (to find in
+another sheet). The readers need these names (a Namar profile, not a copy of Al Narjis').
+
+### Imports and LandXML from the surface models (11 Nov 2026)
+
+- User (screenshot 11 Nov): Sep layers removed; imported `sewer_*`, `water_*`, `irrigation_*` (Pipelines /
+  Pipeline Connectors) and one `LDIP-RCRC-SAP-03-DN-ROD-MOD-90...` Civil 3D DWG source; terrain sources
+  `Namar Topo C3D`, `Dahiyat Namar Site Grading` (IMX, Sep) kept. The user asked for LandXML of the two surface
+  models instead.
+- Civil 3D's LandXML export is a dialog only, so not headless. Route used: `dwg-to-dxf.cjs` on the surface DWG
+  (EXPORTTOAUTOCAD writes the TIN as 3DFACEs when the surface style shows triangles), then the faces to a
+  LandXML TIN (`<Pnts>` northing easting elevation, `<Faces>`; CRS UTM84-38N stated in the file).
+- **Site Grading** (ROD-MOD-90000-002, 10-2026): 62 420 3DFACEs -> `C:\IW\data\namar\DN-ROD-MOD-90000-002 Site
+  Grading.xml`, surface "DN Site Grading", 30 795 points, 59 740 faces (degenerate slivers under 1 mm dropped),
+  E 656 614-657 973, N 2 714 016-2 714 916, Z 750.913-781.566. The same surface as September's: 61 965 of its
+  triangles equal the Sep IFC's to 1 mm, same extent and Z range, and the same Z range as the model's existing
+  `Nemer Mass Grading`.
+- **Roads Surface** (ROD-MOD-90000-003): accoreconsole crashes opening the 10-2026 DWG ("ErrorStatus=53" while
+  regenerating, also with `/product C3D`), so no DXF. The IFC beside it in the 10-2026 zip is byte-identical to
+  September's IFC (`NMAR-IRO-MOD-00-00003.ifc`, 8 Sep): 232 203 faces, E 656 654-657 945, N 2 714 025-2 714 882,
+  Z 753.976-780.637. The 10-2026 DWG differs from the Sep DWG by hash, so the IFC may be older than the DWG.
+- **Roads Surface from the September IFC** (user's choice, 11 Nov): the IFC is a thin solid per surface: up-facing
+  faces = the surface, down-facing = a copy 1 mm lower, plus edge walls. Checked on Site Grading: its IFC up faces hold
+  61 792 of the 62 203 DXF triangles but also 62 707 m2 of overlapping extras (so Site Grading stays from the DXF).
+  Roads Surface up faces: 81 927, 180 528 m2, plan overlap 55 m2 (edge sampling only). Written to
+  `C:\IW\data\namar\NMAR-IRO-MOD-00-00003 Roads Surface (Sep IFC).xml`, surface "NMAR Roads Surface (Sep IFC)":
+  57 540 points, 81 503 faces, E 656 654-657 945, N 2 714 025-2 714 882, Z 753.98-780.64.
+- Both files read by `loadLandXmlSurface` (model:roads). Against the 165 SewerGEMS rims: rim - Site Grading median
+  0.000 m (-1.494 to +0.126); rim - Roads Surface median -0.631 m (-1.519 to -0.199; 3 manholes outside it). Sewer
+  rims sit on the mass grading; the roads surface is the finished road ~0.6 m above it (as Al Qairawan). Proposed
+  stack: Site Grading on top, survey below; Roads Surface for reference (component roads build their own body).
+  The water / irrigation offsets are from the terrain in the model: with Site Grading as terrain, the 1.2 m cover is
+  from the mass grading, not the finished road.
+- Converter now in the repo: `pnpm surface:landxml <surface.dxf|.ifc> <out.xml> --name "<surface>"` (domain `roads/tin.ts`,
+  test `tin.test.ts`): DXF 3DFACEs, or an IFC's up faces; it stops when the faces overlap in plan (> 100 m2), as the
+  Site Grading IFC does. Both files above regenerated with it (same counts).
