@@ -240,3 +240,63 @@ another sheet). The readers need these names (a Namar profile, not a copy of Al 
   767/767; sewer, water, irrigation as before: all **PASS, 0 warnings**. Installed (7C73B35D... -> 5F07EC55...);
   integrity ok; G3 on the working copy: all five PASS, 0 warnings.
 - 1 535 CONSTRAINED_DEFINITIONS rows without a road: normal (Al Narjis 147 of 154).
+
+### Component roads (11 Nov 2026)
+
+- Inputs: layout ROD-DWG-10200-000 blocks "Xref Road Layout Dahiyat Nemar_1|Xref Dim_Names Dahiyat Nemar"; profiles
+  ROD-DWG-40000-001 block "Profiles Layout-Dahiyat Nemar" (each of the 14 profile sheets binds the whole profile
+  drawing: 46 views, 42 roads); surface `NMAR-IRO-MOD-00-00003 Roads Surface (Sep IFC).xml` "NMAR Roads Surface (Sep
+  IFC)"; package `Namar-10200-shp-v1\shp\road_centerline`; template RD-M-03 (CD 5a70af88-...).
+- Typical sections ROD-30000-001 = Al Qairawan's A1 (15 m local), A2 (18 m local), B1 (25 m neighbourhood collector,
+  median 1.20, sidewalks 4.60): no new section type.
+- Reader fixes (tests in namar-roads.test.ts): centrelines `_CL`, edges `Road edge`; profile views: the first (and
+  last) station label of a Namar view stands ~1 m off its tick, so scale = median label step (second label to last
+  when only two steps) and origin = median over the labels; FG lines up to 50 m past the last label (labels stop up
+  to 43 m short of the end); titles of one row up to 5 m apart in height (RD-29 is 2.6 m above RD-28). Alignments: a
+  single piece up to 2 cm short of its profile is extended along its end tangent (RD-32: plan 541.603, profile end
+  label 0+541.614); a piece whose far end lies inside a roundabout ring (CIRCLE on the centreline layer) is cut at
+  the profile end (RD-M-01: 8.219 m into RA-01).
+- Dry run: 41 of 42 roads chained to their profile length (RA-01 is the ring: left to InfraWorks as a roundabout
+  junction; WADI FATIMAH ROAD has no profile and stays a planning road); PVI issues 3 (RD-33 / RD-35 tangents 6-7 mm,
+  RA-01 a PVI without PVC / PVT); 21 reversed against the drawing direction, each matching the surface to <= 0.04 m;
+  sections: RD-M-01 / M-02 / M-03 B1, RD-13 / 19 / 25 / 26 A2, the rest A1 (RD-35 from one side).
+- Written on a scratchpad copy: 41 roads, 40 planning roads replaced (and the template), 0 level problems, 0 junction
+  steps >= 0.3 m. G3 --layout PASS (all 42 drawn roads; no junction rows left over); 10200 (47/47, 41 counted as
+  component roads), plots, sewer, water, irrigation PASS, 0 warnings. Installed (5F07EC55... -> 727F77A9...); G3
+  --layout on the working copy PASS. Do not Refresh `road_centerline` (planning roads would come back).
+
+### Network packages from the drawings (11 Nov 2026, side session)
+
+Same path as Al Narjis (profiles `parsons-dn-*`, packages in `DATA_DIR\exports`). Depths and sizes from report
+LDIP-RCRC-SAP-03-DN-DES-RPT-00001: storm cover 1.2 m §10.2.7; LV / MV 0.65 / 0.80 m to the cable centre §2.3.3; MV duct
+banks 200 mm §2.3.9.3; street lighting ducts 110 mm O.D. uPVC §2.3.12.2.4.1; water 1.2 m §5.3.14 (AICC choice);
+irrigation 1.2 m §8.2.2. §17.2 gives the security ducts as microduct bundles in duct banks with no depth: telecom and
+security stay on the terrain at the 0.1 m display size.
+
+Generalised: `districtNet`, `buriedFor`, `drawnPipeFor`, `corridorFor` (types.ts) build the parts every district
+repeats; Al Narjis' profiles are built from them and serialise exactly as before (checked against HEAD). Rules stay per
+district (xref and layer names differ). `scripts/narjis/corridor-bands.mts` takes `--src --out --district --sheet`.
+
+Fixes on real data (tests in `namar-networks.test.ts`):
+- OCS elevation: the reader dropped the elevation term of the OCS -> WCS transform ("exact for ±Z"). PWT-10000's 119
+  water valves have extrusion (0.012, -0.022, 0.9997) and OCS Z -52 308 m: all landed about 1 km south-east of the site
+  (as did 24 irrigation gate valves). With the term, all are on the network. Al Narjis' Parsons question 10 (19 valves
+  about 1 km south-east) is very likely the same: its water-fittings package would move them on site if rebuilt.
+- `skipBlocks` (profile): storm, security and much of irrigation sit on bare layer names, and each legend draws a sample
+  on those names ("Notes & Legend", "Xref Storm Legend", "NOTES&LEGEND"): the Namar profiles skip `*Legend*` blocks.
+- `dedupePoints` (rule): the street-light poles are arrays of AAM inserts, 47 laid exactly over another: kept once.
+
+| Package | Sheet(s) | Content | Warnings |
+| --- | --- | --- | --- |
+| `Namar-storm-shp-v1` | STO-10000-000 (block system-01) | 142 pipes (6.09 km; 400-1100 mm from the layer names, cover 1.2 m), 142 manholes + 4 outfalls (depth to the deepest pipe within 2 m) | unmapped layers |
+| `Namar-water-fittings-shp-v1` | PWT-10000-000 (xref LDIP-N~1) | 123 valves (119 valves, 3 washouts, 1 air valve), 74 fire hydrants; all on site | HATCH / MULTILEADER skipped |
+| `Namar-irrigation-dwg-shp-v1` | IRR-10000-000 (block Irrigation Routing) | valves 64 (54 buried gate, 6 air, 4 washout; 3 drawn twice), structures 195 (151 pull boxes, 44 quick couplings), two-wire decoder cable 205 lines (9.88 km, on the terrain) | HATCH / LEADER skipped; end-cap symbols on the cable layer left out |
+| `Namar-pipes-dwg-shp-v1` | PWT + IRR + SWN -10000-000 | water 123 (10.83 km; 160 / 200 / 250 mm, cover 1.2 m), irrigation 251 (10.10 km: 98 network 90-200 mm, 44 x 50 mm secondary, 108 x 75 mm tie-ins, the 160 mm transmission line; 1.2 m), sewer 166 (9.27 km, on the terrain); networks "<utility> - Namar (drawing)" | |
+| `Namar-dry-shp-v1` | ELV, EMV, SLT, TEL -10000-000, SEC-10000-000 | LV 4 361 lines (45.67 km; 333 cables + 4 028 house connections, 0.65 m), 212 mini pillars; MV 19 cables (3.80 km, 0.80 m, 200 mm), 16 substations; street lighting 43 cables (8.79 km, 110 mm), 292 lights, 5 panels; telecom 874 ducts (63.34 km), 62 handholes; security 47 ducts (8.00 km), 44 handholes | 1 telecom handhole outside the CRS left out; HATCH skipped |
+| `Namar-security-secondary-shp-v1` | SEC-10100-000 | 111 secondary security ducts (8.60 km) | |
+| `Namar-corridors-shp-v1` | UTL-10000-000 | 15 corridor Shapefiles (one per corridor, 0.15 m, lifted 1.0 m), colours in `CORRIDOR_COLOURS.txt`; adds sewer FM and street lighting, no HV | |
+| `Namar-corridor-bands-shp-v1` | from the corridors | 15 Coverage Areas Shapefiles, half widths 0.09-1.0 m (display only, no manifest: outside G3) | |
+
+Notes: TEL-10100 repeats 841 of TEL-10000's 874 ducts (not read); SEC-10100's ducts are distinct from SEC-10000's (own
+package). The LV xref repeats the substations, the MV loop and the lighting panels: read from their own xrefs. Off site:
+2 street lights and the lighting panel at E 656 676 N 2 712 923. Questions in `parsons-questions.md`.
