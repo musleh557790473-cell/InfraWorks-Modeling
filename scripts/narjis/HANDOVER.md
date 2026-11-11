@@ -337,5 +337,6 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
 
 - User imported `Al-Narjis-irrigation-valves-shp-v1` (13, Pipeline Connectors). model:names on a
   copy: NETWORKNAME 13. G3 with --layout and the ten packages: PASS, 0 warnings; integrity ok, 32 data
-  sources. Installed (8DDA3526... -> 4B574D37...). Every network and layer of the submission now in the model;
-  open items are Parsons' answers (parsons-questions.md).
+  sources. Installed (8DDA3526... -> 4B574D37...). Not modelled: irrigation pull boxes, quick
+  couplings, two-wire decoder cable and tie-ins; utility corridor sheets (IUC, widths only). Open
+  items for Parsons: parsons-questions.md.
