@@ -183,3 +183,17 @@ another sheet). The readers need these names (a Namar profile, not a copy of Al 
 - Converter now in the repo: `pnpm surface:landxml <surface.dxf|.ifc> <out.xml> --name "<surface>"` (domain `roads/tin.ts`,
   test `tin.test.ts`): DXF 3DFACEs, or an IFC's up faces; it stops when the faces overlap in plan (> 100 m2), as the
   Site Grading IFC does. Both files above regenerated with it (same counts).
+
+### Networks named and checked (11 Nov 2026)
+
+- User imported the Roads Surface LandXML (source `NMAR-IRO-MOD-00-00003 Roads Surface (Sep IFC) - Surfaces`, terrain
+  `NMAR Roads Surface (Sep IFC)`; TERRAIN_SURFACES shows MIN_Z / MAX_Z 0 for it, to see in InfraWorks). Earlier the
+  Civil 3D DWG source was ROD-MOD-90000-002 (surface `3D_PR_TR_RDSR_N`, Z 750.91-781.57: the Site Grading, the same as
+  the Sep IMX). Surface layers at close: `NAMAR` survey hidden (priority 1), Mass Grading, 3D_PR_TR_RDSR_N, Roads
+  Surface visible (2, 3, 4). The survey should be visible below the grading (site-edge walls otherwise; CLAUDE.md).
+- Model closed, proposal master, 10 data sources, `.files` clean. model:names on scratchpad copies with the sewer,
+  water and irrigation packages: every NAME, size, material, network filled; sewer ELEV_FROM / ELEV_TO 163 of 164 (the
+  pipe at the manhole without a rim in SewerGEMS). G3 on the copy: sewer 166/166 + 164/164 (9 260 m), water 1/1 +
+  121/121 (10 868 m), irrigation 8/8 + 291/291 (9 453 m), offsets 0.00 m, all named: **PASS, 0 warnings** each.
+  Installed after the hash check (1FD93213... -> E10AEC27...); integrity ok; G3 on the working copy: all three PASS,
+  0 warnings.
