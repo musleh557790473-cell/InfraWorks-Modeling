@@ -357,3 +357,16 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   11 Nov). `exports\Al-Narjis-corridors-shp-v2`: one Shapefile per corridor (13), 0.15 m wide, lifted
   1.0 m above the terrain (new `depth.liftM`; roads stand ~0.6 m above the grading surface), each with
   its IUC layer colour in `CORRIDOR_COLOURS.txt`. The v1 source is to be removed from the model.
+
+### Drawn pipes, corridor bands, nearest-corridor check (11 Nov 2026)
+
+- Drawn pipes beside the hydraulic models: rules in `parsons-nrjs-wet-utilities` (IPW layers "160" /
+  "200" / "250", IRW "Irrigation Network-HDPE-<mm>", 50 mm secondary, 75 mm tie-ins, ISE "SS_Pipe Dia
+  200"; networks "<utility> - Al Narjis (drawing)", covers as the WaterGEMS packages, sewer on the
+  terrain). `exports\Al-Narjis-pipes-dwg-shp-v1`: water 10 (1,778 m), irrigation 33 (1,428 m), sewer 20
+  (1,251 m), all Pipelines.
+- `corridorBands` + `scripts/narjis/corridor-bands.mts`: `exports\Al-Narjis-corridor-bands-shp-v1`, one
+  Coverage Areas Shapefile per corridor (13), each line widened by half the spacing to the nearest other
+  corridor (0.17-0.90 m each side, cap 1.0 m). No manifest: display only, outside G3.
+- `corridorAssignment` (nearest corridor among all) replaces the 1 m tolerance in `corridor-check.mts`;
+  order per network: corridor, drawing, model. Findings in `corridor-check.md`; questions 12-13 updated.

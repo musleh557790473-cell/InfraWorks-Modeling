@@ -519,6 +519,19 @@ const NRJS_REPORT = "SAPL-DSN-LDN-RPT-000003";
 const netN = (utility: string, conn_type?: string) => ({ utility, network: `${utility} - Al Narjis`, ...(conn_type ? { conn_type } : {}) });
 const NRJS_STORM_COVER = { coverM: 1.2, source: `${NRJS_REPORT} §5.6.7 soil cover above top of pipe not less than 1.2 m` };
 
+/** Covers used for the WaterGEMS packages, applied to the same networks as drawn (see HANDOVER.md). */
+const WATER_COVER_N = { coverM: 1.2, source: "NWC typical: 1.20 m from finished road surface to pipe crown (given by AICC, 10 Nov 2026)" };
+const IRR_COVER_N = { coverM: 0.8, source: "ASSUMED by AICC (0.80 m, as Al Qairawan); IRW-00001/00002 general notes give no cover; pending Parsons confirmation" };
+/** A pipe as a network sheet draws it: network "<utility> - Al Narjis (drawing)", size from the layer name. */
+const drawnPipe = (utility: string, outputLayer: string, sizeRe: string | undefined, depth?: { coverM: number; source: string }, fixedMm?: number) => ({
+  infraFeatureClass: "pipeline" as const,
+  outputLayer,
+  attributes: { utility, network: `${utility} - Al Narjis (drawing)`, material: "HDPE" },
+  fields: { ...PIPE_COLUMNS, PIPE_MATERIAL: "material", ...(depth ? LINE_DEPTH_COLUMNS : {}) },
+  size: sizeRe ? { fromLayer: sizeRe } : { fixed: { mm: fixedMm!, source: "IRW-DWG-10000 legend: Ø 75mm HDPE pipe for tie-ins" } },
+  ...(depth ? { depth } : {}),
+});
+
 /**
  * Al Narjis storm drainage (ISW-DWG-10000; no storm model was issued): the network is block SYSTEM-01
  * of the sheet, pipes on "…M-SW_Pipe Dia <mm>" (400-800), manholes as SW_CI_Manhole1500 inserts,
@@ -561,6 +574,18 @@ export const PARSONS_NRJS_WET_PROFILE: MappingProfile = {
     { dwgLayer: "Xref Irrigation$0$*LI-EQPM-DRIP", ...node, outputLayer: "irrigation_structures_dwg", attributes: netN("Irrigation", "Quick Coupling") },
     { dwgLayer: "Xref Irrigation$0$00_Tie-ins_ROW", ...node, outputLayer: "irrigation_structures_dwg", attributes: netN("Irrigation", "Tie-in") },
     { dwgLayer: "Xref Irrigation$0$*IR-ELEC CABLE", ...cable, outputLayer: "irrigation_control_cable", attributes: netN("Irrigation", "Two-Wire Decoder Cable") },
+    // Pipes as the network sheets draw them, beside the hydraulic models' (to compare both with the
+    // IUC corridors): water on layers named for the size (IPW: "160", "200", "250"), irrigation on
+    // "Irrigation Network-HDPE-<mm>", the 50 mm secondary and the 75 mm tie-ins (IRW legend "Ø 75mm HDPE
+    // PIPE FOR TIE INS"), sewer on "SS_Pipe Dia <mm>" (ISE). Covers as for the models' packages.
+    { dwgLayer: "Xref Potable$0$160", ...drawnPipe("Water", "water_pipes_dwg", String.raw`^(\d+)$`, WATER_COVER_N) },
+    { dwgLayer: "Xref Potable$0$200", ...drawnPipe("Water", "water_pipes_dwg", String.raw`^(\d+)$`, WATER_COVER_N) },
+    { dwgLayer: "Xref Potable$0$250", ...drawnPipe("Water", "water_pipes_dwg", String.raw`^(\d+)$`, WATER_COVER_N) },
+    { dwgLayer: "Xref Irrigation$0$Irrigation Network-HDPE-*", ...drawnPipe("Irrigation", "irrigation_pipes_dwg", String.raw`HDPE-(\d+)`, IRR_COVER_N) },
+    { dwgLayer: "Xref Irrigation$0$*50mm HDPE SECONDARY*", ...drawnPipe("Irrigation", "irrigation_pipes_dwg", String.raw`(\d+)mm`, IRR_COVER_N) },
+    { dwgLayer: "Xref Irrigation$0$HDPE-TIE INs-*", ...drawnPipe("Irrigation", "irrigation_pipes_dwg", String.raw`INs-(\d+)`, IRR_COVER_N) },
+    { dwgLayer: "Xref Irrigation$0$Tie- INs", ...drawnPipe("Irrigation", "irrigation_pipes_dwg", undefined, IRR_COVER_N, 75) },
+    { dwgLayer: "XREF NRJS SEWER OVERALL$0$*SS_Pipe Dia *", ...drawnPipe("Sewer", "sewer_pipes_dwg", String.raw`Dia\s*(\d+)`) },
   ],
   reportJoins: [],
   assetKeys: AssetKeyConfig.parse({}),

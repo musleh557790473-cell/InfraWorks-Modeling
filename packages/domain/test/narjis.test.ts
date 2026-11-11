@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PARSONS_NRJS_CORRIDORS_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, corridorFit, depthNetworks, parseDxf } from "../src/index.js";
+import { PARSONS_NRJS_CORRIDORS_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, corridorAssignment, corridorBands, corridorFit, depthNetworks, parseDxf } from "../src/index.js";
 
 /** Build a DXF from [code, value] pairs. */
 const dxf = (...pairs: (string | number)[]) => pairs.map(String).join("\n") + "\n";
@@ -99,6 +99,22 @@ test("corridor fit: the share of a network lying within the tolerance of its IUC
   assert.equal(r.linesOff, 1, "the far line never meets its corridor");
   assert.ok(r.median < 3.1);
   assert.deepEqual(corridorFit([], corridor).share, 0);
+});
+
+test("nearest corridor: each metre is in its own place, another network's, or outside every corridor", () => {
+  // water corridor at y = 0, sewer at y = 1.5 (Parsons' spacing), nothing past y = 4
+  const cor = [{ name: "Corridor - Water", line: [[0, 0], [100, 0]] }, { name: "Corridor - Sewer", line: [[0, 1.5], [100, 1.5]] }];
+  const r = corridorAssignment([[[0, 0.3], [40, 0.3]], [[40, 1.3], [70, 1.3]], [[70, 6], [100, 6]]], cor, ["Corridor - Water"], { outside: 2 });
+  assert.ok(Math.abs(r.own - 40) < 1e-6 && Math.abs((r.others["Corridor - Sewer"] ?? 0) - 30) < 1e-6 && Math.abs(r.outside - 30) < 1e-6, JSON.stringify(r));
+});
+
+test("corridor bands: half the spacing to the nearest other corridor, capped, as closed rings", () => {
+  const cor = [{ name: "W", line: [[0, 0], [100, 0]] }, { name: "S", line: [[0, 1.5], [100, 1.5]] }, { name: "T", line: [[0, 50], [100, 50]] }];
+  const b = corridorBands(cor, { maxHalf: 1 });
+  assert.deepEqual(b.map((x) => [x.name, x.halfWidth]), [["W", 0.75], ["S", 0.75], ["T", 1]]);
+  const w = b[0]!.ring;
+  assert.deepEqual(w[0], w[w.length - 1], "closed");
+  assert.deepEqual([Math.min(...w.map((p) => p[1]!)), Math.max(...w.map((p) => p[1]!))], [-0.75, 0.75]);
 });
 
 test("Al Narjis corridors: lines of the IUC xref ship as display-only corridor lines; the legend copies do not", () => {
