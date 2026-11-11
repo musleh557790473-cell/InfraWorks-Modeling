@@ -162,6 +162,24 @@ test("a faithful import passes", () => {
   assert.ok(r.layers.every((l) => (l.centreOffset ?? 0) < 1e-6));
 });
 
+test("G3-013 roads now component roads of the same name count as arrived (Al Narjis: 7 of 11 written by model:roads)", () => {
+  const path = makeModel("component.sqlite");
+  const db = new DatabaseSync(path);
+  db.exec("alter table ROADS add column FK_PARENT_GUID text");
+  const first = db.prepare("select ID, NAME from ROADS where NAME is not null order by ID limit 1").get() as { ID: number; NAME: string };
+  // the planning road's row left its data source; a component road carries the name
+  db.prepare("update ROADS set DATA_SOURCE_ID = null, FK_PARENT_GUID = 'cd-1' where ID = ?").run(first.ID);
+  db.close();
+  const r = runModelGate(path, { packagePath });
+  assert.equal(r.ok, true, JSON.stringify(r.findings.filter((x) => x.severity !== "info"), null, 1));
+  const roads = r.layers.find((l) => l.infraFeatureClass === "road_centerline")!;
+  assert.equal(roads.modelCount, roads.packageCount);
+  const info = r.findings.find((x) => x.ruleId === "G3-013")!;
+  assert.equal(info.severity, "info");
+  assert.ok(info.message.includes(first.NAME));
+  assert.ok(!rules(r).includes("G3-005") && !rules(r).includes("G3-007"));
+});
+
 test("G3-010 names left unmapped in Configure are a warning that names the field to map", () => {
   const good = runModelGate(makeModel("named.sqlite"), { packagePath });
   const roads = good.layers.find((l) => l.infraFeatureClass === "road_centerline")!;
@@ -222,6 +240,30 @@ test("model-names fills NAME on a copy and records Name = NAME in Configure; the
 
   assert.ok(rules(runModelGate(model, { packagePath })).includes("G3-010"), "the original keeps no names");
   assert.throws(() => fillNames(model, packagePath, out), /already exists/);
+});
+
+test("model-names fills the other roads when one was converted to a component road (it left its data source)", () => {
+  const model = makeModel("converted.sqlite", { names: "unmapped" });
+  const db = new DatabaseSync(model);
+  const first = db.prepare("select ID from ROADS order by ID limit 1").get() as { ID: number };
+  // Al Narjis, 10 Nov 2026: Convert to Component Road clears DATA_SOURCE_ID and EXTERNAL_ID.
+  db.prepare("update ROADS set DATA_SOURCE_ID = null, EXTERNAL_ID = null where ID = ?").run(first.ID);
+  db.close();
+  const r = fillNames(model, packagePath, join(work, "converted (names).sqlite"));
+  const roads = r.layers.find((l) => l.table === "ROADS")!;
+  assert.equal(roads.skipped, undefined);
+  assert.equal(roads.missing, 1);
+  assert.equal(roads.filled, roads.rows);
+
+  // A repeated record number means another file: left alone.
+  const twice = makeModel("repeated.sqlite", { names: "unmapped" });
+  const db2 = new DatabaseSync(twice);
+  const ids = db2.prepare("select ID from ROADS order by ID limit 2").all() as { ID: number }[];
+  db2.prepare("update ROADS set EXTERNAL_ID = (select EXTERNAL_ID from ROADS where ID = ?) where ID = ?").run(ids[0]!.ID, ids[1]!.ID);
+  db2.prepare("delete from ROADS where ID = (select max(ID) from ROADS)").run();
+  db2.close();
+  const r2 = fillNames(twice, packagePath, join(work, "repeated (names).sqlite"));
+  assert.match(r2.layers.find((l) => l.table === "ROADS")!.skipped ?? "", /re-import/);
 });
 
 test("model-names copies the model's .files folder, and refuses while the model is open (.lock)", () => {

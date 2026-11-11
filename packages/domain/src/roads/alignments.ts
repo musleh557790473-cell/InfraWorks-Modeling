@@ -30,13 +30,15 @@ export interface NamedStart {
 const stripCodes = (t: string) => t.replace(/\\[A-Za-z][^;]*;|[{}]/g, "").trim();
 
 export function buildAlignments(layout: DxfEnt[], views: ProfileView[], packageNames: NamedStart[] = []): AlignmentResult {
-  const plines = layout.filter((o) => o.type === "LWPOLYLINE" && o.layer.endsWith("RD_PR_CNRL"));
+  // Al Qairawan draws centrelines on RD_PR_CNRL, Al Narjis on RD_CL (one of them a LINE); "RD_CL
+  // External Road" are roads outside the site, with no profile.
+  const plines = layout.filter((o) => (o.type === "LWPOLYLINE" || (o.type === "LINE" && o.end)) && (o.layer.endsWith("RD_PR_CNRL") || o.layer === "RD_CL"));
   const chainTexts = layout.filter((o) => o.type === "MTEXT" && o.layer.endsWith("RD_C_CHAIN_TEXT"));
   const chain0: P2[] = chainTexts.filter((o) => /(^|;)0\+000(\.0+)?\}?$/.test(o.txt.replace(/\{|\}/g, ""))).map((o) => [o.x[0]!, o.y[0]!]);
   const chainLabels = chainTexts.flatMap((o) => { const m = stripCodes(o.txt).match(/(\d+)\+(\d+\.\d+)$/); return m ? [{ x: o.x[0]!, y: o.y[0]!, s: +m[1]! * 1000 + +m[2]! }] : []; });
   const nameLabels = layout.filter((o) => (o.type === "MTEXT" || o.type === "TEXT") && o.layer.endsWith("0-Alignment Name")).map((o) => ({ x: o.x[0]!, y: o.y[0]!, t: stripCodes(o.txt) }));
 
-  const segsOf = (o: DxfEnt): Seg[] => o.x.slice(0, -1).map((x, k) => ({ a: [x, o.y[k]!], b: [o.x[k + 1]!, o.y[k + 1]!], bulge: o.bulge[k] ?? 0 }));
+  const segsOf = (o: DxfEnt): Seg[] => o.type === "LINE" ? [{ a: [o.x[0]!, o.y[0]!], b: o.end!, bulge: 0 }] : o.x.slice(0, -1).map((x, k) => ({ a: [x, o.y[k]!], b: [o.x[k + 1]!, o.y[k + 1]!], bulge: o.bulge[k] ?? 0 }));
   const nameOf = (o: DxfEnt): string => {
     let best = "", d = 0.05;
     for (const p of packageNames) { const dd = Math.hypot(p.start[0] - o.x[0]!, p.start[1] - o.y[0]!); if (dd < d) { d = dd; best = p.name; } }

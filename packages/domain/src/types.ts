@@ -160,6 +160,8 @@ export const LayerMapping = z.object({
       coverM: z.number().positive().optional(),
       centreM: z.number().positive().optional(),
       fromPipes: z.number().positive().optional(),
+      /** display lines lifted this far above the terrain (Al Narjis corridors, else hidden under the road body) */
+      liftM: z.number().positive().optional(),
       source: z.string().min(1),
     })
     .optional(),
@@ -356,8 +358,9 @@ export const PARSONS_LDIP_ROADS_PROFILE: MappingProfile = {
   name: "Parsons / LDIP road layout",
   team: "Parsons",
   layers: [
-    { dwgLayer: "RD_CL*", infraFeatureClass: "road_centerline" },
-    // Road names (R.6.G.12) are MTEXT 2-10 m beside each centreline, usually twice per road.
+    // Road names are MTEXT 2-10 m beside each centreline on "0-Alignment Name": R.6.G.12 on Al Qairawan,
+    // "ROAD-01 (18m R.O.W)" on Al Narjis (bound in the cut sheets 11000-14002, not in 10001).
+    { dwgLayer: "RD_CL*", infraFeatureClass: "road_centerline", labels: { layers: ["0-Alignment Name"], attribute: "road_name", maxDistance: 10 } },
     { dwgLayer: "RD_PR_CNRL*", infraFeatureClass: "road_centerline", labels: { layers: ["0-Alignment Name"], attribute: "road_name", maxDistance: 10 } },
     { dwgLayer: "Project Boundary", infraFeatureClass: "coverage" },
     { dwgLayer: "Boundary", infraFeatureClass: "coverage", outputLayer: "road_reserve", subtract: ["RD_ROW"] },
@@ -505,5 +508,193 @@ export const PARSONS_LDIP_DRY_PROFILE: MappingProfile = {
   assetKeys: AssetKeyConfig.parse({}),
 };
 
+/**
+ * Al Narjis (NRJS, 30% CD, Sep 2026): the same Parsons networks as Al Qairawan under other xref names,
+ * and its own concept design report, which gives the same values: SAPL-DSN-LDN-RPT-000003 "30% Concept
+ * Design Report for Al Narjis" §2.3.3 burial depth to the cable centre 0.65 m LV / 0.80 m MV, §2.3.9 MV
+ * conduits 200 mm, §2.3.23.2.2.1 street lighting ducts 110 mm O.D. uPVC, §5.6.7 storm soil cover above
+ * the top of pipe not less than 1.2 m.
+ */
+const NRJS_REPORT = "SAPL-DSN-LDN-RPT-000003";
+const netN = (utility: string, conn_type?: string) => ({ utility, network: `${utility} - Al Narjis`, ...(conn_type ? { conn_type } : {}) });
+const NRJS_STORM_COVER = { coverM: 1.2, source: `${NRJS_REPORT} §5.6.7 soil cover above top of pipe not less than 1.2 m` };
+
+/** Covers used for the WaterGEMS packages, applied to the same networks as drawn (see HANDOVER.md). */
+const WATER_COVER_N = { coverM: 1.2, source: "NWC typical: 1.20 m from finished road surface to pipe crown (given by AICC, 10 Nov 2026)" };
+const IRR_COVER_N = { coverM: 0.8, source: "ASSUMED by AICC (0.80 m, as Al Qairawan); IRW-00001/00002 general notes give no cover; pending Parsons confirmation" };
+/** A pipe as a network sheet draws it: network "<utility> - Al Narjis (drawing)", size from the layer name. */
+const drawnPipe = (utility: string, outputLayer: string, sizeRe: string | undefined, depth?: { coverM: number; source: string }, fixedMm?: number) => ({
+  infraFeatureClass: "pipeline" as const,
+  outputLayer,
+  attributes: { utility, network: `${utility} - Al Narjis (drawing)`, material: "HDPE" },
+  fields: { ...PIPE_COLUMNS, PIPE_MATERIAL: "material", ...(depth ? LINE_DEPTH_COLUMNS : {}) },
+  size: sizeRe ? { fromLayer: sizeRe } : { fixed: { mm: fixedMm!, source: "IRW-DWG-10000 legend: Ø 75mm HDPE pipe for tie-ins" } },
+  ...(depth ? { depth } : {}),
+});
+
+/**
+ * Al Narjis storm drainage (ISW-DWG-10000; no storm model was issued): the network is block SYSTEM-01
+ * of the sheet, pipes on "…M-SW_Pipe Dia <mm>" (400-800), manholes as SW_CI_Manhole1500 inserts,
+ * outfalls on C-STRM-STRC. The cut sheets 10001-10003 hold the same network.
+ */
+export const PARSONS_NRJS_WET_PROFILE: MappingProfile = {
+  id: "parsons-nrjs-wet-utilities",
+  name: "Parsons / Al Narjis storm drainage and water fittings (drawings)",
+  team: "Parsons",
+  layers: [
+    {
+      dwgLayer: "*SW_Pipe Dia *",
+      infraFeatureClass: "pipeline",
+      outputLayer: "storm_pipes",
+      attributes: { ...netN("Storm") },
+      fields: { ...PIPE_COLUMNS, ...LINE_DEPTH_COLUMNS },
+      size: { fromLayer: String.raw`Dia\s*(\d+)` },
+      depth: NRJS_STORM_COVER,
+    },
+    { dwgLayer: "*SW_CI_Manhole*", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: netN("Storm", "Manhole"), fields: { ...CONNECTOR_COLUMNS, ...NODE_DEPTH_COLUMNS }, depth: { fromPipes: 2, source: NRJS_STORM_COVER.source } },
+    { dwgLayer: "C-STRM-STRC", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: netN("Storm", "Outfall"), fields: { ...CONNECTOR_COLUMNS, ...NODE_DEPTH_COLUMNS }, depth: { fromPipes: 2, source: NRJS_STORM_COVER.source } },
+    // Potable water fittings (IPW-DWG-10000, bound "Xref Potable"; the WaterGEMS model has none): valves
+    // on C-WATR-APPT, the air valve, and the washout, which the xref draws on C-STRM-STRC (so matched with
+    // its prefix, before the storm outfall rule). Fire hydrants are anonymous blocks on layer 0, each with
+    // one circle on C-PW-FIRE HYDRANT COVER CATCH: the circle's centre is the hydrant.
+    { dwgLayer: "Xref Potable$0$C-WATR-APPT", ...node, outputLayer: "water_valves", attributes: netN("Water", "Valve") },
+    { dwgLayer: "Xref Potable$0$C-PW-AIR VALVE", ...node, outputLayer: "water_valves", attributes: netN("Water", "Air Valve") },
+    { dwgLayer: "Xref Potable$0$C-STRM-STRC", ...node, outputLayer: "water_valves", attributes: netN("Water", "Washout Valve") },
+    { dwgLayer: "C-PW-FIRE HYDRANT COVER CATCH", ...node, asPoint: true, outputLayer: "water_hydrants", attributes: netN("Water", "Fire Hydrant") },
+    // Irrigation fittings (IRW-DWG-10000, bound "Xref Irrigation" with nested network xrefs; the WaterGEMS
+    // model has 3 of the 9 isolation valves): isolation valves, air valve, washout valve, and the flow
+    // sensor / master valve chambers (legend "FLOW SENSOR AND MASTER VALVE").
+    { dwgLayer: "Xref Irrigation$0$Isolation valve", ...node, outputLayer: "irrigation_valves", attributes: netN("Irrigation", "Isolation Valve") },
+    { dwgLayer: "Xref Irrigation$0$*C-PW-AIR VALVE", ...node, outputLayer: "irrigation_valves", attributes: netN("Irrigation", "Air Valve") },
+    { dwgLayer: "Xref Irrigation$0$*C-PW-WASHOUT VALVE", ...node, outputLayer: "irrigation_valves", attributes: netN("Irrigation", "Washout Valve") },
+    { dwgLayer: "Xref Irrigation$0$*L-IRRG-CHMB", ...node, outputLayer: "irrigation_valves", attributes: netN("Irrigation", "Flow Sensor and Master Valve") },
+    // The rest of the IRW-10000 legend: pull boxes, quick couplings, tie-ins, and the two-wire decoder
+    // cable (a control cable, no depth in the documents: on the terrain, display size).
+    { dwgLayer: "Xref Irrigation$0$Pull-box", ...node, outputLayer: "irrigation_structures_dwg", attributes: netN("Irrigation", "Pull Box") },
+    { dwgLayer: "Xref Irrigation$0$*LI-EQPM-DRIP", ...node, outputLayer: "irrigation_structures_dwg", attributes: netN("Irrigation", "Quick Coupling") },
+    { dwgLayer: "Xref Irrigation$0$00_Tie-ins_ROW", ...node, outputLayer: "irrigation_structures_dwg", attributes: netN("Irrigation", "Tie-in") },
+    { dwgLayer: "Xref Irrigation$0$*IR-ELEC CABLE", ...cable, outputLayer: "irrigation_control_cable", attributes: netN("Irrigation", "Two-Wire Decoder Cable") },
+    // Pipes as the network sheets draw them, beside the hydraulic models' (to compare both with the
+    // IUC corridors): water on layers named for the size (IPW: "160", "200", "250"), irrigation on
+    // "Irrigation Network-HDPE-<mm>", the 50 mm secondary and the 75 mm tie-ins (IRW legend "Ø 75mm HDPE
+    // PIPE FOR TIE INS"), sewer on "SS_Pipe Dia <mm>" (ISE). Covers as for the models' packages.
+    { dwgLayer: "Xref Potable$0$160", ...drawnPipe("Water", "water_pipes_dwg", String.raw`^(\d+)$`, WATER_COVER_N) },
+    { dwgLayer: "Xref Potable$0$200", ...drawnPipe("Water", "water_pipes_dwg", String.raw`^(\d+)$`, WATER_COVER_N) },
+    { dwgLayer: "Xref Potable$0$250", ...drawnPipe("Water", "water_pipes_dwg", String.raw`^(\d+)$`, WATER_COVER_N) },
+    { dwgLayer: "Xref Irrigation$0$Irrigation Network-HDPE-*", ...drawnPipe("Irrigation", "irrigation_pipes_dwg", String.raw`HDPE-(\d+)`, IRR_COVER_N) },
+    { dwgLayer: "Xref Irrigation$0$*50mm HDPE SECONDARY*", ...drawnPipe("Irrigation", "irrigation_pipes_dwg", String.raw`(\d+)mm`, IRR_COVER_N) },
+    { dwgLayer: "Xref Irrigation$0$HDPE-TIE INs-*", ...drawnPipe("Irrigation", "irrigation_pipes_dwg", String.raw`INs-(\d+)`, IRR_COVER_N) },
+    { dwgLayer: "Xref Irrigation$0$Tie- INs", ...drawnPipe("Irrigation", "irrigation_pipes_dwg", undefined, IRR_COVER_N, 75) },
+    { dwgLayer: "XREF NRJS SEWER OVERALL$0$*SS_Pipe Dia *", ...drawnPipe("Sewer", "sewer_pipes_dwg", String.raw`Dia\s*(\d+)`) },
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
+/**
+ * Al Narjis dry utilities, one general sheet per network (ILV / IMV / ISL / ITE -10000, IIC-13000).
+ * Substations (DSS) and the MV loop are drawn in both the LV and MV xrefs: read from the MV one only.
+ * Street lighting has its poles and panel only (no cable lines drawn). Telecom and security ducts are
+ * "Primary Duct" and "Seconday Duct" (sic), handholes TEL_HH / SEC_HH inserts.
+ */
+const NLV = "Xref_Narjis_LV Network$0$";
+const NMV = "Xref_Narjis_MV Network$0$";
+const NTEL = "Narjes Overall Primary Telecom Network$0$";
+const NSEC = "Narjes Overall Primary Security Network$0$";
+const buriedN = (centreM: number, kind: string) => ({
+  fields: { ...cable.fields, ...LINE_DEPTH_COLUMNS },
+  depth: { centreM, source: `${NRJS_REPORT} §2.3.3 burial depth to the cable centre, ${kind}` },
+});
+export const PARSONS_NRJS_DRY_PROFILE: MappingProfile = {
+  id: "parsons-nrjs-dry-utilities",
+  name: "Parsons / Al Narjis dry utilities (drawings)",
+  team: "Parsons",
+  layers: [
+    { dwgLayer: `${NLV}E-POWER-CABL*`, ...cable, ...buriedN(0.65, "LV"), outputLayer: "lv_cables", attributes: netN("Electrical LV") },
+    { dwgLayer: `${NLV}Electrical LV -HC`, ...cable, ...buriedN(0.65, "LV"), outputLayer: "lv_cables", attributes: netN("Electrical LV", "House Connection") },
+    // Each pillar is an "LV Panel" dynamic block on MINI-PILLAR-0 holding the pillar symbol (on
+    // MINI-PILLAR-2) and its 19 house connection lines: opened, so both are read.
+    { dwgLayer: `${NLV}E-POWR-MINI-PILLAR-0`, ...node, explode: true, outputLayer: "lv_pillars", attributes: netN("Electrical LV", "Mini Pillar") },
+    { dwgLayer: `${NLV}E-POWR-MINI-PILLAR-*`, ...node, outputLayer: "lv_pillars", attributes: netN("Electrical LV", "Mini Pillar") },
+    // the lighting panel is drawn in the street lighting sheet and again in the LV xref
+    { dwgLayer: `${NLV}SSLPC`, infraFeatureClass: "unmapped" },
+    { dwgLayer: `${NMV}MV Cables*`, ...cable, ...buriedN(0.8, "MV"), size: { fixed: { mm: 200, source: `${NRJS_REPORT} §2.3.9: MV conduits, 200 mm maximum diameter` } }, outputLayer: "mv_cables", attributes: netN("Electrical MV") },
+    { dwgLayer: `${NMV}DSS`, ...node, outputLayer: "substations", attributes: netN("Electrical MV", "Distribution Substation") },
+    { dwgLayer: "AAM", infraFeatureClass: "annotation", outputLayer: "street_lights", attributes: netN("Street Lighting", "Street Light") },
+    { dwgLayer: "SSLPC", ...node, outputLayer: "streetlight_panels", attributes: netN("Street Lighting", "Lighting Panel") },
+    { dwgLayer: `${NTEL}Primary Duct`, ...cable, outputLayer: "telecom_ducts", attributes: netN("Telecom", "Primary Duct") },
+    { dwgLayer: `${NTEL}Seconday Duct`, ...cable, outputLayer: "telecom_ducts", attributes: netN("Telecom", "Secondary Duct") },
+    { dwgLayer: `${NTEL}*TEL_HH`, ...node, outputLayer: "telecom_handholes", attributes: netN("Telecom", "Handhole") },
+    { dwgLayer: `${NSEC}Primary Duct`, ...cable, outputLayer: "security_ducts", attributes: netN("Security", "Primary Duct") },
+    { dwgLayer: `${NSEC}Seconday Duct`, ...cable, outputLayer: "security_ducts", attributes: netN("Security", "Secondary Duct") },
+    { dwgLayer: `${NSEC}*TEL_HH`, ...node, outputLayer: "security_handholes", attributes: netN("Security", "Handhole") },
+    { dwgLayer: `${NSEC}*SEC_HH`, ...node, outputLayer: "security_handholes", attributes: netN("Security", "Handhole") },
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
+/**
+ * Al Narjis blocks and road reserve (IRO-11000, bound "Xref Road Layout Al Narjis"): the right-of-way
+ * lines (__ROW) close around the 8 blocks between the roads, some drawn closed, some with meeting ends;
+ * the road reserve is the Project Boundary less those blocks (as Al Qairawan's Boundary less RD_ROW).
+ * A profile of its own, shipped beside the roads package that already carries the boundary.
+ */
+export const PARSONS_NRJS_AREAS_PROFILE: MappingProfile = {
+  id: "parsons-nrjs-areas",
+  name: "Parsons / Al Narjis blocks and road reserve",
+  team: "Parsons",
+  layers: [
+    { dwgLayer: "Project Boundary", infraFeatureClass: "coverage", outputLayer: "road_reserve", subtract: ["__ROW"] },
+    { dwgLayer: "__ROW", infraFeatureClass: "coverage", outputLayer: "blocks" },
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
+/**
+ * Al Narjis utility corridors (IUC-DWG-10000, bound "Xref_Al Narjis_Utilities Corridor"): one open line
+ * per network where its run lies in the road reserve ("-05- Potable Water", "-10- Electrical LV"…),
+ * shipped as display-only Pipelines named "Corridor - <utility>" (no depth, 5 cm) to compare with the
+ * modelled networks. Rules carry the xref prefix: the legend repeats every layer outside it.
+ */
+const NIUC = "Xref_Al Narjis_Utilities Corridor$0$";
+// One Shapefile per corridor, so each data source takes its own colour in InfraWorks (one Rule Style per
+// source); lifted 1.0 m above the terrain, as the roads stand ~0.6 m above the grading surface and hid
+// the lines. `colour`: the layer's colour in IUC-DWG-10000 (AutoCAD index, as RGB).
+const corridor = (layer: string, utility: string, slug: string, colour: string) => ({
+  dwgLayer: `${NIUC}${layer}`,
+  infraFeatureClass: "pipeline" as const,
+  explode: false,
+  outputLayer: `corridor_${slug}`,
+  fields: { NETWORKNAME: "network", SIZE_X: "size_m", SIZE_Y: "size_y_m", ELEV_FROM: "off_start_m", ELEV_TO: "off_end_m" },
+  size: { fixed: { mm: 150, source: "display only: corridor line of IUC-DWG-10000" } },
+  depth: { liftM: 1.0, source: "display only: corridor line lifted 1.0 m above the terrain to show above the road" },
+  attributes: { utility, network: `Corridor - ${utility}`, conn_type: "Corridor line", corridor_layer: layer, colour },
+});
+export const PARSONS_NRJS_CORRIDORS_PROFILE: MappingProfile = {
+  id: "parsons-nrjs-corridors",
+  name: "Parsons / Al Narjis utility corridors (IUC)",
+  team: "Parsons",
+  layers: [
+    corridor("-01- Storm Water", "Storm", "storm", "ACI 170 blue 0,0,255"),
+    corridor("-01- Storm CB", "Storm Catch Basins", "storm_cb", "ACI 160 blue 0,63,255"),
+    corridor("-02- Sewerage", "Sewer", "sewer", "ACI 210 magenta 255,0,255"),
+    corridor("-04- Irrigation", "Irrigation", "irrigation", "ACI 90 green 0,255,0"),
+    corridor("-04-Irrigation Secondary", "Irrigation Secondary", "irrigation_secondary", "ACI 94 dark green 0,153,0"),
+    corridor("-05- Potable Water", "Water", "water", "ACI 140 sky blue 0,191,255"),
+    corridor("07- Telecom", "Telecom", "telecom", "olive green 124,165,0"),
+    corridor("-08- Electrical HV", "Electrical HV", "hv", "as drawn"),
+    corridor("-09- Electrical MV", "Electrical MV", "mv", "ACI 21 salmon 255,159,127"),
+    corridor("-10- Electrical LV", "Electrical LV", "lv", "ACI 44 dark gold 153,115,0"),
+    corridor("-15- House Connection", "House Connection", "house_connection", "ACI 242 crimson 204,0,51"),
+    corridor("-00-Tree_SL", "Trees and Street Lighting", "trees_sl", "ACI 8 grey 128,128,128"),
+    corridor("-00-Tree_IRS", "Trees and Irrigation", "trees_irs", "ACI 81 pale green 191,255,127"),
+    corridor("-00-Tree_IRS_SL", "Trees, Irrigation and Street Lighting", "trees_irs_sl", "ACI 151 pale blue 127,191,255"),
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
 /** Profiles shipped with the tool: listed first, and never overwritten or deleted by a save. */
-export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE];
+export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_AREAS_PROFILE, PARSONS_NRJS_CORRIDORS_PROFILE];

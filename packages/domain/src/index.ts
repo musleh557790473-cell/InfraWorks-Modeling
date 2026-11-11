@@ -15,4 +15,5 @@ export * from "./scan.js";
 export * from "./polygonize.js";
 export * from "./hydraulic.js";
 export * from "./networks.js";
+export * from "./corridors.js";
 export * from "./roads/index.js";

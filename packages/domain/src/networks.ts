@@ -233,13 +233,14 @@ export function depthNetworks(
   const out = features.map((f) => {
     const rule = findLayerMapping(profile, f.provenance.sourceLayer ?? "");
     const d = rule?.depth;
-    if (!rule || !d || !linesOf(f).length || (d.coverM === undefined && d.centreM === undefined)) return f;
-    const st = statOf(rule, d.coverM !== undefined ? `cover ${d.coverM} m over the crown` : `${d.centreM} m to the centre`);
+    if (!rule || !d || !linesOf(f).length || (d.coverM === undefined && d.centreM === undefined && d.liftM === undefined)) return f;
+    const st = statOf(rule, d.coverM !== undefined ? `cover ${d.coverM} m over the crown` : d.centreM !== undefined ? `${d.centreM} m to the centre` : `lifted ${d.liftM} m above the terrain`);
     st.features += 1;
     const size = Number(f.attributes.size_m);
     let offset: number | null = null;
     if (d.coverM !== undefined) offset = Number.isFinite(size) && size > 0 ? -(d.coverM + size / 2) : null;
-    else offset = -d.centreM!;
+    else if (d.centreM !== undefined) offset = -d.centreM;
+    else offset = d.liftM!;
     if (offset === null) return f;
     st.placed += 1;
     const o = round3(offset);
@@ -247,7 +248,7 @@ export function depthNetworks(
       ...f,
       attributes: {
         ...f.attributes,
-        ...(d.coverM !== undefined ? { cover_m: d.coverM } : { centre_m: d.centreM! }),
+        ...(d.coverM !== undefined ? { cover_m: d.coverM } : d.centreM !== undefined ? { centre_m: d.centreM } : { lift_m: d.liftM! }),
         depth_src: d.source,
         off_start_m: o,
         off_end_m: o,

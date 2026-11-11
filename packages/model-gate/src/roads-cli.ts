@@ -10,7 +10,7 @@ import {
 
 import { junctionSteps, levelProblems, parseTieEnds, roadRows, tieLevels } from "./roads/checks.js";
 import { planRoad } from "./roads/plan.js";
-import { repointLinks, splitLinks } from "./roads/intersections.js";
+import { pruneDanglingIntersections, repointLinks, splitLinks } from "./roads/intersections.js";
 import { parseFgf } from "@infraworks/imx-gate";
 import { mergeRoads, missingDrawnRoads, parseMerges, partsDescription, setDescription } from "./roads/merge.js";
 import { roadsToWrite } from "./roads/select.js";
@@ -226,6 +226,11 @@ function main(argv: string[]): number {
       } catch (e) { failed.push(`${a.name}: ${e instanceof Error ? e.message : String(e)}`); }
     }
     say(`written ${written} roads${failed.length ? `; failed ${failed.length}:\n  ${failed.join("\n  ")}` : ""}`);
+    if (writer.replacedPlanning.length) say(`planning roads replaced by component roads: ${writer.replacedPlanning.length} (do not Refresh their data source: it would bring them back)`);
+    // Junction rows with no junction crash InfraWorks on the next road edit (AIM_ModelRoad.dll+0xa7f28,
+    // Al Narjis 10 Nov 2026: 12 arms + 8 regions from the ROAD-01 conversion, no INTERSECTIONS row).
+    const pr = pruneDanglingIntersections(db);
+    if (pr.orphans || pr.removed.length || pr.bodies) say(`junction rows cleaned: ${pr.orphans} arm/region rows without a junction, ${pr.removed.length} junction(s) on a deleted road, ${pr.bodies} body row(s)`);
     const rows = roadRows(db);
     const lv = levelProblems(db, rows), js = junctionSteps(rows).filter((j) => Math.abs(j.step) >= 0.3);
     say(`checks: ${rows.length} roads, ${lv.length} with level problems, ${js.length} junction steps >= 0.3 m`);

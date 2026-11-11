@@ -19,8 +19,15 @@ import { parseFgf } from "@infraworks/imx-gate";
 
 export interface KerbArc { cx: number; cy: number; r: number; /** sweep in degrees; NaN for an ARC entity, whose angles the reader does not keep */ deg: number }
 
+/**
+ * The layer the kerb returns are drawn on: Al Narjis (IRO-10001) has its own RD_CURB_RETURN, at the
+ * radii dimensioned on the plan (R12.00, R14.00; its RD_Edge arcs lie 0.30 m out, the kerb width);
+ * Al Qairawan (10200) draws them on -RD_Edges.
+ */
+export const kerbLayer = (layout: readonly DxfEnt[]) => (layout.some((e) => e.layer === "RD_CURB_RETURN") ? "RD_CURB_RETURN" : "RD_Edges");
+
 /** Arcs on the road-edge layer: LWPOLYLINE bulge segments (true centre and sweep) and ARC entities (centre, radius). */
-export function kerbArcs(layout: readonly DxfEnt[], layer = "RD_Edges"): KerbArc[] {
+export function kerbArcs(layout: readonly DxfEnt[], layer = kerbLayer(layout)): KerbArc[] {
   const out: KerbArc[] = [];
   for (const e of layout) {
     if (!e.layer.endsWith(layer)) continue;

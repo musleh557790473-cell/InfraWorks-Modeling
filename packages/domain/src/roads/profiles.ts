@@ -155,8 +155,15 @@ export function assemblePvis(ents: DxfEnt[], views: ProfileView[]): PviResult {
       const e = elev.filter((o) => Math.abs(o.y - s.y) < 0.6 && Math.abs(o.x - s.x) < 30).sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x))[0];
       if (e) fixed.push({ s: sta(s.t), z: +e.t.slice(5), split: true });
     }
-    const pvc = L.filter((o) => /^PVC/.test(o.t)).map((o) => ({ s: sta(o.t), z: +o.t.split("ELEV")[1]!, x: o.x, y: o.y }));
-    const pvt = L.filter((o) => /^PVT/.test(o.t)).map((o) => ({ s: sta(o.t), z: +o.t.split("ELEV")[1]!, x: o.x, y: o.y }));
+    // "PVC 0+045.188 ELEV 673.594" in one label, or (Al Narjis, a label EXPORTTOAUTOCAD split into
+    // TEXTs) "PVC 0+045.188" with "ELEV 673.594" beside it on the same line, ~6 m to the right
+    const levelOf = (o: Txt) => {
+      if (o.t.includes("ELEV")) return +o.t.split("ELEV")[1]!;
+      const e = elev.filter((q) => Math.abs(q.y - o.y) < 0.6 && q.x > o.x && q.x - o.x < 30).sort((a, b) => a.x - b.x)[0];
+      return e ? +e.t.slice(5) : NaN;
+    };
+    const pvc = L.filter((o) => /^PVC/.test(o.t)).map((o) => ({ s: sta(o.t), z: levelOf(o), x: o.x, y: o.y }));
+    const pvt = L.filter((o) => /^PVT/.test(o.t)).map((o) => ({ s: sta(o.t), z: levelOf(o), x: o.x, y: o.y }));
     const pvi = L.filter((o) => /^PVI/.test(o.t)).map((o) => ({ s: sta(o.t), x: o.x, y: o.y }));
     const vc = L.filter((o) => /^VC/.test(o.t)).map((o) => ({ L: +o.t.match(/VC\s*([\d.]+)/)![1]!, K: +o.t.match(/K\s*([\d.]+)/)![1]!, x: o.x, y: o.y }));
     const curves: Curve[] = pvi.map((p) => {

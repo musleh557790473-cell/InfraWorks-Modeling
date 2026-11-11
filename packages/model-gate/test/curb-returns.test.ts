@@ -4,7 +4,7 @@ import test from "node:test";
 
 import type { DxfEnt } from "@infraworks/domain";
 
-import { curbReturnsFromDrawing, junctionCentre, kerbArcs } from "../src/roads/curb-returns.js";
+import { curbReturnsFromDrawing, junctionCentre, kerbArcs, kerbLayer } from "../src/roads/curb-returns.js";
 import { lineBlob } from "../src/roads/write.js";
 
 /** An LWPOLYLINE on -RD_Edges whose middle segment is a quarter arc of radius r around (cx, cy), in the given quadrant (bearing of its centre from the junction). */
@@ -22,6 +22,17 @@ test("a bulge segment gives the arc's true centre, radius and sweep; an ARC enti
   const [b] = kerbArcs([{ type: "ARC", layer: "L$0$-RD_Edges", x: [5], y: [6], bulge: [], txt: "", r: 20 }]);
   assert.deepEqual([b!.cx, b!.cy, b!.r, Number.isNaN(b!.deg)], [5, 6, 20, true]);
   assert.equal(kerbArcs([{ type: "LWPOLYLINE", layer: "RD_ROW", x: [0, 1], y: [0, 1], bulge: [0, 0.5], txt: "" }]).length, 0, "other layers are not kerbs");
+});
+
+test("Al Narjis: kerb returns come from RD_CURB_RETURN (R12.00 as dimensioned), not the RD_Edge arc 0.30 m out", () => {
+  // as readDxfBlock gives them: the xref prefix dropped
+  const layout: DxfEnt[] = [
+    { type: "ARC", layer: "RD_CURB_RETURN", x: [5], y: [6], bulge: [], txt: "", r: 12 },
+    { type: "ARC", layer: "RD_Edge", x: [5], y: [6], bulge: [], txt: "", r: 12.3 },
+  ];
+  assert.equal(kerbLayer(layout), "RD_CURB_RETURN");
+  assert.deepEqual(kerbArcs(layout).map((a) => a.r), [12]);
+  assert.equal(kerbLayer([kerbArc(0, 0, 10)]), "RD_Edges", "Al Qairawan has no RD_CURB_RETURN: -RD_Edges as before");
 });
 
 test("the junction centre is read from a Point or a MultiPoint reference point (junctions 51, 300, 303)", () => {

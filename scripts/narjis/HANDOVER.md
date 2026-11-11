@@ -156,6 +156,78 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   (5/5, 47/47, 1 251 m, all named). Installed (hash B5B2860B... -> E3680A78...); integrity ok;
   G3 on the working copy with the irrigation and the sewer packages: both PASS, 0 warnings.
 
+### Water package (10 Nov 2026)
+
+- Cover from the user (AICC, 10 Nov): **1.20 m from the finished road surface to the pipe crown,
+  NWC typical value**. The model terrain there is Parsons' grading (Roads TOS), so the offsets are
+  taken from it.
+- `exports\Al-Narjis-water-shp-v1` (+ zip) from `alnarjes hydraulic model REV02.wtg.sqlite`:
+  41 pipes (HDPE SDR11: 22 x 160, 15 x 200, 4 x 250 mm; nominal from inside diameter), 1 structure
+  (reservoir), centre 1.280-1.325 m below terrain. Validation OK, no warnings.
+- Imported by the user (`water_pipes` Pipelines, `water_structures` Pipeline Connectors). Model
+  closed, proposal `master`, `.files` HEAD unchanged. `model:names` on a scratchpad copy: 1 + 41
+  rows filled (NAME, sizes, material, network, ELEV_FROM/TO). G3 on the copy: **PASS, 0 warnings**
+  (1/1, 41/41, 1 378 m). Installed (hash 72BF2107... -> 0BB60C02...); integrity ok; G3 on the
+  working copy with the water, irrigation and sewer packages: all PASS, 0 warnings.
+
+### DXF exports (10 Nov 2026, AYNLAP1201)
+
+- The 77 DWGs of `Vol. 01_Drawings` copied with robocopy to `C:\Temp\narjis-dwg`, converted by
+  `scripts/dwg-to-dxf.cjs` to `C:\Temp\dxf\narjis` (same folders). 69 through EXPORTTOAUTOCAD (IRO-10001:
+  AUDIT fixed 573 errors, Civil 3D surface and styles inside); 8 crashed accoreconsole in
+  EXPORTTOAUTOCAD and are direct DXFOUT: ILV/IMV-10001/10002, ISW-10001/10002/10003, IRO-60001.
+- The 1:500 cut sheets 10001/10002 hold the same bound network as the 10000 general plan (same counts
+  per layer on LV): read the 10000 sheets.
+- The plans bind `Ladun AlNarjis Baseplan` (plots MP-PLT-LIN 192 lines, MP-PLT-TXT 123 numbers, as Al
+  Qairawan) and `Ladun AlNarjis Road Layout`; IRO-10001 binds `Xref Road Layout Al Narjis` (RD_CL,
+  __ROW, RD_Edge, RD_CURB_RETURN) and `Xref Dim_Names Al Narjis`.
+- ODA comparison asked of the other laptop: samples in `DATA_DIR\inputs\narjis\dxf-acad`, result to
+  `oda-compare.md` there.
+
+### Roads and plots package (10 Nov 2026)
+
+- Road names are MTEXT on `0-Alignment Name` in the bound `Xref Dim_Names Al Narjis`, present in the
+  cut sheets 11000-14002 only (10001 has L1-L9 dimension labels instead). The reader now opens an xref
+  that holds only label texts, and `RD_CL*` reads names like `RD_PR_CNRL` (test in sheet.test.ts).
+- `exports\Al-Narjis-11000-shp-v1` (+ zip) from `C:\Temp\dxf\narjis\Roads\BIND\...IRO-DWG-00-11000-0A.dxf`:
+  - 11 centrelines (Roads), all named: ROAD-01 (15m / 18m R.O.W), ROAD-02 (15m / 18m), ROAD-03, -04,
+    -05 (18m) and 4 x EXTERNAL ROAD. Lengths match the profile EPs (ROAD-01 18m 492.1 vs 0+492.073,
+    ROAD-05 114.3 vs 0+114.345, ROAD-02 15m 88.7 vs 0+088.706).
+  - 145 plots (Parcels) from MP-PLT-LIN, 123 numbered (300-8,596 m2, no duplicates); 22 without a
+    number on the plan (20 strips of 70-148 m2, one 328 m2, two of 3,706 / 4,118 m2).
+  - Project Boundary (Coverage Areas). Validation OK; warnings: 22 plots without a number,
+    50 DIMENSION entities skipped, unmapped layers.
+- Not shipped yet: blocks / road reserve (Al Narjis draws the ROW on `__ROW`, not RD_ROW).
+
+### Component roads (10 Nov 2026)
+
+- User imported `Al-Narjis-11000-shp-v1` (Roads, Parcels, Coverage Areas) and converted ROAD-01
+  (18m R.O.W) to a component road (right-click > Convert to Component Road): the template, CD GUID
+  `05049575-6277-44fc-8952-2e38f48b0df7`. The conversion took the road out of its data source
+  (EXTERNAL_ID and DATA_SOURCE_ID null, no name), and InfraWorks made 12 arms + 8 regions linking it to
+  the planning roads it crosses, by their ROADS.GUID.
+- Tool changes (each with a test): model:names fills a source with fewer rows than records when every
+  row keeps its own record number; `readDxfBlock` reads "A|B" and "*Model_Space" (the profile sheets
+  explode each Civil 3D view into an anonymous *U block); alignments read RD_CL (and LINE pieces);
+  sections read __ROW / RD_Edge; PVC / PVT labels split into two TEXTs ("PVC 0+045.188", "ELEV
+  673.594") are paired (ROAD-03's sag was dropped, leaving a 0.97 m step at ROAD-05's end); the writer
+  replaces a planning road of the same name, its definition taking the planning road's GUID so those
+  junction rows stay valid, and picks template terrain operations by type (the converted road has
+  3 x Grading, Grading, CutOut); G3-013 counts component roads of the same name as arrived.
+- Inputs: layout `IRO-DWG-00-11000-0A.dxf` blocks "Xref Road Layout Al Narjis|Xref Dim_Names Al
+  Narjis_1"; profiles `IRO-DWG-00-40001-0A.dxf` "*Model_Space" (40002 is the same sheet); surface
+  `AL-Narjis Grading_ Roads TOS.xml` "Compiled Grading". 7 profiles, 0 PVI issues; 7 of 7 alignments
+  equal their profile length; none reversed. Sections A1 (15 m) / A2 (18 m) per IRO-30001 (same as
+  Al Qairawan: lanes 3.30, kerb 0.30, 2 %); 6 typed from __ROW, ROAD-02 (15m R.O.W) = A1 from its name
+  and the plan's "15.00m R.O.W." label (its ROW is not drawn as polylines). Crossfall from the surface.
+- On a scratchpad copy: model:names, template named, then
+  `model:roads ... --section "ROAD-02 (15m R.O.W)=A1"`: 7 written, 6 planning roads replaced, 0 level
+  problems, 0 junction steps >= 0.3 m. The 4 "EXTERNAL ROAD" stay planning roads (no profile).
+  Installed (hash EE644B06... -> 75141E48...); integrity ok. G3 on the working copy: --layout PASS
+  (1 warning: G3-022, the 20 arm / region rows InfraWorks made without INTERSECTIONS rows, already
+  there before the write); 11000 (11/11 roads, 145/145 plots), sewer, irrigation, water: PASS, 0
+  warnings. Do not Refresh `road_centerline`: it would bring the replaced planning roads back.
+
 ### Order proposed
 
 1. Copy the submission into `DATA_DIR\inputs\narjis` (stable shared place).
@@ -164,3 +236,173 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
 3. Sewer now (model complete); water and irrigation once the cover is sourced.
 4. DXF exports (AUDIT, EXPORTTOAUTOCAD, DXFOUT to `C:\Temp\dxf`) of 10001, 40001, 40002, 30001 and the
    utility plan sheets: then names, plots, dry networks, storm, and the roads.
+
+### Crash on the first Grading Limit edit (10 Nov 2026)
+
+- The user's Grading Limit edit (5.000 -> 5.1) crashed InfraWorks three times: access violation in
+  AIM_ModelRoad.dll+0xa7f28 (read near null; dump `%LOCALAPPDATA%\Temp\InfraWorks_error.dmp` 14:11,
+  read with `scripts/road-pilot/minidump.cjs`). The model held 12 arms + 8 regions with no
+  INTERSECTIONS row (made by InfraWorks at the ROAD-01 conversion; G3-022 warned of them).
+- `model:intersections` on a copy removed the 20 rows; G3 --layout PASS, 0 warnings; installed
+  (7AB8AFD4... -> B3ADB366...). model:roads now prunes such rows after every write.
+
+### Junctions and kerb returns (10 Nov 2026)
+
+- After the cleanup the user's Grading Limit edits worked on every road: InfraWorks built 7 junctions
+  (21 arms, 14 corners); G3 --layout PASS, 0 warnings.
+- Kerb returns: Al Narjis draws them on RD_CURB_RETURN at the dimensioned radii (R12.00, R11.00; the
+  RD_Edge arcs lie 0.30 m out); `kerbLayer` picks that layer when present (Al Qairawan has none, keeps
+  -RD_Edges; test in curb-returns.test.ts). `model:intersections --curb-returns <11000.dxf>
+  --layout-block "Xref Road Layout Al Narjis"` on a copy: 12 corners set (11 x 12 m, 1 x 11 m), 1
+  already 11 m, 1 without a drawn arc (junction 4, region 7: ROAD-05's end on ROAD-03, corner at 200
+  deg; InfraWorks' 9 m kept; to ask Parsons). Installed (41A3FE5A... -> E6BE04FB...). G3 --layout PASS
+  (G3-025: 13 at the drawn radius, 1 without an arc), 11000 / sewer / irrigation / water PASS, 0 warnings.
+
+### Dry networks and storm packages (10 Nov 2026)
+
+- Depths and sizes from Al Narjis' own report `SAPL-DSN-LDN-RPT-000003` ("30% Concept Design Report
+  for Al Narjis", Vol. 02_Reports; text pulled from the PDF's streams): §2.3.3 burial depth to the cable
+  centre 0.65 m LV / 0.80 m MV; §2.3.9 MV conduits 200 mm; §2.3.23.2.2.1 street lighting ducts 110 mm
+  O.D. uPVC; §5.6.7 storm soil cover over the crown >= 1.2 m. Same values as Al Qairawan's report.
+- New profiles `parsons-nrjs-dry-utilities` / `parsons-nrjs-wet-utilities` (Al Qairawan's untouched;
+  networks named "<utility> - Al Narjis"; tests in narjis.test.ts).
+- `exports\Al-Narjis-storm-shp-v1` from ISW-10000 (block SYSTEM-01): 54 pipes (400-800 mm from the layer
+  names, cover 1.2 m), 44 manholes + 2 outfalls (depth to the deepest pipe within 2 m). OK, 1 warning
+  (unmapped layers).
+- `exports\Al-Narjis-dry-shp-v1` from ILV / IMV / ISL / ITE -10000 and IIC-13000: LV 60 cables + 589
+  house connections (0.65 m), 31 mini pillars, MV 10 cables (0.80 m, 200 mm), 4 substations, 37 street
+  lights + 1 panel (no cable lines drawn), telecom 150 ducts + 13 handholes, security 142 ducts + 9
+  handholes. Telecom / security / LV sizes 0.1 m for display; their depths are not in the documents
+  (drawn on the terrain). OK, 2 warnings (HATCH skipped, unmapped layers).
+- Each pillar is an "LV Panel" dynamic block on MINI-PILLAR-0 holding the pillar symbol (MINI-PILLAR-2)
+  and 19 house connections: opened (`explode: true`). The lighting panel is drawn again in the LV xref:
+  that copy is left out.
+- Off site, kept as drawn (to ask Parsons): an LV group ~450 m south of the site (substation SSNA001
+  1000 kVA, DP1-1: a pillar, 19 house connections, 9 cables), one substation and a storm line with an
+  outfall ~200 m east of the site.
+
+### Storm and dry networks imported (10 Nov 2026)
+
+- User imported both packages (12 data sources). Model closed, proposal master. model:names with the
+  storm package, then the dry one, on chained scratchpad copies: every size, network, depth and offset
+  column filled. G3 on the copy with --layout and all seven packages (11000, sewer, irrigation, water,
+  storm, dry): PASS, 0 warnings; integrity ok, 27 data sources. Installed (018340F1... -> BD157E7A...).
+
+### Blocks and road reserve package (10 Nov 2026)
+
+- __ROW (IRO-11000, bound road layout) closes around 8 blocks: some drawn closed, some with meeting
+  ends; the rest are loose edges, left out. Profile `parsons-nrjs-areas`: blocks = closed __ROW,
+  road reserve = Project Boundary less the blocks (test in areas.test.ts).
+- `exports\Al-Narjis-areas-shp-v1`: blocks 8 (3,252-27,265 m2, none overlapping), road reserve 1
+  (21,577 m2 plus two slivers of 12 and 8 m2 between block edges and the boundary). OK; warnings:
+  8 open __ROW lines left out, unmapped layers. Both import as Coverage Areas.
+
+### Blocks and road reserve imported; all checks (11 Nov 2026)
+
+- User imported `Al-Narjis-areas-shp-v1` (blocks, road_reserve as Coverage Areas). Model closed,
+  proposal master, 29 data sources, integrity ok. G3 on the working copy with --layout and the eight
+  packages (areas, 11000, sewer, irrigation, water, storm, dry): all PASS, 0 warnings (G3-025: 13 of 14
+  corners at the drawn radius, 1 without a drawn arc). Questions for Parsons: `parsons-questions.md`.
+
+### Water valves and fire hydrants package (11 Nov 2026)
+
+- Found missing after the "all checks" entry: IPW-10000 carries water fittings the WaterGEMS model lacks
+  (and IRW-10000 irrigation valves, not done yet). Rules added to `parsons-nrjs-wet-utilities`:
+  valves on `Xref Potable$0$C-WATR-APPT`, air valve, washout (drawn on C-STRM-STRC, matched with the
+  xref prefix so it is no storm outfall), fire hydrants = the circle on C-PW-FIRE HYDRANT COVER CATCH in
+  anonymous blocks on layer 0. The reader now opens a block whose only content is an `asPoint` shape
+  (test in narjis.test.ts).
+- `exports\Al-Narjis-water-fittings-shp-v1`: 12 fire hydrants (on site), 21 valves: air valve and
+  washout on site, 19 valves ~1 km south-east of the site with no pipe drawn there (kept as drawn,
+  Parsons question 10). OK; warnings: HATCH / MULTILEADER skipped, unmapped layers.
+
+### Water fittings imported (11 Nov 2026)
+
+- User imported `Al-Narjis-water-fittings-shp-v1` (water_hydrants 12, water_valves 21, Pipeline
+  Connectors). model:names on a copy: NETWORKNAME filled (12 + 21). G3 on the copy with --layout and the
+  nine packages: PASS, 0 warnings; integrity ok, 31 data sources. Installed (1767DCA2... -> ABAF6226...).
+- Still to do: irrigation valves from IRW-10000 (Parsons question 11).
+
+### Irrigation valves package (11 Nov 2026)
+
+- IRW-10000 (block "Xref Irrigation_1", nested network xrefs): rules in `parsons-nrjs-wet-utilities`
+  for isolation valves (layer "Isolation valve", each a block holding the gate and butterfly symbols),
+  air valve, washout valve, flow sensor / master valve chambers (L-IRRG-CHMB). Test in narjis.test.ts.
+  Not taken: pull boxes, quick couplings, two-wire decoder cable, tie-ins (no valves).
+- `exports\Al-Narjis-irrigation-valves-shp-v1`: 13 (9 isolation, 2 flow sensor / master valve, 1 air,
+  1 washout); 2 isolation valves 100-300 m south of the site (Parsons question 11). OK; warnings:
+  DIMENSION / HATCH / LEADER skipped, unmapped layers.
+
+### Irrigation valves imported (11 Nov 2026)
+
+- User imported `Al-Narjis-irrigation-valves-shp-v1` (13, Pipeline Connectors). model:names on a
+  copy: NETWORKNAME 13. G3 with --layout and the ten packages: PASS, 0 warnings; integrity ok, 32 data
+  sources. Installed (8DDA3526... -> 4B574D37...). Not modelled: irrigation pull boxes, quick
+  couplings, two-wire decoder cable and tie-ins; utility corridor sheets (IUC, widths only). Open
+  items for Parsons: parsons-questions.md.
+
+### Irrigation extras and utility corridors (11 Nov 2026)
+
+- `parsons-nrjs-wet-utilities` also reads IRW-10000's pull boxes (25), quick couplings (8), tie-ins (18)
+  and the two-wire decoder cable (24 lines, on the terrain). `exports\Al-Narjis-irrigation-dwg-shp-v1`
+  (built with --skip-layers irrigation_valves, already imported): irrigation_structures_dwg 51
+  (Pipeline Connectors), irrigation_control_cable 24 (Pipelines).
+- New profile `parsons-nrjs-corridors`: the IUC-10000 corridor lines of the bound
+  "Xref_Al Narjis_Utilities Corridor" (legend copies left out) as display-only Pipelines
+  "Corridor - <utility>" (5 cm, no depth). `exports\Al-Narjis-corridors-shp-v1`: 414 lines, 13 corridors.
+- `corridorFit` (domain) and `scripts/narjis/corridor-check.mts`: share of each network within 1 / 2 m
+  of its corridor. Results and reading in `corridor-check.md`: sewer and MV follow theirs; water and
+  irrigation (WaterGEMS) follow the sewer corridor; storm a third. Parsons questions 12, 13.
+- Corridors v1 (one Shapefile) showed every corridor in one colour, hidden under the road body (user,
+  11 Nov). `exports\Al-Narjis-corridors-shp-v2`: one Shapefile per corridor (13), 0.15 m wide, lifted
+  1.0 m above the terrain (new `depth.liftM`; roads stand ~0.6 m above the grading surface), each with
+  its IUC layer colour in `CORRIDOR_COLOURS.txt`. The v1 source is to be removed from the model.
+
+### Drawn pipes, corridor bands, nearest-corridor check (11 Nov 2026)
+
+- Drawn pipes beside the hydraulic models: rules in `parsons-nrjs-wet-utilities` (IPW layers "160" /
+  "200" / "250", IRW "Irrigation Network-HDPE-<mm>", 50 mm secondary, 75 mm tie-ins, ISE "SS_Pipe Dia
+  200"; networks "<utility> - Al Narjis (drawing)", covers as the WaterGEMS packages, sewer on the
+  terrain). `exports\Al-Narjis-pipes-dwg-shp-v1`: water 10 (1,778 m), irrigation 33 (1,428 m), sewer 20
+  (1,251 m), all Pipelines.
+- `corridorBands` + `scripts/narjis/corridor-bands.mts`: `exports\Al-Narjis-corridor-bands-shp-v1`, one
+  Coverage Areas Shapefile per corridor (13), each line widened by half the spacing to the nearest other
+  corridor (0.17-0.90 m each side, cap 1.0 m). No manifest: display only, outside G3.
+- `corridorAssignment` (nearest corridor among all) replaces the 1 m tolerance in `corridor-check.mts`;
+  order per network: corridor, drawing, model. Findings in `corridor-check.md`; questions 12-13 updated.
+
+### Corridor colours (11 Nov 2026)
+
+- User coloured corridor_irrigation (Pipelines) and corridor_band_irrigation (Coverage Areas) by hand:
+  InfraWorks wrote DATA_SOURCES.CONFIG propertyMappings.RULE_STYLE = "'Pipeline/Green Circle'" and
+  "'x00FF00FF'" (a colour code, RGBA), and the same value in each feature's RULE_STYLE (`.files` commit
+  a095490). `scripts/narjis/corridor-styles.cjs` writes the IUC colours the same way: exact codes on the
+  bands, the nearest of InfraWorks' 11 pipeline styles on the lines (LocalLibrary\Styles\Pipeline).
+  Its dry run reproduces the user's two choices. The other 12 + 12 corridor files and the drawn pipes
+  are not imported yet.
+- Coverage Areas drape on the terrain (Draping Options: Drape or one Set Elevation): they cannot follow
+  the road surface; the lifted Pipelines are the corridors seen above the roads.
+- Exact colours (11 Nov): the user made one style in the Style Palette ("IUC Telecom", x7CA500FF).
+  InfraWorks keeps such styles in the model: `<model>.files\unver\Content\Styles\Material\Colors\CORRIDOR
+  color\`, `...\Material\CORRIDOR color\` and `...\Pipeline\` (.ACItem JSON + .png). The Pipeline style is a
+  copy of Green Circle whose tube material is the new colour; "ambient" is half the colour.
+  `scripts/narjis/corridor-style-library.cjs` writes the 14 "IUC <name>" styles the same way (its Telecom
+  matches InfraWorks' own file for file); `corridor-styles.cjs` now gives each corridor line
+  'Pipeline/IUC <name>'. 39 style files written into the working copy; corridors not yet all imported.
+- Corridors imported by the user (13 + 13; corridor_irrigation twice: "corridor_irrigation (2)" to
+  remove, G3-011). The user removed the Material\CORRIDOR color copy; the library script no longer
+  writes it. corridor-styles.cjs on a copy: 27 sources styled (Pipeline/IUC <name> on the lines, the
+  exact colour code on the bands); then model:names with irrigation-dwg and corridors-v2 (NETWORKNAME,
+  sizes, ELEV_FROM/TO = the 1.0 m lift). Installed (9D3AD37B... -> 11CF6921... -> 50BB736A...). G3: layout
+  and every package PASS, 0 warnings, except corridors-v2: G3-011 for the duplicate source.
+
+### Networks in Parsons' utility colours (11 Nov 2026)
+
+- The network sheets colour by layer (telecom and security alike: primary duct blue, secondary red);
+  IUC-DWG-10000 is the submission's one per-network colour scheme. `scripts/narjis/network-styles.cjs`
+  gives pipes and cables "Pipeline/IUC <name>" and the network nodes (sewer / storm manholes, water and
+  irrigation structures) new "PipeConnector/IUC <name>" styles (Circle, tube and cap in the colour, as
+  InfraWorks' Orange Circle), written into the model's style library. Valves, hydrants, pillars,
+  handholes, substations, street lights keep their 3D shapes; security keeps its own (no IUC corridor).
+- On a copy: 12 sources restyled, integrity ok; installed (50BB736A... -> C8C2E56D...), 4 PipeConnector
+  styles added. G3 with the network packages PASS.

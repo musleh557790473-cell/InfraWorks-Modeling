@@ -86,6 +86,28 @@ test("a plotted sheet: roads are read from the bound xref at their own coordinat
   assert.match(parsed.notes[0]!, /bound xref\(s\) "Xref Road Layout Al Narjis" were read/);
 });
 
+test("Al Narjis: an RD_CL centreline takes its name from the MTEXT on 0-Alignment Name beside it", () => {
+  // Cut sheet 11000 binds "Xref Dim_Names Al Narjis", whose names read "ROAD-01 (18m R.O.W)" with
+  // MTEXT formatting codes, about 5 m off the centreline.
+  const text = dxf(
+    ...SHEET_BLOCKS.slice(0, -2), // without its closing ENDSEC
+    0, "BLOCK", 2, "Xref Dim_Names Al Narjis", 70, 0, 10, 0, 20, 0,
+    0, "MTEXT", 8, "Xref Dim_Names Al Narjis$0$0-Alignment Name", 10, 663750, 20, 2756705, 40, 2, 1, String.raw`{\Fisocp|c0;\C256;ROAD-01 (18m R.O.W)}`,
+    0, "ENDBLK",
+    0, "ENDSEC",
+    0, "SECTION", 2, "ENTITIES",
+    0, "INSERT", 8, "0", 2, "Xref Road Layout Al Narjis", 10, 0, 20, 0,
+    0, "INSERT", 8, "0", 2, "Xref Dim_Names Al Narjis", 10, 0, 20, 0,
+    0, "ENDSEC", 0, "EOF",
+  );
+  const roads = roadsOf(parseDxf(text, "11000-0A.dxf", PARSONS_LDIP_ROADS_PROFILE));
+  const named = roads.find((f) => f.provenance.sourceLayer.endsWith("$RD_CL"))!;
+  assert.equal(named.attributes.road_name, "ROAD-01 (18m R.O.W)");
+  assert.equal(named.nameAttribute, "road_name");
+  const external = roads.find((f) => f.provenance.sourceLayer.endsWith("External Road"))!;
+  assert.equal(external.attributes.road_name, undefined, "no name within 10 m: none invented");
+});
+
 test("a sheet whose xref layers are not mapped says which xrefs to map instead of guessing", () => {
   const text = dxf(...SHEET_BLOCKS, 0, "SECTION", 2, "ENTITIES", 0, "ENDSEC", 0, "EOF");
   const parsed = parseDxf(text, "10001-0A.dxf", DEFAULT_MAPPING_PROFILE);

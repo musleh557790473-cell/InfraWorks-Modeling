@@ -568,6 +568,8 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
     layerStats.set(layer, s);
   };
 
+  const labelLayers = profile.layers.flatMap((l) => l.labels?.layers ?? []);
+  const isLabelLayer = (layer: string) => labelLayers.some((r) => matchesLayer(r, layer) || matchesLayer(r, stripBoundXrefPrefix(layer)));
   const blockHasGeometry = memo((name: string, depth: number): boolean => {
     const b = blocks.get(name.toUpperCase());
     if (!b || depth > MAX_BLOCK_DEPTH) return false;
@@ -575,6 +577,12 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
       const info = readInfo(e);
       // A symbol inserted on a mapped layer (a valve on C-WATR-APPT) is content too: open the xref holding it.
       if (e.type === "INSERT") return classOf(info.layer) !== "unmapped" || blockHasGeometry(info.str.get(2) ?? "", depth + 1);
+      // Names a rule reads from labels count too: Al Narjis binds its road names in their own xref
+      // ("Xref Dim_Names Al Narjis", MTEXT on 0-Alignment Name), with no mapped geometry beside them.
+      if (e.type === "TEXT" || e.type === "MTEXT") return isLabelLayer(info.layer);
+      // A shape read as a point (asPoint): Al Narjis' fire hydrants are anonymous blocks on layer 0, each
+      // with one circle on C-PW-FIRE HYDRANT COVER CATCH (IPW-10000).
+      if (findLayerMapping(profile, info.layer)?.asPoint) return true;
       return GEOMETRY_CLASSES.includes(classOf(info.layer));
     });
   });

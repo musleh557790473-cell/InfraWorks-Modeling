@@ -44,7 +44,7 @@ function main(argv: string[]): number {
         process.stdout.write(`  ${l.file} ("${l.dataSource}"): left alone, ${l.skipped}\n`);
         continue;
       }
-      process.stdout.write(`  ${l.file} ("${l.dataSource}", ${l.table}, ${l.rows} rows)\n`);
+      process.stdout.write(`  ${l.file} ("${l.dataSource}", ${l.table}, ${l.rows} rows${l.missing ? `; ${l.missing} record(s) with no row left: converted or deleted in InfraWorks` : ""})\n`);
       for (const c of l.columns) {
         process.stdout.write(
           c.skipped

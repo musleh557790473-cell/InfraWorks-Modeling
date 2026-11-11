@@ -6,7 +6,7 @@ import { readDxfBlock } from "@infraworks/domain";
 import { openImx, readRegions } from "@infraworks/imx-gate";
 
 import { roadModelFindings } from "./roads/road-gate.js";
-import { dataSources, importedFilled, importedNames, importedStats, modelRegions, modelWkt, openModel, readPackage, schemaVersion } from "./read.js";
+import { componentRoadStats, dataSources, growExtent, importedFilled, importedNames, importedStats, modelRegions, modelWkt, openModel, readPackage, schemaVersion } from "./read.js";
 import type { DataSourceRow, ModelHandle } from "./read.js";
 import { EXPECTED_TABLE } from "./types.js";
 import type { LayerComparison, ModelFinding, ModelGateOptions, ModelGateReport, PackageInfo, RegionComparison } from "./types.js";
@@ -285,6 +285,19 @@ function compareLayers(h: ModelHandle, pkg: PackageInfo, out: ModelFinding[], ro
     }
 
     const stats = importedStats(h, target, src.GUID);
+    // Roads the source no longer holds but that are in the model as component roads of the same name
+    const comp = target === "ROADS" && layer.names?.size && stats.count < layer.featureCount ? componentRoadStats(h, layer.names, src.GUID) : null;
+    if (comp?.count) {
+      stats.count += comp.count;
+      stats.length += comp.length;
+      if (comp.extent) for (const [x, y] of [[comp.extent.minX, comp.extent.minY], [comp.extent.maxX, comp.extent.maxY]] as const) stats.extent = growExtent(stats.extent, x, y);
+      out.push(
+        f("G3-013", "Roads now component roads", "info", `${layer.file}: ${comp.count} road(s) are in the model as component roads of the same name (converted in InfraWorks or written by model:roads), no longer rows of the data source: ${comp.names.join(", ")}. Counted as arrived.`, {
+          layer: layer.name,
+          count: String(comp.count),
+        }),
+      );
+    }
     row.modelCount = stats.count;
     row.modelLength = stats.length;
 
@@ -346,7 +359,7 @@ function compareLayers(h: ModelHandle, pkg: PackageInfo, out: ModelFinding[], ro
 
     /* G3-010 names arrived: InfraWorks keeps a .dbf field only when it is mapped in Configure */
     if (layer.nameField && layer.names?.size) {
-      const got = importedNames(h, target, src.GUID);
+      const got = [...importedNames(h, target, src.GUID), ...(comp?.names ?? [])];
       const matched = got.filter((n) => layer.names!.has(n)).length;
       const sent = layer.namedCount ?? layer.names.size;
       row.names = { field: layer.nameField, package: sent, model: got.length, matched };

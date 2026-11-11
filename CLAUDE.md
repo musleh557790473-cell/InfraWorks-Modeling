@@ -69,8 +69,12 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
 - Sheets bind the design in as xrefs (`<xref>$0$<layer>`): read through the bound xref.
   EXPORTTOAUTOCAD may rename an xref block (`Xref Storm Network_1`) while its layers keep the old
   prefix; the reader accepts both.
-- ODA File Converter is installed on one laptop only. On the other, ask the user for DXF exports
-  (to `C:\Temp\dxf`); never invent a converter or download one unasked.
+- ODA File Converter is installed on one laptop only. AYNLAP1201 has no ODA but has Civil 3D 2026
+  (AutoCAD 2026 + accoreconsole): there `node scripts/dwg-to-dxf.cjs <dwg folder> <out>` runs AUDIT,
+  EXPORTTOAUTOCAD, DXFOUT on every sheet without the user. EXPORTTOAUTOCAD crashes accoreconsole on
+  some sheets (Access Violation 0x01f0, also with `/product C3D` and TILEMODE 1); the script then
+  falls back to a direct DXFOUT and says so. Company policy blocks .ps1 scripts (even -ExecutionPolicy
+  Bypass): write such tools in Node. Never invent a converter or download one unasked.
 - Depths missing from drawings come from the design report `LDIP-RCRC-SAP-01-AQ-DES-RPT-00001`
   (Vol. 02_Reports): storm min cover 1.2 m (§8), LV 0.65 m / MV 0.80 m to cable centre (§3.3.3).
   Utility corridor sections (UTL-DWG-30000) give widths only, no depths.
@@ -144,6 +148,16 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
   ROADS.GUID. model:roads keeps both GUIDs when it replaces a road, so they stay valid.
 - `<model>.files` keeps every InfraWorks edit as text rows (`exploded/<TABLE>/<n>`): diff its Git
   history to see what InfraWorks wrote, read-only, without opening the model.
+- "Convert to Component Road" (InfraWorks 2026, Al Narjis 10 Nov) takes the road out of its data
+  source (EXTERNAL_ID, DATA_SOURCE_ID and NAME null) and writes junction arms / regions to the planning
+  roads it crosses by their ROADS.GUID. model:roads then replaces each planning road of the same name,
+  its definition taking that GUID; never Refresh the centreline source after (planning roads return).
+  Those arms / regions had no INTERSECTIONS row, and the next Grading Limit edit crashed InfraWorks
+  (access violation, AIM_ModelRoad.dll+0xa7f28; dump `%LOCALAPPDATA%\Temp\InfraWorks_error.dmp`).
+  model:roads now prunes junction rows without a junction after writing.
+- EXPORTTOAUTOCAD explodes Civil 3D profile views into anonymous blocks (`--profiles-block "*Model_Space"`)
+  and may split a label into TEXTs ("PVC 0+045.188" + "ELEV 673.594"): check every road's PVIs against
+  its FG line (a dropped curve showed as a 0.97 m junction step).
 - InfraWorks rebuilds a component road (body, and the intersections where it meets other roads)
   only on a single-road edit. Rebuilding RA-1 split it into 4 pieces between its arms and created
   9 intersections; the one-piece closed ring model:roads writes draws a stray band until then.
@@ -249,6 +263,15 @@ Qairawan, all in UTM 38N, checked by Gate G3 and seen in InfraWorks unless noted
   0 warnings. Other proposals (master, Plots, Imagery, EGL, Engineering1) hold older road states
   without the full data. Junction pits 298 / 299 fixed the same day (D13, Parsons question 17); G3
   (with G3-026) PASS, 0 warnings after the fix.
+
+- Al Narjis (11 Nov 2026, `scripts/narjis/HANDOVER.md`): working copy `C:\IW\Al Narjis\Al Narjis.sqlite`
+  (proposal master, 29 data sources) holds sewer, water (cover 1.20 m, NWC typical, AICC), irrigation
+  (0.80 m assumed), storm and dry networks (depths from SAPL-DSN-LDN-RPT-000003), plots (145, 123
+  numbered), blocks, road reserve, 7 component roads (A1/A2) with 7 InfraWorks junctions and drawn kerb
+  radii on 13 of 14 corners, water valves (21, 19 of them off site) and fire hydrants (12) from
+  IPW-10000, irrigation valves (13) from IRW-10000. G3 with --layout and all ten packages: PASS,
+  0 warnings (32 data sources). Not modelled: irrigation pull boxes, quick couplings, decoder cable,
+  tie-ins; utility corridors (IUC). Open questions: `scripts/narjis/parsons-questions.md`.
 
 Open points: confirm the irrigation cover with Parsons; depths of telecom, security and
 street-lighting ducts (not in the Parsons documents, drawn on the terrain); the full Al Narjis road layout

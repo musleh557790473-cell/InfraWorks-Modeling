@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { AssetKeyConfig, createFileStore, dropDegenerateRings, isDegenerateRing, parseDxf, runBuildPipeline } from "../src/index.js";
+import { AssetKeyConfig, PARSONS_NRJS_AREAS_PROFILE, createFileStore, dropDegenerateRings, isDegenerateRing, parseDxf, runBuildPipeline } from "../src/index.js";
 import type { MappingProfile } from "../src/index.js";
 
 const X = 657000;
@@ -47,13 +47,13 @@ function shpRings(base: string): number[][][][] {
 }
 const clockwise = (r: number[][]) => r.reduce((s, p, i) => s + (r[(i + 1) % r.length]![0]! - p[0]!) * (r[(i + 1) % r.length]![1]! + p[1]!), 0) > 0;
 
-async function build(text: string, skipLayers?: string[]) {
+async function build(text: string, skipLayers?: string[], profile: MappingProfile = PROFILE) {
   const dir = mkdtempSync(join(tmpdir(), "iw-areas-"));
   const path = join(dir, "t.dxf");
   writeFileSync(path, text);
   const store = createFileStore(dir);
   const project = store.createProject("t", 32638);
-  store.setMappingProfile(project.id, PROFILE);
+  store.setMappingProfile(project.id, profile);
   if (skipLayers) store.updateProject(project.id, { skipLayers });
   store.addUpload({ projectId: project.id, filename: "t.dxf", kind: "dxf", path, size: 0 });
   const r = await runBuildPipeline(store, project.id);
@@ -76,6 +76,23 @@ test("skipLayers leaves a layer out of the package (10100 road centrelines for a
   assert.deepEqual(shp, ["blocks", "road_reserve"]);
   assert.ok(!manifest.files.some((f: string) => f.includes("road_centerline")));
   assert.equal(r.collection.features.filter((f) => f.infraFeatureClass === "road_centerline").length, 0);
+});
+
+test("Al Narjis: blocks from __ROW (closed, or drawn open with meeting ends), road reserve = Project Boundary minus them", async () => {
+  const { manifest } = await build(
+    dxf(
+      0, "SECTION", 2, "ENTITIES",
+      ...poly("Xref Road Layout Al Narjis$0$Project Boundary", square(0, 0, 100)),
+      ...poly("Xref Road Layout Al Narjis$0$__ROW", square(10, 10, 30)),
+      ...poly("Xref Road Layout Al Narjis$0$__ROW", [...square(60, 60, 30), [60, 60]], false), // ends meet
+      ...poly("Xref Road Layout Al Narjis$0$__ROW", [[0, 50], [100, 50]], false), // a loose edge
+      0, "ENDSEC", 0, "EOF",
+    ),
+    undefined,
+    PARSONS_NRJS_AREAS_PROFILE,
+  );
+  const shp = manifest.layers.filter((l: { format: string }) => l.format === "shp");
+  assert.deepEqual(shp.map((l: { name: string; featureCount: number }) => `${l.name}:${l.featureCount}`).sort(), ["blocks:2", "road_reserve:1"]);
 });
 
 test("road reserve = site boundary minus the blocks, each in its own Shapefile; open lines stay out", async () => {
