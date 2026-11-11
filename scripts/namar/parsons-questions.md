@@ -18,3 +18,4 @@ says what the model uses until Parsons answers. Report = LDIP-RCRC-SAP-03-DN-DES
 | 11 | Telecom sheets | TEL-10100 ("Secondary Telecom Network") repeats 841 of the 874 ducts of TEL-10000; 9 ducts of TEL-10000 are drawn twice. Which sheet holds the issued network? | TEL-10000 as drawn |
 | 12 | Street lighting off site | Two street lights and the lighting panel SSLPC lie at E 656 676 N 2 712 923, about 1.1 km south of the site. Are they part of Namar? | Kept as drawn |
 | 13 | Street lights drawn twice | 47 street-light poles in SLT-10000 are laid exactly over another pole. Please confirm 292 poles. | One pole per spot (292) |
+| 14 | Missing ROW line | In ROD-10200 a row of 63 plots (around E 657 556-657 621, N 2 714 190-2 714 219) has no `__ROW` line between it and its road, so no block closes there. Please add the right-of-way line. | Plots cut out of the road reserve; no block formed |
