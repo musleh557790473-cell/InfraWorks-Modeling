@@ -524,7 +524,7 @@ const NRJS_STORM_COVER = { coverM: 1.2, source: `${NRJS_REPORT} §5.6.7 soil cov
  */
 export const PARSONS_NRJS_WET_PROFILE: MappingProfile = {
   id: "parsons-nrjs-wet-utilities",
-  name: "Parsons / Al Narjis storm drainage (drawings)",
+  name: "Parsons / Al Narjis storm drainage and water fittings (drawings)",
   team: "Parsons",
   layers: [
     {
@@ -538,6 +538,14 @@ export const PARSONS_NRJS_WET_PROFILE: MappingProfile = {
     },
     { dwgLayer: "*SW_CI_Manhole*", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: netN("Storm", "Manhole"), fields: { ...CONNECTOR_COLUMNS, ...NODE_DEPTH_COLUMNS }, depth: { fromPipes: 2, source: NRJS_STORM_COVER.source } },
     { dwgLayer: "C-STRM-STRC", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: netN("Storm", "Outfall"), fields: { ...CONNECTOR_COLUMNS, ...NODE_DEPTH_COLUMNS }, depth: { fromPipes: 2, source: NRJS_STORM_COVER.source } },
+    // Potable water fittings (IPW-DWG-10000, bound "Xref Potable"; the WaterGEMS model has none): valves
+    // on C-WATR-APPT, the air valve, and the washout, which the xref draws on C-STRM-STRC (so matched with
+    // its prefix, before the storm outfall rule). Fire hydrants are anonymous blocks on layer 0, each with
+    // one circle on C-PW-FIRE HYDRANT COVER CATCH: the circle's centre is the hydrant.
+    { dwgLayer: "Xref Potable$0$C-WATR-APPT", ...node, outputLayer: "water_valves", attributes: netN("Water", "Valve") },
+    { dwgLayer: "Xref Potable$0$C-PW-AIR VALVE", ...node, outputLayer: "water_valves", attributes: netN("Water", "Air Valve") },
+    { dwgLayer: "Xref Potable$0$C-STRM-STRC", ...node, outputLayer: "water_valves", attributes: netN("Water", "Washout Valve") },
+    { dwgLayer: "C-PW-FIRE HYDRANT COVER CATCH", ...node, asPoint: true, outputLayer: "water_hydrants", attributes: netN("Water", "Fire Hydrant") },
   ],
   reportJoins: [],
   assetKeys: AssetKeyConfig.parse({}),

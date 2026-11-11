@@ -580,6 +580,9 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
       // Names a rule reads from labels count too: Al Narjis binds its road names in their own xref
       // ("Xref Dim_Names Al Narjis", MTEXT on 0-Alignment Name), with no mapped geometry beside them.
       if (e.type === "TEXT" || e.type === "MTEXT") return isLabelLayer(info.layer);
+      // A shape read as a point (asPoint): Al Narjis' fire hydrants are anonymous blocks on layer 0, each
+      // with one circle on C-PW-FIRE HYDRANT COVER CATCH (IPW-10000).
+      if (findLayerMapping(profile, info.layer)?.asPoint) return true;
       return GEOMETRY_CLASSES.includes(classOf(info.layer));
     });
   });

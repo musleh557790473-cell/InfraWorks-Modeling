@@ -303,3 +303,15 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   proposal master, 29 data sources, integrity ok. G3 on the working copy with --layout and the eight
   packages (areas, 11000, sewer, irrigation, water, storm, dry): all PASS, 0 warnings (G3-025: 13 of 14
   corners at the drawn radius, 1 without a drawn arc). Questions for Parsons: `parsons-questions.md`.
+
+### Water valves and fire hydrants package (11 Nov 2026)
+
+- Found missing after the "all checks" entry: IPW-10000 carries water fittings the WaterGEMS model lacks
+  (and IRW-10000 irrigation valves, not done yet). Rules added to `parsons-nrjs-wet-utilities`:
+  valves on `Xref Potable$0$C-WATR-APPT`, air valve, washout (drawn on C-STRM-STRC, matched with the
+  xref prefix so it is no storm outfall), fire hydrants = the circle on C-PW-FIRE HYDRANT COVER CATCH in
+  anonymous blocks on layer 0. The reader now opens a block whose only content is an `asPoint` shape
+  (test in narjis.test.ts).
+- `exports\Al-Narjis-water-fittings-shp-v1`: 12 fire hydrants (on site), 21 valves: air valve and
+  washout on site, 19 valves ~1 km south-east of the site with no pipe drawn there (kept as drawn,
+  Parsons question 10). OK; warnings: HATCH / MULTILEADER skipped, unmapped layers.

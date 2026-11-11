@@ -13,4 +13,6 @@ the model uses until Parsons answers.
 | 6 | LV off site | ILV-10000 carries an LV group about 450 m south of the site (substation SSNA001 1000 kVA, DP1-1, a pillar, 19 house connections, 9 cables). Is it part of Al Narjis? | Kept as drawn |
 | 7 | Off site east | One distribution substation and a storm line ending at an outfall lie about 200 m east of the site. Please confirm both. | Kept as drawn |
 | 8 | Duct depths | No burial depth for telecom, security or street lighting ducts in the drawings or SAPL-DSN-LDN-RPT-000003. What depths apply? | Drawn on the terrain, 0.1 m display size (street lighting: no cable lines drawn) |
+| 10 | Water valves | IPW-10000 draws 19 valves (C-WATR-APPT) about 1 km south-east of the site, over some 400 m, with no water pipe drawn there; the site network shows only an air valve and a washout. Where are the valves of the site network, and what are these 19? | The 19 kept as drawn; on site: air valve, washout, 12 fire hydrants |
+| 11 | Irrigation valves | IRW-10000 draws 9 isolation valves and butterfly valves; the WaterGEMS model has 3 isolation valves. Not yet modelled from the drawing. | WaterGEMS valves only |
 | 9 | Street lighting cables | ISL-10000 shows the poles and the panel but no cable routes. Are they to be issued? | Poles and panel only |

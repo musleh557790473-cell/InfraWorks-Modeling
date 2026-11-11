@@ -39,6 +39,30 @@ test("Al Narjis LV: an LV Panel block on MINI-PILLAR-0 gives its pillar and its 
   assert.equal(by("streetlight_panels").length, 1, "the lighting panel drawn again in the LV xref is not shipped twice");
 });
 
+test("Al Narjis water: a hydrant block on layer 0 gives one hydrant at its circle; the xref's washout on C-STRM-STRC is no storm outfall", () => {
+  // IPW-DWG-10000: each fire hydrant is an anonymous block on layer 0 holding a circle on
+  // "C-PW-FIRE HYDRANT COVER CATCH" (and a hatch); unopened, no hydrant was read.
+  const text = dxf(
+    0, "SECTION", 2, "BLOCKS",
+    0, "BLOCK", 2, "*U33", 70, 1, 10, 0, 20, 0,
+    0, "CIRCLE", 8, "C-PW-FIRE HYDRANT COVER CATCH", 10, 1, 20, 2, 40, 0.4,
+    0, "ENDBLK",
+    0, "BLOCK", 2, "WO", 70, 0, 10, 0, 20, 0, 0, "CIRCLE", 8, "0", 10, 0, 20, 0, 40, 0.3, 0, "ENDBLK",
+    0, "BLOCK", 2, "Xref Potable", 70, 0, 10, 0, 20, 0, 1, "Xref Potable.dwg",
+    0, "INSERT", 8, "0", 2, "*U33", 10, 663900, 20, 2756900,
+    0, "INSERT", 8, "Xref Potable$0$C-STRM-STRC", 2, "WO", 10, 663950, 20, 2756950,
+    0, "ENDBLK",
+    0, "ENDSEC",
+    0, "SECTION", 2, "ENTITIES", 0, "INSERT", 8, "0", 2, "Xref Potable", 10, 0, 20, 0, 0, "ENDSEC", 0, "EOF",
+  );
+  const f = parseDxf(text, "IPW-10000.dxf", PARSONS_NRJS_WET_PROFILE).features;
+  const h = f.filter((x) => x.outputLayer === "water_hydrants");
+  assert.equal(h.length, 1);
+  assert.deepEqual(h[0]!.geometry, { type: "Point", coordinates: [663901, 2756902] });
+  assert.deepEqual(f.filter((x) => x.outputLayer === "water_valves").map((x) => x.attributes.conn_type), ["Washout Valve"]);
+  assert.equal(f.filter((x) => x.outputLayer === "storm_manholes").length, 0);
+});
+
 test("Al Narjis storm: pipe size from the layer, network named for Al Narjis, cover from its own report", () => {
   const rule = PARSONS_NRJS_WET_PROFILE.layers.find((l) => l.outputLayer === "storm_pipes")!;
   assert.equal(rule.attributes?.network, "Storm - Al Narjis");
