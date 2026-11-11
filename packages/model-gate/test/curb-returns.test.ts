@@ -35,6 +35,15 @@ test("Al Narjis: kerb returns come from RD_CURB_RETURN (R12.00 as dimensioned), 
   assert.equal(kerbLayer([kerbArc(0, 0, 10)]), "RD_Edges", "Al Qairawan has no RD_CURB_RETURN: -RD_Edges as before");
 });
 
+test("Namar: kerb returns come from __Curb (R10 / R12 / R15), not the 'Road edge' arc 0.30 m out", () => {
+  const layout: DxfEnt[] = [
+    { type: "ARC", layer: "__Curb", x: [5], y: [6], bulge: [], txt: "", r: 10 },
+    { type: "ARC", layer: "Road edge", x: [5], y: [6], bulge: [], txt: "", r: 10.3 },
+  ];
+  assert.equal(kerbLayer(layout), "__Curb");
+  assert.deepEqual(kerbArcs(layout).map((a) => a.r), [10]);
+});
+
 test("the junction centre is read from a Point or a MultiPoint reference point (junctions 51, 300, 303)", () => {
   assert.deepEqual(junctionCentre(point(10, 20)), [10, 20]);
   assert.deepEqual(junctionCentre(multiPoint(10, 20)), [10, 20]);

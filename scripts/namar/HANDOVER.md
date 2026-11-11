@@ -313,3 +313,19 @@ package). The LV xref repeats the substations, the MV loop and the lighting pane
   cutter of an earlier entry; with every plot as a cutter the clipper failed on shared edges): 0.570 -> 0.281 km2.
 - `exports\Namar-10200-shp-v2` (+ zip): blocks 38, road reserve 1 (9 parts), centrelines as v1. Only `blocks` and
   `road_reserve` are to be re-imported (not `road_centerline`: the planning roads would come back).
+
+### Junctions, cleanup and kerb returns (11 Nov 2026)
+
+- User: blocks / road_reserve replaced with v2 (Coverage Areas), Grading Limit edits on the roads. Model closed, master,
+  integrity ok: 55 junctions, 181 arms, 126 corners; RA-01 not converted yet (0 roundabouts).
+- G3 --layout on a copy after model:names (v2): G3-021 FAIL, 16 links to no road definition, and G3-022, 20 arm /
+  region rows without a junction: all 20 were arms / corners InfraWorks started against RA-01's planning ring (the
+  `_CL` circle imported as a planning road) and never tied to a junction. `model:intersections` (dry run first) removed
+  them: 0 dangling links, G3 --layout PASS.
+- Kerb returns: Namar draws the kerb line on `__Curb` at the design radii (10.00 x93, 15.00 x14, 12.00 x11, larger at
+  RA-01), `Road edge` 0.30 m out (10.30, 12.30): `kerbLayer` now picks `__Curb` (test in curb-returns.test.ts).
+  `model:intersections --curb-returns <10200> --layout-block "Xref Road Layout Dahiyat Nemar_1"`: 118 corners on 55
+  junctions; set 96 (10 m x88, 12 m x8), 1 already at the drawn value, 5 ambiguous (nearest arc taken: junctions 3,
+  10, 25, 29), 16 without a drawn arc (InfraWorks' radius kept; mostly junctions 51-55).
+- G3 on the copy: --layout PASS (G3-025: 102 at the drawn radius, 16 without an arc); 10200 v2, plots, sewer, water,
+  irrigation PASS, 0 warnings. Installed (440D012C... -> 60D8CA20...); G3 --layout on the working copy PASS.
