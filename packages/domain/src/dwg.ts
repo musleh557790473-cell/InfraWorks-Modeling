@@ -568,7 +568,10 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
     layerStats.set(layer, s);
   };
 
-  const labelLayers = profile.layers.flatMap((l) => l.labels?.layers ?? []);
+  // Texts a rule reads as labels, and the asset-number texts (plot numbers): an xref holding only these
+  // is still opened. Namar binds its plot numbers (MP-PLT-TXT) in a baseplan xref whose plot lines are
+  // not used (the plots are the layout xref's closed "Residential plots").
+  const labelLayers = [...profile.layers.flatMap((l) => l.labels?.layers ?? []), ...keys.textLayers];
   const isLabelLayer = (layer: string) => labelLayers.some((r) => matchesLayer(r, layer) || matchesLayer(r, stripBoundXrefPrefix(layer)));
   const blockHasGeometry = memo((name: string, depth: number): boolean => {
     const b = blocks.get(name.toUpperCase());

@@ -197,3 +197,30 @@ another sheet). The readers need these names (a Namar profile, not a copy of Al 
   121/121 (10 868 m), irrigation 8/8 + 291/291 (9 453 m), offsets 0.00 m, all named: **PASS, 0 warnings** each.
   Installed after the hash check (1FD93213... -> E10AEC27...); integrity ok; G3 on the working copy: all three PASS,
   0 warnings.
+
+### Roads, blocks, road reserve and plots packages (11 Nov 2026)
+
+- Where things are (10-2026 DXFs): `ROD-DWG-10200-000` binds the layout xref `Xref Road Layout Dahiyat Nemar` and
+  the names xref `Xref Dim_Names Dahiyat Nemar` (the only sheets with names). Layout layers: `_CL` (45 LWPOLYLINE,
+  a LINE, a CIRCLE = RA-01), `__ROW` 43, `G-ASPHALT ROAD` 22 (all open), `Residential plots` 770 closed, `GR`
+  (HATCH / REGION here), the project boundary = `NOTES & LEGEND ROAD-NHC-DMM$0$RD-PVT-MRK` nested in the layout
+  ("PROJECT BOUNDARY" in the legend). Names RD-01..RD-38, RD-M-01..03, RA-01, "WADI FATIMAH ROAD". The plot numbers
+  (MP-PLT-TXT, 774, all unique) are only in the network sheets' baseplan xref `Ladun Dahiyat Namar Baseplan`;
+  SLT-DWG-10000-000's layout xref has 767 plots (10200's has 770: two versions of the layout xref).
+- The sheets also hold a legend sample of each layer (bare `_CL`, `__ROW`, the boundary) and a scaled copy of the
+  layout in the title block's key plan: every Namar rule names its layer with the layout-xref prefix.
+- Generalised: `parsonsDistrictRoadsProfile` / `parsonsDistrictPlotsProfile` (types.ts) build a district's
+  profiles from its layer names (`ParsonsDistrictLayout`); Namar = `NAMAR_LAYOUT`, profiles `parsons-dn-roads`,
+  `parsons-dn-plots`. Al Qairawan / Al Narjis profiles untouched.
+- Fixes on real data (tests in namar.test.ts): Namar's road names stand 11-12 m off the centreline (25 m ROW):
+  `labelDistance` per district (Namar 15 m; next-nearest labels are >= 20 m away), 10 m kept as the default. The
+  reader did not open an xref holding only asset-number texts, so all plots came out unnumbered: the asset text
+  layers now count as content when deciding which xrefs to open (dwg.ts).
+- `exports\Namar-10200-shp-v1` (+ zip) from 10200-000: 47 centrelines, 44 named (unnamed: a zero-length `_CL` LINE,
+  pieces of 145 m at E 656 649 N 2 714 001 and 44 m at E 657 308 N 2 714 261 with no label); RA-01 the circle;
+  RD-33 and WADI FATIMAH ROAD in two pieces each. Blocks 34 (closed `__ROW`), road reserve 1 (boundary less the
+  blocks). OK; warnings: 31 open lines left out (9 `__ROW`, 22 asphalt), DIMENSION / REGION / HATCH skipped,
+  unmapped layers. Asphalt not shipped (no closed areas).
+- `exports\Namar-plots-shp-v1` (+ zip) from SLT-DWG-10000-000: 767 plots, all numbered; ASSET_ID_DUPLICATE: 58 and
+  225 each on two equal plots side by side (one of each pair has no number of its own and takes its neighbour's).
+  774 numbers for 767 plots. Green space `GR`: 3 open polylines, not shipped. Parsons questions.

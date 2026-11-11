@@ -696,5 +696,90 @@ export const PARSONS_NRJS_CORRIDORS_PROFILE: MappingProfile = {
   assetKeys: AssetKeyConfig.parse({}),
 };
 
+/**
+ * A Parsons district's road layout as its sheets bind it: one xref holding the layout (centrelines,
+ * right of way, asphalt, project boundary, plots) and the road names in another (MTEXT on
+ * "0-Alignment Name"). Layer names change per district, so they are parameters. Every rule names its
+ * layer with the layout xref's prefix: the sheets also carry a legend sample of each layer (bare
+ * "_CL", "__ROW"…) and a scaled copy of the layout in the title block's key plan, neither of which is
+ * design.
+ */
+export interface ParsonsDistrictLayout {
+  /** profile id stem, e.g. "parsons-dn" */
+  id: string;
+  /** district as written in profile names, e.g. "Namar" */
+  district: string;
+  /** bound layout xref, e.g. "Xref Road Layout Dahiyat Nemar" */
+  xref: string;
+  centreline: string;
+  row: string;
+  /** project boundary layer inside the xref (Namar: the legend xref's RD-PVT-MRK, nested) */
+  boundary: string;
+  asphalt?: string;
+  plots: string;
+  /** plot number texts (any xref): MP-PLT-TXT on every Parsons baseplan so far */
+  plotNumbers?: string;
+  green?: string;
+  /** how far a road name may sit from its centreline (m); default 10. Namar's labels stand 11-12 m off. */
+  labelDistance?: number;
+}
+
+/** Roads and areas from the layout sheet: named centrelines, blocks (closed ROW), road reserve, asphalt. */
+export function parsonsDistrictRoadsProfile(d: ParsonsDistrictLayout): MappingProfile {
+  const x = (layer: string) => `${d.xref}$0$${layer}`;
+  return {
+    id: `${d.id}-roads`,
+    name: `Parsons / ${d.district} road layout, blocks and road reserve`,
+    team: "Parsons",
+    layers: [
+      { dwgLayer: x(d.centreline), infraFeatureClass: "road_centerline", labels: { layers: ["0-Alignment Name"], attribute: "road_name", maxDistance: d.labelDistance ?? 10 } },
+      { dwgLayer: x(d.boundary), infraFeatureClass: "coverage", outputLayer: "road_reserve", subtract: [x(d.row)] },
+      { dwgLayer: x(d.row), infraFeatureClass: "coverage", outputLayer: "blocks" },
+      ...(d.asphalt ? [{ dwgLayer: x(d.asphalt), infraFeatureClass: "coverage" as const, outputLayer: "asphalt" }] : []),
+    ],
+    reportJoins: [],
+    assetKeys: AssetKeyConfig.parse({}),
+  };
+}
+
+/** Plots (closed polylines in the layout xref) numbered by the baseplan's texts, and green space. */
+export function parsonsDistrictPlotsProfile(d: ParsonsDistrictLayout): MappingProfile {
+  const x = (layer: string) => `${d.xref}$0$${layer}`;
+  return {
+    id: `${d.id}-plots`,
+    name: `Parsons / ${d.district} plots`,
+    team: "Parsons",
+    layers: [
+      { dwgLayer: x(d.plots), infraFeatureClass: "parcel", outputLayer: "plots", joinKeyAttribute: "parcel_id" },
+      ...(d.green ? [{ dwgLayer: x(d.green), infraFeatureClass: "coverage" as const, outputLayer: "green_space" }] : []),
+    ],
+    reportJoins: [],
+    assetKeys: AssetKeyConfig.parse({ textLayers: [d.plotNumbers ?? "MP-PLT-TXT"], pattern: "^([A-Z]{1,2}-)?[0-9]{1,4}$" }),
+  };
+}
+
+/**
+ * Namar (Dahiyat Namar, Package 3, code DN, 10-2026 set). Layout xref "Xref Road Layout Dahiyat Nemar"
+ * (spelt "Nemar"), names in "Xref Dim_Names Dahiyat Nemar" (RD-01..RD-38, RD-M-01..03, RA-01, "WADI
+ * FATIMAH ROAD"). Centrelines `_CL`, ROW `__ROW`, asphalt `G-ASPHALT ROAD`, plots `Residential plots`,
+ * green space `GR`; the project boundary is the RD-PVT-MRK polyline of the legend xref nested in the
+ * layout ("PROJECT BOUNDARY" in the ROD-10200 legend). Roads from ROD-DWG-10200-000 (the only sheets with
+ * the names); plots from SLT-DWG-10000-000, whose baseplan carries the plot numbers (MP-PLT-TXT).
+ */
+export const NAMAR_LAYOUT: ParsonsDistrictLayout = {
+  id: "parsons-dn",
+  district: "Namar",
+  xref: "Xref Road Layout Dahiyat Nemar",
+  centreline: "_CL",
+  row: "__ROW",
+  boundary: "NOTES & LEGEND ROAD-NHC-DMM$0$RD-PVT-MRK",
+  asphalt: "G-ASPHALT ROAD",
+  plots: "Residential plots",
+  green: "GR",
+  labelDistance: 15,
+};
+export const PARSONS_DN_ROADS_PROFILE = parsonsDistrictRoadsProfile(NAMAR_LAYOUT);
+export const PARSONS_DN_PLOTS_PROFILE = parsonsDistrictPlotsProfile(NAMAR_LAYOUT);
+
 /** Profiles shipped with the tool: listed first, and never overwritten or deleted by a save. */
-export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_AREAS_PROFILE, PARSONS_NRJS_CORRIDORS_PROFILE];
+export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_AREAS_PROFILE, PARSONS_NRJS_CORRIDORS_PROFILE, PARSONS_DN_ROADS_PROFILE, PARSONS_DN_PLOTS_PROFILE];
