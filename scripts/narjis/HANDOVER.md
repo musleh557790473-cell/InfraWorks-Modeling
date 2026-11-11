@@ -370,3 +370,15 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
   corridor (0.17-0.90 m each side, cap 1.0 m). No manifest: display only, outside G3.
 - `corridorAssignment` (nearest corridor among all) replaces the 1 m tolerance in `corridor-check.mts`;
   order per network: corridor, drawing, model. Findings in `corridor-check.md`; questions 12-13 updated.
+
+### Corridor colours (11 Nov 2026)
+
+- User coloured corridor_irrigation (Pipelines) and corridor_band_irrigation (Coverage Areas) by hand:
+  InfraWorks wrote DATA_SOURCES.CONFIG propertyMappings.RULE_STYLE = "'Pipeline/Green Circle'" and
+  "'x00FF00FF'" (a colour code, RGBA), and the same value in each feature's RULE_STYLE (`.files` commit
+  a095490). `scripts/narjis/corridor-styles.cjs` writes the IUC colours the same way: exact codes on the
+  bands, the nearest of InfraWorks' 11 pipeline styles on the lines (LocalLibrary\Styles\Pipeline).
+  Its dry run reproduces the user's two choices. The other 12 + 12 corridor files and the drawn pipes
+  are not imported yet.
+- Coverage Areas drape on the terrain (Draping Options: Drape or one Set Elevation): they cannot follow
+  the road surface; the lifted Pipelines are the corridors seen above the roads.
