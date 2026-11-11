@@ -23,6 +23,18 @@ function bboxOf(polys: ClipPolygon[]): Bbox {
 
 const overlaps = (a: Bbox, b: Bbox) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
 
+function inPolygon(p: [number, number], poly: ClipPolygon): boolean {
+  const inRing = (r: [number, number][]) => {
+    let k = false;
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+      const [xi, yi] = r[i]!, [xj, yj] = r[j]!;
+      if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) k = !k;
+    }
+    return k;
+  };
+  return inRing(poly[0]! as [number, number][]) && !poly.slice(1).some((h) => inRing(h as [number, number][]));
+}
+
 export function matchesAny(rules: string[], layer: string): boolean {
   const own = stripBoundXrefPrefix(layer);
   return rules.some((r) => matchesLayer(r, layer) || matchesLayer(r, own));
@@ -47,11 +59,25 @@ export function subtractAreas(features: DomainFeature[], profile: Pick<MappingPr
       return findLayerMapping(profile, layer) === rule && polygonsOf(f.geometry).length > 0;
     });
     if (!targets.length) continue;
-    const cutters = features
-      .filter((f) => !targets.includes(f) && matchesAny(rule.subtract!, f.provenance.sourceLayer ?? ""))
-      .map((f) => polygonsOf(f.geometry))
-      .filter((p) => p.length > 0)
-      .map((p) => ({ polys: p, bbox: bboxOf(p) }));
+    // Cutters by subtract entry, in order; one lying inside a cutter of an earlier entry adds nothing
+    // and is left out (Namar: plots inside the blocks share the blocks' edges, which broke the clipper).
+    const byEntry = rule.subtract!.map((s) =>
+      features
+        .filter((f) => !targets.includes(f) && matchesAny([s], f.provenance.sourceLayer ?? ""))
+        .map((f) => polygonsOf(f.geometry))
+        .filter((p) => p.length > 0)
+        .map((p) => ({ polys: p, bbox: bboxOf(p) })),
+    );
+    const cutters: { polys: ClipPolygon[]; bbox: Bbox }[] = [];
+    for (const list of byEntry) {
+      const earlier = [...cutters];
+      for (const c of list) {
+        const ring = c.polys[0]![0]!.slice(0, -1);
+        const p = [ring.reduce((s, q) => s + q[0]!, 0) / ring.length, ring.reduce((s, q) => s + q[1]!, 0) / ring.length] as [number, number];
+        if (cutters.includes(c) || earlier.some((e) => e.polys.some((poly) => inPolygon(p, poly)))) continue;
+        cutters.push(c);
+      }
+    }
 
     let used = 0;
     let area0 = 0;

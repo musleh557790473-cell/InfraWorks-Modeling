@@ -98,7 +98,21 @@ export const LayerMapping = z.object({
    * as single LINE segments. `closeGaps` joins line ends that stop short of another line by up to
    * that distance (drafting gaps). Only a label inside an area names it.
    */
-  polygonize: z.object({ closeGaps: z.number().nonnegative().max(5).optional() }).optional(),
+  polygonize: z
+    .object({
+      closeGaps: z.number().nonnegative().max(5).optional(),
+      /**
+       * Fill mode: the rule's closed areas stay as drawn, and the faces its lines enclose together
+       * with these layers' lines (the site boundary) are added where they hold a feature of `keep`
+       * that no drawn area holds. Namar's blocks along the site edge are closed by the project
+       * boundary, not by __ROW; the road strips there hold no plots and stay out.
+       */
+      with: z.array(z.string().min(1)).optional(),
+      keep: z.array(z.string().min(1)).optional(),
+      /** a face holding a vertex of these layers' lines is never added (a road strip leaking into a block) */
+      avoid: z.array(z.string().min(1)).optional(),
+    })
+    .optional(),
   /**
    * Names written as text next to the features (road names along their centreline): each label on
    * these layers names the nearest feature of this rule within maxDistance, and a feature named by
@@ -920,8 +934,10 @@ export function parsonsDistrictRoadsProfile(d: ParsonsDistrictLayout): MappingPr
     team: "Parsons",
     layers: [
       { dwgLayer: x(d.centreline), infraFeatureClass: "road_centerline", labels: { layers: ["0-Alignment Name"], attribute: "road_name", maxDistance: d.labelDistance ?? 10 } },
-      { dwgLayer: x(d.boundary), infraFeatureClass: "coverage", outputLayer: "road_reserve", subtract: [x(d.row)] },
-      { dwgLayer: x(d.row), infraFeatureClass: "coverage", outputLayer: "blocks" },
+      // the plots too: where no ROW line separates a row of plots from its road (Namar: 63 plots), no block forms
+      { dwgLayer: x(d.boundary), infraFeatureClass: "coverage", outputLayer: "road_reserve", subtract: [x(d.row), x(d.plots)] },
+      // blocks as drawn (closed ROW), plus those the project boundary closes where they hold plots
+      { dwgLayer: x(d.row), infraFeatureClass: "coverage", outputLayer: "blocks", polygonize: { closeGaps: 0.5, with: [x(d.boundary)], keep: [x(d.plots)], avoid: [x(d.centreline)] } },
       ...(d.asphalt ? [{ dwgLayer: x(d.asphalt), infraFeatureClass: "coverage" as const, outputLayer: "asphalt" }] : []),
     ],
     reportJoins: [],

@@ -300,3 +300,16 @@ Fixes on real data (tests in `namar-networks.test.ts`):
 Notes: TEL-10100 repeats 841 of TEL-10000's 874 ducts (not read); SEC-10100's ducts are distinct from SEC-10000's (own
 package). The LV xref repeats the substations, the MV loop and the lighting panels: read from their own xrefs. Off site:
 2 street lights and the lighting panel at E 656 676 N 2 712 923. Questions in `parsons-questions.md`.
+
+### Blocks closed by the project boundary (11 Nov 2026)
+
+- User's screenshots: the road reserve (cyan) covered several blocks of plots. 9 `__ROW` lines in 10200 are open: some
+  pieces meet end to end, but most blocks along the site edge are closed by the project boundary, not by `__ROW`.
+- `polygonize` fill mode (`with`, `keep`, `avoid`; dwg.ts, test in namar.test.ts): the closed `__ROW` blocks stay as
+  drawn; faces of `__ROW` plus the boundary are added where they hold plots no drawn block holds, unless they hold a
+  road centreline. 10200: 34 as drawn + 4 closed by the boundary = 38 blocks. One face is left out: a row of 63 plots
+  with no ROW line between them and their road (the face holds the centreline): Parsons question.
+- Road reserve = boundary less the blocks and the plots outside them (`subtract` now leaves out cutters lying inside a
+  cutter of an earlier entry; with every plot as a cutter the clipper failed on shared edges): 0.570 -> 0.281 km2.
+- `exports\Namar-10200-shp-v2` (+ zip): blocks 38, road reserve 1 (9 parts), centrelines as v1. Only `blocks` and
+  `road_reserve` are to be re-imported (not `road_centerline`: the planning roads would come back).

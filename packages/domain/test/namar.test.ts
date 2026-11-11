@@ -63,6 +63,38 @@ test("Namar 10200: a centreline named from a label 12 m off; blocks and road res
   assert.equal((reserve[0]!.geometry.coordinates as number[][][]).length, 2, "the block is cut out as a hole");
 });
 
+test("Namar 10200: blocks closed by the project boundary are added where they hold plots; road strips and plots stay out of the reserve", () => {
+  const bnd = `${RL}$0$NOTES & LEGEND ROAD-NHC-DMM$0$RD-PVT-MRK`;
+  // boundary 0..300 x 0..100. Block A drawn closed; block B a ROW "U" open to the boundary on the north;
+  // C: plots between a road and the boundary with no ROW line on the road side (a face holding the road)
+  const text = dxf(
+    0, "SECTION", 2, "BLOCKS",
+    0, "BLOCK", 2, RL, 70, 0, 10, 0, 20, 0,
+    0, "LWPOLYLINE", 8, bnd, 90, 4, 70, 1, 10, E, 20, N, 10, E + 300, 20, N, 10, E + 300, 20, N + 100, 10, E, 20, N + 100,
+    ...square(`${RL}$0$__ROW`, E + 10, N + 10, 40),
+    0, "LWPOLYLINE", 8, `${RL}$0$__ROW`, 90, 4, 70, 0, 10, E + 70, 20, N + 100, 10, E + 70, 20, N + 60, 10, E + 130, 20, N + 60, 10, E + 130, 20, N + 100,
+    ...square(`${RL}$0$Residential plots`, E + 80, N + 70, 20),
+    0, "LWPOLYLINE", 8, `${RL}$0$__ROW`, 90, 2, 70, 0, 10, E + 200, 20, N, 10, E + 200, 20, N + 100,
+    0, "LWPOLYLINE", 8, `${RL}$0$_CL`, 90, 2, 70, 0, 10, E + 210, 20, N, 10, E + 210, 20, N + 100,
+    ...square(`${RL}$0$Residential plots`, E + 260, N + 40, 20),
+    0, "ENDBLK",
+    0, "ENDSEC",
+    0, "SECTION", 2, "ENTITIES",
+    0, "INSERT", 8, "0", 2, RL, 10, 0, 20, 0,
+    0, "ENDSEC", 0, "EOF",
+  );
+  const p = parseDxf(text, "10200-000.dxf", PARSONS_DN_ROADS_PROFILE);
+  const blocks = p.features.filter((f) => f.outputLayer === "blocks");
+  assert.equal(blocks.length, 2, "A as drawn, B closed by the boundary; the face holding the road is no block");
+  assert.ok(p.notes.some((n) => /1 more closed by/.test(n) && /1 face\(s\) left out/.test(n)), p.notes.join("\n"));
+  const reserve = p.features.find((f) => f.outputLayer === "road_reserve")!;
+  const area = (r: number[][]) => { let a = 0; for (let i = 1; i < r.length; i++) a += r[i - 1]![0]! * r[i]![1]! - r[i]![0]! * r[i - 1]![1]!; return Math.abs(a / 2); };
+  const polys = (reserve.geometry.type === "Polygon" ? [reserve.geometry.coordinates] : reserve.geometry.coordinates) as number[][][][];
+  const total = polys.reduce((s, poly) => s + poly.reduce((t, r, i) => t + (i ? -area(r) : area(r)), 0), 0);
+  // 30 000 less block A (1 600), block B (60 x 40 = 2 400) and the plot by the road (400)
+  assert.ok(Math.abs(total - (30000 - 1600 - 2400 - 400)) < 1, `reserve ${total}`);
+});
+
 test("Namar SLT-10000: plot numbers in a baseplan xref of texts only still number the layout's plots", () => {
   // The baseplan's own plot lines (MP-PLT-LIN) are not mapped: before, the reader did not open an xref
   // holding only those numbers, and all 767 plots came out without one.

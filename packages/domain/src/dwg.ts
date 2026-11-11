@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { nanoid } from "nanoid";
-import { subtractAreas } from "./areas.js";
+import { matchesAny, subtractAreas } from "./areas.js";
 import { findLayerMapping, matchesLayer, stripBoundXrefPrefix } from "./layers.js";
 import { polygonize } from "./polygonize.js";
 import { depthNetworks, sizePipes } from "./networks.js";
@@ -785,8 +785,36 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
       c.geometry.type === "LineString" ? [c.geometry.coordinates as number[][]] : c.geometry.type === "Polygon" ? (c.geometry.coordinates as number[][][]) : [],
     );
     const closeGaps = rule.polygonize!.closeGaps ?? 0;
-    const r = polygonize(lines, { closeGaps });
     const layer = mostCommon([...mine].map((c) => c.layer));
+    const { with: withLayers, keep } = rule.polygonize!;
+    if (keep?.length) {
+      // fill mode: drawn areas kept; faces of these lines plus the `with` lines added where they hold
+      // a `keep` feature no drawn area holds
+      const onLayers = (rules: string[]) => candidates.filter((c) => c.geometry.type !== "Point" && !mine.has(c) && matchesAny(rules, c.layer));
+      const ringsOf = (c: Candidate) => (c.geometry.type === "LineString" ? [c.geometry.coordinates as number[][]] : c.geometry.type === "Polygon" ? (c.geometry.coordinates as number[][][]) : []);
+      const r = polygonize([...lines, ...onLayers(withLayers ?? []).flatMap(ringsOf)], { closeGaps });
+      const drawn = [...mine].filter((c) => c.geometry.type === "Polygon").map((c) => c.geometry.coordinates as number[][][]);
+      const inPoly = (p: number[], poly: number[][][]) => inRingPt(p, poly[0]!) && !poly.slice(1).some((h) => inRingPt(p, h));
+      const marks = onLayers(keep).filter((c) => c.geometry.type === "Polygon").map((c) => {
+        const ring = (c.geometry.coordinates as number[][][])[0]!.slice(0, -1);
+        return [ring.reduce((s, q) => s + q[0]!, 0) / ring.length, ring.reduce((s, q) => s + q[1]!, 0) / ring.length];
+      }).filter((p) => !drawn.some((d) => inPoly(p, d)));
+      const avoidPts = onLayers(rule.polygonize!.avoid ?? []).flatMap(ringsOf).flat();
+      const leaks = r.polygons.filter((poly) => marks.some((p) => inPoly(p, poly)) && avoidPts.some((p) => inPoly(p, poly)));
+      const added = r.polygons.filter((poly) => marks.some((p) => inPoly(p, poly)) && !leaks.includes(poly));
+      const loose = [...mine].filter((c) => c.geometry.type !== "Polygon");
+      const kept = candidates.filter((c) => !loose.includes(c));
+      candidates.length = 0;
+      candidates.push(...kept);
+      for (const coordinates of added) candidates.push({ layer, geometry: { type: "Polygon", coordinates }, xdata: [], attribs: {}, labelInside: true });
+      polygonNotes.push(
+        `${rule.outputLayer ?? rule.dwgLayer}: ${drawn.length} area(s) as drawn on "${rule.dwgLayer}", ${added.length} more closed by ${(withLayers ?? []).map((w) => `"${w}"`).join(", ") || "its own lines"} ` +
+          `(faces holding ${keep.join(", ")} outside the drawn areas)` + (closeGaps ? `; ${r.gapsClosed} drafting gap(s) up to ${closeGaps} m closed` : "") +
+          (leaks.length ? `; ${leaks.length} face(s) left out: they hold ${rule.polygonize!.avoid!.join(", ")} (open lines let the road strip in)` : ""),
+      );
+      continue;
+    }
+    const r = polygonize(lines, { closeGaps });
     const kept = candidates.filter((c) => !mine.has(c));
     candidates.length = 0;
     candidates.push(...kept);
@@ -986,6 +1014,16 @@ function dedupeRulePoints(r: { features: DomainFeature[]; notes: string[] }, pro
   });
   const notes = [...dropped].map(([l, n]) => `${l}: ${n} point(s) drawn twice on the same spot kept once`);
   return { features, notes: [...r.notes, ...notes] };
+}
+
+/** Point in a ring (even-odd). */
+function inRingPt(p: number[], ring: number[][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i]!, [xj, yj] = ring[j]!;
+    if (yi! > p[1]! !== yj! > p[1]! && p[0]! < ((xj! - xi!) * (p[1]! - yi!)) / (yj! - yi!) + xi!) inside = !inside;
+  }
+  return inside;
 }
 
 function safeRegExp(source: string): RegExp {
