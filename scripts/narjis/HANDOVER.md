@@ -315,3 +315,10 @@ detail. Water (`alnarjes hydraulic model REV02.wtg.sqlite`) still waits for a co
 - `exports\Al-Narjis-water-fittings-shp-v1`: 12 fire hydrants (on site), 21 valves: air valve and
   washout on site, 19 valves ~1 km south-east of the site with no pipe drawn there (kept as drawn,
   Parsons question 10). OK; warnings: HATCH / MULTILEADER skipped, unmapped layers.
+
+### Water fittings imported (11 Nov 2026)
+
+- User imported `Al-Narjis-water-fittings-shp-v1` (water_hydrants 12, water_valves 21, Pipeline
+  Connectors). model:names on a copy: NETWORKNAME filled (12 + 21). G3 on the copy with --layout and the
+  nine packages: PASS, 0 warnings; integrity ok, 31 data sources. Installed (1767DCA2... -> ABAF6226...).
+- Still to do: irrigation valves from IRW-10000 (Parsons question 11).
