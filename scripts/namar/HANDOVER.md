@@ -224,3 +224,19 @@ another sheet). The readers need these names (a Namar profile, not a copy of Al 
 - `exports\Namar-plots-shp-v1` (+ zip) from SLT-DWG-10000-000: 767 plots, all numbered; ASSET_ID_DUPLICATE: 58 and
   225 each on two equal plots side by side (one of each pair has no number of its own and takes its neighbour's).
   774 numbers for 767 plots. Green space `GR`: 3 open polylines, not shipped. Parsons questions.
+
+### Roads and plots imported; template RD-M-03 (11 Nov 2026)
+
+- First import: `road_reserve` taken as Roads (a road along the reserve's outline, jumping between its 34 block holes)
+  and converted to a component road; `road_centerline` not imported. User removed both and re-imported:
+  `road_centerline` (Roads), `road_reserve` and `blocks` (Coverage Areas), `plots` (Parcels); then converted
+  **RD-M-03** (package record 40, ROADS.ID 41) to a component road: the template, CD GUID
+  `5a70af88-e21f-4da0-b681-d29eb61bf771`.
+- Model closed, proposal master, integrity ok. The conversion (and the deleted triangle) left 6 arms + 4 regions
+  without an INTERSECTIONS row (the Al Narjis crash pattern). On a scratchpad copy: `model:intersections` (dry run
+  first) removed the 10 rows (7 dangling links -> 0); model:names with the 10200 package (43 of 46 rows named; the
+  template has left its source) and the plots package (767); the template named RD-M-03 (it lost its name in the
+  conversion). G3 on the copy: 10200 47/47 roads (11 813 m, 44/44 named), road reserve 1/1, blocks 34/34; plots
+  767/767; sewer, water, irrigation as before: all **PASS, 0 warnings**. Installed (7C73B35D... -> 5F07EC55...);
+  integrity ok; G3 on the working copy: all five PASS, 0 warnings.
+- 1 535 CONSTRAINED_DEFINITIONS rows without a road: normal (Al Narjis 147 of 154).
