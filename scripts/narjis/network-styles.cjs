@@ -20,7 +20,7 @@ const PIPES = {
   water_pipes: "water", water_pipes_dwg: "water",
   irrigation_pipes: "irrigation", irrigation_pipes_dwg: "irrigation", irrigation_control_cable: "irrigation",
   storm_pipes: "storm",
-  mv_cables: "mv", lv_cables: "lv",
+  mv_cables: "mv", lv_cables: "lv", streetlight_cables: "street_lighting",
   telecom_ducts: "telecom",
 };
 const NODES = { sewer_manholes: "sewer", storm_manholes: "storm", water_structures: "water", irrigation_structures: "irrigation" };
@@ -31,7 +31,9 @@ if (!model || !/\.sqlite$/i.test(model)) { console.error('usage: node network-st
 if (existsSync(model.replace(/\.sqlite$/i, ".lock"))) { console.error("the model is open in InfraWorks (.lock): close it first"); process.exit(2); }
 
 // the PipeConnector styles the nodes need, in the model's own library (next to the .sqlite: <model>.files)
-const lib = join(model.replace(/\.sqlite$/i, ".files"), "unver", "Content", "Styles", "PipeConnector");
+// --files <model>.files: the style library of the working model when <model.sqlite> is a scratchpad copy
+const filesArg = rest.indexOf("--files") >= 0 ? rest[rest.indexOf("--files") + 1] : undefined;
+const lib = join(filesArg ?? model.replace(/\.sqlite$/i, ".files"), "unver", "Content", "Styles", "PipeConnector");
 for (const slug of new Set(Object.values(NODES))) {
   const [name, hex] = CORRIDORS[slug];
   const f = join(lib, `${name}.ACItem`);

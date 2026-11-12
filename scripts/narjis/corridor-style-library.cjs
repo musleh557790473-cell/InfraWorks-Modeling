@@ -19,6 +19,9 @@ const CORRIDORS = {
   storm: ["IUC Storm", "0000FF"],
   storm_cb: ["IUC Storm CB", "003FFF"],
   sewer: ["IUC Sewer", "FF00FF"],
+  // Namar (UTL-DWG-10000, 10-2026) adds these two; the IUC colours are otherwise the same as Al Narjis'
+  sewer_fm: ["IUC Sewer FM", "A50052"],
+  street_lighting: ["IUC Street Lighting", "808080"],
   irrigation: ["IUC Irrigation", "00FF00"],
   irrigation_secondary: ["IUC Irrigation Secondary", "009900"],
   water: ["IUC Water", "00BFFF"],

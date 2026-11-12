@@ -329,3 +329,20 @@ package). The LV xref repeats the substations, the MV loop and the lighting pane
   10, 25, 29), 16 without a drawn arc (InfraWorks' radius kept; mostly junctions 51-55).
 - G3 on the copy: --layout PASS (G3-025: 102 at the drawn radius, 16 without an arc); 10200 v2, plots, sewer, water,
   irrigation PASS, 0 warnings. Installed (440D012C... -> 60D8CA20...); G3 --layout on the working copy PASS.
+
+### Remaining packages imported; names, G3, IUC colours (12 Nov 2026)
+
+- User imported the remaining packages (52 sources; 66 in the model, no duplicates): storm, water fittings, irrigation
+  (drawing), drawn pipes, dry, security secondary, corridors (15) and corridor bands (15, Coverage Areas).
+- model:names chained on scratchpad copies with the seven packages: every column filled (storm 8, fittings 2,
+  irrigation-dwg 5, pipes-dwg 16, dry 24, security-secondary 3, corridors 75). model:names does not overwrite an
+  existing --out file: clear old copies first.
+- G3 on the copy: --layout and all twelve packages PASS; 2 warnings G3-004, import types: `irrigation_structures_dwg`
+  came in as Pipelines (should be Pipeline Connectors) and `street_lights` as Pipeline Connectors (should be Points of
+  Interest): to re-import. Installed (07E922FC... -> D0EBC98F...).
+- IUC colours: the shared table (`scripts/narjis/corridor-style-library.cjs`) gains Namar's two extra corridors (IUC
+  Sewer FM A50052, IUC Street Lighting 808080; colours from UTL-DWG-10000, the rest equal to Al Narjis'); street
+  lighting cables take their corridor colour; `network-styles.cjs --files <model>.files` writes the PipeConnector
+  styles into the working model's library while restyling a copy. 32 style files written into
+  `C:\IW\Namar\...files\unver\Content\Styles` (unversioned: `.files` Git clean); 30 corridor sources and 16 network
+  sources styled on a copy; G3 all packages PASS (the same 2 G3-004); installed (D0EBC98F... -> 3DED661B...).
