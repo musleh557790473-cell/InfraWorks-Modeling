@@ -388,3 +388,9 @@ package). The LV xref repeats the substations, the MV loop and the lighting pane
   rebuild; junction 56 regions 128, 130), 16 without an arc. G3 --layout PASS, 0 warnings (106 of 122 at the drawn
   radius); every package PASS (warnings: the 10200 merge, the two import types). Installed (D6EF8459... -> 028718C7...).
   Deviation D2b, Parsons question 15.
+
+### Corridor check (12 Nov 2026)
+
+- `scripts/narjis/corridor-check.mts --district namar` (district table added; Al Narjis' table unchanged, 24 of 24 rows
+  identical): results and reading in `scripts/namar/corridor-check.md`. Drawn networks 88-96 % in their own corridor;
+  WaterGEMS water 74 %, irrigation model 42 % (38 % in the MV place), control cable 12 %. Parsons questions 16, 17.
