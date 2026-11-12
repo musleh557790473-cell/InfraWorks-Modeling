@@ -377,3 +377,14 @@ package). The LV xref repeats the substations, the MV loop and the lighting pane
   `--shorten-arms --arm-gap 14.4 --arm-ids 56` (47.0, 50.0, 46.7, 76.9 m). Deviation D2. G3 --layout PASS with
   G3-024 (arms not built until InfraWorks builds) and G3-025 (junction 10 corner back to 22.3 after the user's edit).
   Installed (E2B650C2... -> 230675A3...). Next: one roundel edit in InfraWorks.
+- After the user's Grading Limit edit on RD-M-01 (log 09:56): only arm 2 failed (same message). InfraWorks had rewritten the
+  arm offsets below those written: RD-M-01 45.01 / 38.82, RD-13 41.22, RD-32 70.64 m (its own clamps from the
+  neighbouring junction bodies), all under Urban Compact's 47.57 m. Last trial (user's choice): RD-13's arm reset and set
+  to 48.0 m (`--shorten-arms --arm-gap 13.1 --arm-ids 56`), others as InfraWorks left them; G3 --layout PASS (2 warnings
+  as before). Installed (6DED01A1... -> F64A6D70...). Expected: InfraWorks clamps it again; then RA-01 stays a crossing.
+- Refused again after the 48 m trial (same warning). User set junction 56 back to Intersection in the Stack (12 Nov):
+  type 0, 4 arms, no ROUNDABOUTS row. Kerb returns on a copy: 122 corners on 56 junctions, 2 set (junction 56: 20.88,
+  20.2 m), 101 already at the drawn value, 3 ambiguous (junction 10 region 22 alternates 22.3 / 15 with each InfraWorks
+  rebuild; junction 56 regions 128, 130), 16 without an arc. G3 --layout PASS, 0 warnings (106 of 122 at the drawn
+  radius); every package PASS (warnings: the 10200 merge, the two import types). Installed (D6EF8459... -> 028718C7...).
+  Deviation D2b, Parsons question 15.
