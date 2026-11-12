@@ -362,3 +362,18 @@ package). The LV xref repeats the substations, the MV loop and the lighting pane
   after the merge (15 m). G3 --layout PASS, 0 warnings (102 of 118 corners at the drawn radius); the 10200 package now
   warns G3-005 / G3-010 for the three road_centerline records no longer separate roads (RA-01 ring, its arc copy,
   RD-M-02 inside RD-M-01): expected. Installed (E7CE9D43... -> 895D3B12...).
+
+### RA-01 roundabout written in the file (12 Nov 2026)
+
+- User converted junction 56 (RA-01 centre) in the Stack: FHWA 2010 Rural Double Lane and FHWA 2000 Urban Compact both
+  refused, "Invalid roundabout geometry - insufficient space for arm lengths, or arm radii"; log
+  (`AIW_26.0_2026-11-12_08-59-00`): "[Create Roundabout Fail] The blend point offset is less than Inner Zone Of
+  Influence Radius" on arms 1 and 3. Saved state: ROUNDABOUTS row (Urban Compact, ICD 30, island 18, STATUS -1).
+- Room (`--arm-room`): next junctions at 61.4 (11) and 64.4 m (10) on RD-M-01, 61.1 m (50) on RD-13, 236.8 m (12) on
+  RD-32; InfraWorks' clamp seen in Al Qairawan = next centre - 14.4 m, i.e. 47.0 / 50.0 / 46.7 m, about Urban
+  Compact's 47.57 m.
+- On a copy: `--roundabout 56 --icd 36 --island 24 --apron 0 --lanes 1 --lane-width 6 --standard urban-compact`
+  (2 x 4.1 m refused by the tool: Urban Compact keeps one 6 m lane), arms reset and set to the clamp with
+  `--shorten-arms --arm-gap 14.4 --arm-ids 56` (47.0, 50.0, 46.7, 76.9 m). Deviation D2. G3 --layout PASS with
+  G3-024 (arms not built until InfraWorks builds) and G3-025 (junction 10 corner back to 22.3 after the user's edit).
+  Installed (E2B650C2... -> 230675A3...). Next: one roundel edit in InfraWorks.
