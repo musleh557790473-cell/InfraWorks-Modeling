@@ -12,7 +12,7 @@ import { junctionSteps, levelProblems, parseTieEnds, roadRows, tieLevels } from 
 import { planRoad } from "./roads/plan.js";
 import { pruneDanglingIntersections, repointLinks, splitLinks } from "./roads/intersections.js";
 import { parseFgf } from "@infraworks/imx-gate";
-import { mergeRoads, missingDrawnRoads, parseMerges, partsDescription, setDescription } from "./roads/merge.js";
+import { extendToCentre, mergeRoads, missingDrawnRoads, parseMerges, partsDescription, setDescription, type Ring } from "./roads/merge.js";
 import { roadsToWrite } from "./roads/select.js";
 import { RoadWriter, removeRoad, restyleRoad } from "./roads/write.js";
 
@@ -39,6 +39,9 @@ model-roads - Parsons roads as InfraWorks component roads, written into a model 
                                   InfraWorks as intersections of the roads through their centres)
       [--tie-ends R.4.G.2@R.0.D.11,...]   (with --only: give the end of each road lying on the named road
                                   that road's level there, when the profiles disagree by up to 0.10 m)
+      [--to-centre RD-13@RD-M-01,...]   (with --only: carry a road ending on a roundabout ring (a centreline
+                                  circle) straight on to the ring's centre, ending on the named through road
+                                  at its level there; --merge joins two roads across such a ring)
 
 Reads the profiles (FG line, PVI and curve labels), chains each road's centreline (its length must
 equal its profile length), checks every road's direction against the grading surface and the levels at
@@ -119,6 +122,8 @@ function main(argv: string[]): number {
       w("road-report.txt", [...al.report, "", ...pv.issues.map((i) => `PVI ${i}`), "", ...or.report].join("\n") + "\n");
       say(`results: ${outDir}`);
     }
+    // roundabout rings drawn as centreline circles (Namar RA-01): --merge may cross one, --to-centre ends at its centre
+    const rings: Ring[] = layout.filter((e) => e.type === "CIRCLE" && e.r && (e.layer === "_CL" || e.layer === "RD_CL" || e.layer.endsWith("RD_PR_CNRL"))).map((e) => ({ c: [e.x[0]!, e.y[0]!], r: e.r! }));
     const merges = parseMerges(flag("--merge") ?? "").map((m) => {
       const parts = m.parts.map((n) => {
         const a = al.roads.find((r) => r.name === n), v = pv.roads[n];
@@ -127,7 +132,7 @@ function main(argv: string[]): number {
       });
       const t = new Set(m.parts.map((n) => `${sections[n]?.type}/${xfall[n]?.side}/${xfall[n]?.fall}`));
       if (t.size > 1) throw new Error(`--merge ${m.name}: the roads have different sections or crossfall (${[...t].join(", ")})`);
-      const r = mergeRoads(m.name, parts);
+      const r = mergeRoads(m.name, parts, rings);
       say(`merge ${m.name} = ${m.parts.join(" + ")}: ${r.al.length.toFixed(3)} m, ${r.pv.length} PVIs, section ${sections[m.parts[0]!]?.type}`);
       return { ...m, road: r };
     });
@@ -217,13 +222,37 @@ function main(argv: string[]): number {
       if (!choice.write.some((a) => a.name === n)) throw new Error(`--tie-ends: ${n} is not among the roads written (add it to --only)`);
       say(`tie ${n}: ${t.startZ != null ? "start" : "end"} on ${t.on}, step ${t.step.toFixed(3)} m -> 0`);
     }
-    for (const a of choice.write) {
+    // --to-centre: the through road's level at the ring centre, read from the model as it is
+    const toCentre = new Map(parseTieEnds(flag("--to-centre") ?? "").map((t) => [t.road, t.on]));
+    const centreLevel = (on: string, c: [number, number]) => {
+      const line = roadRows(db).find((r) => r.name === on)?.line;
+      if (!line) throw new Error(`--to-centre: no component road ${on} in the model`);
+      let best = { d: Infinity, z: NaN };
+      for (let i = 1; i < line.length; i++) {
+        const [ax, ay, az] = line[i - 1]!, [bx, by, bz] = line[i]!, dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+        const t = l2 ? Math.max(0, Math.min(1, ((c[0] - ax) * dx + (c[1] - ay) * dy) / l2)) : 0, d = Math.hypot(c[0] - ax - t * dx, c[1] - ay - t * dy);
+        if (d < best.d) best = { d, z: az + t * (bz - az) };
+      }
+      if (best.d > 0.5) throw new Error(`--to-centre: ${on} does not pass through the ring centre (${best.d.toFixed(2)} m off)`);
+      return best.z;
+    };
+    for (const [n, on] of toCentre) if (!choice.write.some((a) => a.name === n)) throw new Error(`--to-centre: ${n} is not among the roads written (add it to --only); through road ${on}`);
+    for (const a0 of choice.write) {
       try {
-        const plan = planRoad(a, pv.roads[a.name] ?? [], ties.get(a.name) ?? {});
+        let a = a0, pvis = pv.roads[a0.name] ?? [];
+        const on = toCentre.get(a0.name);
+        if (on) {
+          const end = a0.segs.at(-1)!.b, start = a0.segs[0]!.a, ring = rings.find((g) => [end, start].some((p) => Math.abs(Math.hypot(p[0] - g.c[0], p[1] - g.c[1]) - g.r) < 1.5));
+          if (!ring) throw new Error(`--to-centre: ${a0.name} has no end on a roundabout ring`);
+          const x = extendToCentre({ al: a0, pv: pvis }, rings, centreLevel(on, ring.c));
+          a = x.al; pvis = x.pv;
+          say(`  ${a0.name}: ${x.at} carried ${x.dist.toFixed(3)} m to the centre of the ring on ${on}, level ${x.pv[x.at === "end" ? x.pv.length - 1 : 0]!.z!.toFixed(3)}`);
+        }
+        const plan = planRoad(a, pvis, ties.get(a.name) ?? {});
         for (const note of plan.notes) say(`  ${a.name}: ${note}`);
         writer.write(plan, sectionOf(a.name));
         written++;
-      } catch (e) { failed.push(`${a.name}: ${e instanceof Error ? e.message : String(e)}`); }
+      } catch (e) { failed.push(`${a0.name}: ${e instanceof Error ? e.message : String(e)}`); }
     }
     say(`written ${written} roads${failed.length ? `; failed ${failed.length}:\n  ${failed.join("\n  ")}` : ""}`);
     if (writer.replacedPlanning.length) say(`planning roads replaced by component roads: ${writer.replacedPlanning.length} (do not Refresh their data source: it would bring them back)`);

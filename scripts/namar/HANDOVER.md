@@ -346,3 +346,19 @@ package). The LV xref repeats the substations, the MV loop and the lighting pane
   styles into the working model's library while restyling a copy. 32 style files written into
   `C:\IW\Namar\...files\unver\Content\Styles` (unversioned: `.files` Git clean); 30 corridor sources and 16 network
   sources styled on a copy; G3 all packages PASS (the same 2 G3-004); installed (D0EBC98F... -> 3DED661B...).
+
+### RA-01 prepared for the roundabout (12 Nov 2026)
+
+- RA-01 in ROD-10200: ring centreline circle r 20.212 (ICD ~40.4 m), island kerb `__Curb` circle r 12.00, carriageway
+  r 12.30-19.90 ("Road edge"), lane line r 16.10 (two ring lanes). Arms RD-M-01 (bearing 295), RD-M-02 (112), RD-13 (44),
+  RD-32 (213) all end on the ring; no junction at the centre, so nothing InfraWorks could convert.
+- User decision (12 Nov): deviation D1 (`parsons-deviations.md`). `model:roads --merge` may now cross a roundabout ring
+  through its centre, and `--to-centre ROAD@THROUGH` carries a road from the ring to the centre at the through road's
+  level (merge.ts, tests in roads-merge.test.ts).
+- The user deleted the RA-01 planning ring in InfraWorks (model opened 08:59-09:12); a second planning copy (road 5, a
+  3-vertex arc on the ring, no links) deleted on the copy. Then `--merge RD-M-01=RD-M-01+RD-M-02` (1 662.245 m, 16 PVIs,
+  B1; 24 junction links of RD-M-02 moved to RD-M-01) and `--only RD-13,RD-32 --to-centre RD-13@RD-M-01,RD-32@RD-M-01`
+  (20.501 / 20.200 m, level 766.272): 0 level problems, 0 junction steps >= 0.3 m. Junction 10's kerb corner re-read
+  after the merge (15 m). G3 --layout PASS, 0 warnings (102 of 118 corners at the drawn radius); the 10200 package now
+  warns G3-005 / G3-010 for the three road_centerline records no longer separate roads (RA-01 ring, its arc copy,
+  RD-M-02 inside RD-M-01): expected. Installed (E7CE9D43... -> 895D3B12...).
