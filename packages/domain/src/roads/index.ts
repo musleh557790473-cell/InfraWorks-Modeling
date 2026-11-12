@@ -3,5 +3,6 @@ export * from "./dxf-block.js";
 export * from "./profiles.js";
 export * from "./alignments.js";
 export * from "./surface.js";
+export * from "./tin.js";
 export * from "./orient.js";
 export * from "./sections.js";

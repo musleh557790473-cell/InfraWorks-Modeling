@@ -1,0 +1,24 @@
+# Namar (DN, 30% CD, 10-2026 set): questions for Parsons
+
+Raised while modelling the October 2026 submission (`03-DN-*` sheets) in InfraWorks (log: `HANDOVER.md`). Each item
+says what the model uses until Parsons answers. Report = LDIP-RCRC-SAP-03-DN-DES-RPT-00001.
+
+| # | Topic | Question | In the model meanwhile |
+| --- | --- | --- | --- |
+| 1 | Roads Surface model | ROD-MOD-90000-003.dwg (10-2026) cannot be opened outside Civil 3D's user interface here (accoreconsole fails while regenerating, "ErrorStatus=53"), and the IFC beside it in the 10-2026 zip is byte-identical to September's NMAR-IRO-MOD-00-00003.ifc. Please issue the October Roads Surface as LandXML (Points and Faces). | Roads Surface from the September IFC's top faces; Site Grading from the 10-2026 DWG |
+| 2 | Plots | The layout xref holds 770 closed plots in ROD-10200 but 767 in the SLT / PWT sheets' copy; the baseplan carries 774 plot numbers. Plots 58 and 225 each fall on two equal plots side by side (one of each pair has no number of its own). Which layout version and numbering hold? | 767 plots from SLT-10000 (all numbered; 58 and 225 twice) |
+| 3 | Unnamed centrelines | Three `_CL` pieces carry no road name: a zero-length LINE, a 145 m piece at E 656 649 N 2 714 001 and a 44 m piece at E 657 308 N 2 714 261. What are they? | Kept as unnamed planning roads |
+| 4 | Open areas | The asphalt (22 G-ASPHALT ROAD lines), the green space (GR, 3 lines) and 9 of the 43 __ROW lines are open polylines, so no areas can be built from them. Please close them or confirm the blocks. | 34 blocks from the closed __ROW; no asphalt, no green space |
+| 5 | Sewer node | One SewerGEMS node (Rev.01_Op.4) has no usable rim level (0 or below the invert). Please give its rim. | Rim and depth left empty; the pipe ending there has no levels |
+| 6 | Irrigation labels | The irrigation WaterGEMS model uses 26 pipe labels twice (P-46, P-47, P-61, P-63, P-64, … Tie In- 140). Which is right? | All pipes kept, labels as issued |
+| 7 | Irrigation size | One irrigation pipe has a 71 mm inside diameter, which is no standard SDR 11 size (others map to 75, 90, 110, 160, 200 mm). Please confirm. | Kept at the model's size |
+| 8 | Water valves | PWT-10000 draws the 119 C-WATR-APPT valves with a tilted extrusion (0.012, -0.022, 0.9997) at OCS elevation -52 308 m; read without that elevation they fall about 1 km south-east of the site. Please redraw them flat (extrusion 0,0,1). | Read with the elevation: all 119 on the network (same for 24 buried gate valves in IRR-10000) |
+| 9 | Duct depths | Report §17.2 gives the security ducts as microduct bundles in concrete-encased duct banks, with no depth; no depth for telecom or street lighting ducts either. What depths apply? | Drawn on the terrain, 0.1 m display size (street lighting 110 mm) |
+| 10 | Security sheets | SEC-10000 draws 45 primary ducts and SEC-10100 111 others, both on layer "Primary Duct", with the same 42 handholes. Please confirm SEC-10100 is the secondary security network. | Both sets of ducts, network "Security - Namar"; handholes once |
+| 11 | Telecom sheets | TEL-10100 ("Secondary Telecom Network") repeats 841 of the 874 ducts of TEL-10000; 9 ducts of TEL-10000 are drawn twice. Which sheet holds the issued network? | TEL-10000 as drawn |
+| 12 | Street lighting off site | Two street lights and the lighting panel SSLPC lie at E 656 676 N 2 712 923, about 1.1 km south of the site. Are they part of Namar? | Kept as drawn |
+| 13 | Street lights drawn twice | 47 street-light poles in SLT-10000 are laid exactly over another pole. Please confirm 292 poles. | One pole per spot (292) |
+| 14 | Missing ROW line | In ROD-10200 a row of 63 plots (around E 657 556-657 621, N 2 714 190-2 714 219) has no `__ROW` line between it and its road, so no block closes there. Please add the right-of-way line. | Plots cut out of the road reserve; no block formed |
+| 15 | RA-01 roundabout | The junctions next to RA-01 stand 61-64 m from its centre (junction of RD-M-01 at 61.4 and 64.4 m, of RD-13 at 61.1 m). InfraWorks' roundabout standards need about 48 m of arm before the next junction's body, so RA-01 could not be built as a roundabout in the model. Can the neighbouring junctions move, or the ring change? | Modelled as a plain intersection (deviations D1, D2b) |
+| 16 | Water model vs drawing | The WaterGEMS model PW_CD_Model lies in the potable water corridor (UTL-DWG-10000) for 74 % of its length (15 % in the LV corridor's place), the PWT-DWG-10000 pipes for 96 %. Is the model a schematic of the drawn network? | Both kept; the drawn pipes show the corridor position (corridor-check.md) |
+| 17 | Irrigation position | The irrigation WaterGEMS model is in an irrigation corridor for 42 % of its length and in the MV corridor's place for 38 %; the two-wire control cable in the MV place for 48 %. Which line is right: the corridor plan or the model / cable? | Both kept as issued |

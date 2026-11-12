@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { DatabaseSync } from "node:sqlite";
 
-import { mergeRoads, missingDrawnRoads, parseMerges, partsDescription, partsFromDescription, setDescription } from "../src/roads/merge.js";
+import { extendToCentre, mergeRoads, missingDrawnRoads, parseMerges, partsDescription, partsFromDescription, setDescription } from "../src/roads/merge.js";
 
 const part = (name: string, a: [number, number], b: [number, number], pv: [number, number, number][]) => {
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -26,6 +26,32 @@ test("a merge is refused at a gap, a road drawn the other way, a level step or a
   assert.throws(() => mergeRoads("A", [c1, part("B", [160, 0], [100, 0], [[0, 682, 0], [60, 681, 0]])]), /drawn the other way/);
   assert.throws(() => mergeRoads("A", [c1, part("B", [100, 0], [160, 0], [[0, 681.1, 0], [60, 682, 0]])]), /level step/);
   assert.throws(() => mergeRoads("A", [part("A", [0, 0], [100, 0], [[0, 680, 0], [100, 681, 20]]), part("B", [100, 0], [160, 0], [[0, 681, 0], [60, 682, 0]])]), /vertical curve at the joint/);
+});
+
+test("Namar RA-01: two arms stopping on the ring are joined straight through its centre, levels kept at both ends", () => {
+  const ring = { c: [120, 0] as [number, number], r: 20 };
+  const m1 = part("RD-M-01", [0, 0], [100, 0], [[0, 770, 0], [100, 766.6, 0]]);
+  const m2 = part("RD-M-02", [140, 0], [240, 0], [[0, 765.94, 0], [100, 763, 0]]);
+  const m = mergeRoads("RD-M-01", [m1, m2], [ring]);
+  assert.equal(m.al.length, 240);
+  assert.deepEqual(m.al.segs.map((s) => [s.a, s.b]), [[[0, 0], [100, 0]], [[100, 0], [120, 0]], [[120, 0], [140, 0]], [[140, 0], [240, 0]]]);
+  assert.deepEqual(m.pv.map((p) => [p.s, p.z]), [[0, 770], [100, 766.6], [140, 765.94], [240, 763]], "the crossing grades straight between the two ring ends");
+  assert.throws(() => mergeRoads("RD-M-01", [m1, m2]), /does not start where/, "without the ring the gap is refused");
+  assert.throws(() => mergeRoads("RD-M-01", [m1, part("X", [141, 5], [240, 0], [[0, 765, 0], [99, 763, 0]])], [ring]), /does not start where/, "an end off the ring is not bridged");
+});
+
+test("Namar RA-01: --to-centre carries a road from the ring to its centre at the through road's level", () => {
+  const ring = { c: [120, 0] as [number, number], r: 20 };
+  const x = extendToCentre(part("RD-13", [120, 120], [120, 20], [[0, 770, 0], [100, 765.762, 0]]), [ring], 766.27);
+  assert.equal(x.at, "end");
+  assert.equal(x.dist, 20);
+  assert.equal(x.al.length, 120);
+  assert.deepEqual(x.al.segs.at(-1), { a: [120, 20], b: [120, 0], bulge: 0 });
+  assert.deepEqual(x.pv.at(-1), { s: 120, z: 766.27, L: 0 });
+  const y = extendToCentre(part("RD-32", [120, -20], [120, -120], [[0, 766.786, 0], [100, 770, 0]]), [ring], 766.27);
+  assert.equal(y.at, "start");
+  assert.deepEqual(y.pv.map((p) => [p.s, p.z]), [[0, 766.27], [20, 766.786], [120, 770]]);
+  assert.throws(() => extendToCentre(part("Z", [0, 50], [0, 100], [[0, 1, 0], [50, 2, 0]]), [ring], 766), /no end on a roundabout ring/);
 });
 
 test("--merge NAME=ROAD1+ROAD2, the name being one of the roads", () => {

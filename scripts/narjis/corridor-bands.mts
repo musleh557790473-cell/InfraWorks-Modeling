@@ -5,6 +5,8 @@
  * DATA_DIR\exports\Al-Narjis-corridor-bands-shp-v1\shp with an IMPORT_CHECKLIST.txt.
  *
  *   pnpm exec tsx scripts/narjis/corridor-bands.mts
+ *   pnpm exec tsx scripts/narjis/corridor-bands.mts --src Namar-corridors-shp-v1 --out Namar-corridor-bands-shp-v1 --district Namar --sheet UTL-DWG-10000
+ * (another district: its corridors package, the bands package to write, and the names for the checklist)
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -13,8 +15,12 @@ import { corridorBands, resolveDataDir, writeShapefile, type Line, type NamedLin
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const ex = join(resolveDataDir(root), "exports");
-const src = join(ex, "Al-Narjis-corridors-shp-v2", "layers");
-const out = join(ex, "Al-Narjis-corridor-bands-shp-v1");
+const args = process.argv.slice(2);
+const flag = (n: string, d: string) => { const i = args.indexOf(n); return i >= 0 && args[i + 1] ? args[i + 1]! : d; };
+const srcPkg = flag("--src", "Al-Narjis-corridors-shp-v2");
+const district = flag("--district", "Al Narjis"), sheet = flag("--sheet", "IUC-DWG-10000");
+const src = join(ex, srcPkg, "layers");
+const out = join(ex, flag("--out", "Al-Narjis-corridor-bands-shp-v1"));
 if (existsSync(out)) throw new Error(`${out} exists: choose a new version`);
 mkdirSync(join(out, "shp"), { recursive: true });
 
@@ -27,8 +33,8 @@ for (const f of readdirSync(src).filter((n) => n.startsWith("corridor_") && n.en
 }
 const bands = corridorBands(lines, { maxHalf: 1 });
 const checklist: string[] = [
-  "Al Narjis utility corridors as areas (IUC-DWG-10000), one Shapefile per corridor: give each data source its own colour",
-  "(Data Sources > double-click > Common > Style Chooser; colours in CORRIDOR_COLOURS.txt of Al-Narjis-corridors-shp-v2).",
+  `${district} utility corridors as areas (${sheet}), one Shapefile per corridor: give each data source its own colour`,
+  `(Data Sources > double-click > Common > Style Chooser; colours in CORRIDOR_COLOURS.txt of ${srcPkg}).`,
   "Each band: the corridor line widened by half the spacing to the nearest other corridor, at most 1.0 m each side. Display only.",
   "Coordinate system UTM84-38N (EPSG:32638, from the .prj).",
   "",

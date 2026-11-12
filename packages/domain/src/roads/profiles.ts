@@ -35,7 +35,8 @@ const texts = (ents: DxfEnt[], layer: string, para = " "): Txt[] =>
  * R.10.G.1): then the title straight above is used.
  */
 function windowOf(names: Txt[], n: Txt, sideways: number): { next: Txt | undefined; rowY: number; top: number } {
-  const next = names.filter((o) => Math.abs(o.y - n.y) < 1 && o.x > n.x + 1).sort((a, b) => a.x - b.x)[0];
+  // titles of one row may differ by a few metres in height (Namar RD-29 stands 2.6 m above RD-28)
+  const next = names.filter((o) => Math.abs(o.y - n.y) < 5 && o.x > n.x + 1).sort((a, b) => a.x - b.x)[0];
   const rowY = n.y - 16;
   const right = next ? next.x : n.x + sideways;
   let above = names.filter((o) => o.x < right - 20 && o.x > n.x - 200 && o.y > n.y + 1).sort((a, b) => a.y - b.y)[0];
@@ -63,8 +64,15 @@ export function readProfileViews(ents: DxfEnt[]): { views: ProfileView[]; errors
     const st = stn.filter((o) => Math.abs(o.y - rowY) < 1 && o.x > n.x && o.x < xmax).sort((a, b) => a.x - b.x);
     const reg = st.filter((o) => Math.abs(o.s / 25 - Math.round(o.s / 25)) < 1e-6);
     if (!reg.length) { errors.push(`${n.t} no stations`); continue; }
-    const k = reg.length >= 2 ? (reg[reg.length - 1]!.s - reg[0]!.s) / (reg[reg.length - 1]!.x - reg[0]!.x) : 1;
-    const x0 = reg[0]!.x, s0 = reg[0]!.s;
+    // Scale and origin from all the regular station labels, by median: Namar's first label of each view
+    // (0+000, 0+500) stands ~1 m right of its tick while the others sit on theirs (ROD-40000, 10-2026).
+    // The last label of a view can stand off its tick too (RD-M-01 0+525 at +561.2, tick at +569.0): the
+    // scale is the median step; with only two steps (short views, 0+000..0+050) the second label to the last.
+    const med = (a: number[]) => { const b = [...a].sort((p, q) => p - q); return b.length ? b[b.length >> 1]! : NaN; };
+    const steps = reg.slice(1).map((o, i) => (o.s - reg[i]!.s) / (o.x - reg[i]!.x)).filter((v) => isFinite(v) && v > 0);
+    const ka = reg.length >= 3 ? reg[1]! : reg[0]!, kb = reg[reg.length - 1]!;
+    const k = steps.length >= 3 ? med(steps) : reg.length >= 2 && kb.x !== ka.x ? (kb.s - ka.s) / (kb.x - ka.x) : 1;
+    const s0 = reg[0]!.s, x0 = med(reg.map((o) => o.x - (o.s - s0) / k));
     const cols: Record<number, { x: number; y: number; v: number }[]> = {};
     for (const o of grid) {
       if (o.y <= rowY || o.y > top) continue;
@@ -77,8 +85,9 @@ export function readProfileViews(ents: DxfEnt[]): { views: ProfileView[]; errors
     const ve = (gg[gg.length - 1]!.y - gg[0]!.y) / (gg[gg.length - 1]!.v - gg[0]!.v);
     const xEnd = st[st.length - 1]!.x;
     // the FG line only has to stay left of the next view's title (its own line starts ~54 m right of
-    // that title); a 20 m margin cut off lines ending close to it (R.14.G.9, R.8.G.4)
-    const f = fg.filter((o) => o.x.every((x) => x >= x0 - s0 / k - 0.5 && x <= xEnd + 25 && x < xmax) && o.y.every((y) => y > rowY && y < top) && o.x[0]! < xmax);
+    // that title); a 20 m margin cut off lines ending close to it (R.14.G.9, R.8.G.4). Up to 50 m past the
+    // last station label: Namar's labels stop up to 43 m before the road's end (RD-01: 0+475, road 518 m).
+    const f = fg.filter((o) => o.x.every((x) => x >= x0 - s0 / k - 0.5 && x <= xEnd + 50 && x < xmax) && o.y.every((y) => y > rowY && y < top) && o.x[0]! < xmax);
     const viaGrid = Math.abs(ve - 10) < 0.01;
     const zf = (y: number) => (viaGrid ? gg[0]!.v + (y - gg[0]!.y) / ve : datum + (y - (rowY + 5)) / 10);
     const pts = f.flatMap((o) => o.x.map((x, i) => [s0 + (x - x0) * k, zf(o.y[i]!)] as [number, number])).sort((a, b) => a[0] - b[0]);

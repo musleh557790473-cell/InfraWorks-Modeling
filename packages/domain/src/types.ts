@@ -89,11 +89,30 @@ export const LayerMapping = z.object({
    */
   subtract: z.array(z.string().min(1)).optional(),
   /**
+   * Keep one point where the drawing places this rule's symbol twice on the same spot (within 1 cm):
+   * Namar's street lights are arrays of pole inserts, 47 of them laid over another pole (SLT-10000).
+   */
+  dedupePoints: z.boolean().optional(),
+  /**
    * Build this rule's areas from separate lines: the faces the lines enclose, as for plots drawn
    * as single LINE segments. `closeGaps` joins line ends that stop short of another line by up to
    * that distance (drafting gaps). Only a label inside an area names it.
    */
-  polygonize: z.object({ closeGaps: z.number().nonnegative().max(5).optional() }).optional(),
+  polygonize: z
+    .object({
+      closeGaps: z.number().nonnegative().max(5).optional(),
+      /**
+       * Fill mode: the rule's closed areas stay as drawn, and the faces its lines enclose together
+       * with these layers' lines (the site boundary) are added where they hold a feature of `keep`
+       * that no drawn area holds. Namar's blocks along the site edge are closed by the project
+       * boundary, not by __ROW; the road strips there hold no plots and stay out.
+       */
+      with: z.array(z.string().min(1)).optional(),
+      keep: z.array(z.string().min(1)).optional(),
+      /** a face holding a vertex of these layers' lines is never added (a road strip leaking into a block) */
+      avoid: z.array(z.string().min(1)).optional(),
+    })
+    .optional(),
   /**
    * Names written as text next to the features (road names along their centreline): each label on
    * these layers names the nearest feature of this rule within maxDistance, and a feature named by
@@ -218,6 +237,12 @@ export const MappingProfile = z.object({
   layers: z.array(LayerMapping),
   reportJoins: z.array(ReportJoin).default([]),
   assetKeys: AssetKeyConfig.default({}),
+  /**
+   * Blocks never opened (names, * and ? wildcards): a sheet's legend draws a sample of each network
+   * layer under the same bare name as the network itself (Namar STO / SEC-10000, "Notes & Legend",
+   * "Xref Storm Legend"), so a layer rule alone cannot tell them apart.
+   */
+  skipBlocks: z.array(z.string()).optional(),
 });
 export type MappingProfile = z.infer<typeof MappingProfile>;
 
@@ -516,21 +541,33 @@ export const PARSONS_LDIP_DRY_PROFILE: MappingProfile = {
  * the top of pipe not less than 1.2 m.
  */
 const NRJS_REPORT = "SAPL-DSN-LDN-RPT-000003";
-const netN = (utility: string, conn_type?: string) => ({ utility, network: `${utility} - Al Narjis`, ...(conn_type ? { conn_type } : {}) });
+/**
+ * District factories for the parts every Parsons network profile repeats (Al Narjis, Namar): the network
+ * name "<utility> - <district>", the burial depth with its report citation, a pipe as a sheet draws it,
+ * a corridor line. The layer rules themselves stay per district: xref and layer names differ each time.
+ */
+const districtNet = (district: string) => (utility: string, conn_type?: string) => ({ utility, network: `${utility} - ${district}`, ...(conn_type ? { conn_type } : {}) });
+const buriedFor = (report: string, section: string) => (centreM: number, kind: string) => ({
+  fields: { ...cable.fields, ...LINE_DEPTH_COLUMNS },
+  depth: { centreM, source: `${report} ${section} burial depth to the cable centre, ${kind}` },
+});
+const drawnPipeFor = (district: string, tieInSource: string) =>
+  (utility: string, outputLayer: string, sizeRe: string | undefined, depth?: { coverM: number; source: string }, fixedMm?: number) => ({
+    infraFeatureClass: "pipeline" as const,
+    outputLayer,
+    attributes: { utility, network: `${utility} - ${district} (drawing)`, material: "HDPE" },
+    fields: { ...PIPE_COLUMNS, PIPE_MATERIAL: "material", ...(depth ? LINE_DEPTH_COLUMNS : {}) },
+    size: sizeRe ? { fromLayer: sizeRe } : { fixed: { mm: fixedMm!, source: tieInSource } },
+    ...(depth ? { depth } : {}),
+  });
+const netN = districtNet("Al Narjis");
 const NRJS_STORM_COVER = { coverM: 1.2, source: `${NRJS_REPORT} §5.6.7 soil cover above top of pipe not less than 1.2 m` };
 
 /** Covers used for the WaterGEMS packages, applied to the same networks as drawn (see HANDOVER.md). */
 const WATER_COVER_N = { coverM: 1.2, source: "NWC typical: 1.20 m from finished road surface to pipe crown (given by AICC, 10 Nov 2026)" };
 const IRR_COVER_N = { coverM: 0.8, source: "ASSUMED by AICC (0.80 m, as Al Qairawan); IRW-00001/00002 general notes give no cover; pending Parsons confirmation" };
 /** A pipe as a network sheet draws it: network "<utility> - Al Narjis (drawing)", size from the layer name. */
-const drawnPipe = (utility: string, outputLayer: string, sizeRe: string | undefined, depth?: { coverM: number; source: string }, fixedMm?: number) => ({
-  infraFeatureClass: "pipeline" as const,
-  outputLayer,
-  attributes: { utility, network: `${utility} - Al Narjis (drawing)`, material: "HDPE" },
-  fields: { ...PIPE_COLUMNS, PIPE_MATERIAL: "material", ...(depth ? LINE_DEPTH_COLUMNS : {}) },
-  size: sizeRe ? { fromLayer: sizeRe } : { fixed: { mm: fixedMm!, source: "IRW-DWG-10000 legend: Ø 75mm HDPE pipe for tie-ins" } },
-  ...(depth ? { depth } : {}),
-});
+const drawnPipe = drawnPipeFor("Al Narjis", "IRW-DWG-10000 legend: Ø 75mm HDPE pipe for tie-ins");
 
 /**
  * Al Narjis storm drainage (ISW-DWG-10000; no storm model was issued): the network is block SYSTEM-01
@@ -601,10 +638,7 @@ const NLV = "Xref_Narjis_LV Network$0$";
 const NMV = "Xref_Narjis_MV Network$0$";
 const NTEL = "Narjes Overall Primary Telecom Network$0$";
 const NSEC = "Narjes Overall Primary Security Network$0$";
-const buriedN = (centreM: number, kind: string) => ({
-  fields: { ...cable.fields, ...LINE_DEPTH_COLUMNS },
-  depth: { centreM, source: `${NRJS_REPORT} §2.3.3 burial depth to the cable centre, ${kind}` },
-});
+const buriedN = buriedFor(NRJS_REPORT, "§2.3.3");
 export const PARSONS_NRJS_DRY_PROFILE: MappingProfile = {
   id: "parsons-nrjs-dry-utilities",
   name: "Parsons / Al Narjis dry utilities (drawings)",
@@ -662,16 +696,17 @@ const NIUC = "Xref_Al Narjis_Utilities Corridor$0$";
 // One Shapefile per corridor, so each data source takes its own colour in InfraWorks (one Rule Style per
 // source); lifted 1.0 m above the terrain, as the roads stand ~0.6 m above the grading surface and hid
 // the lines. `colour`: the layer's colour in IUC-DWG-10000 (AutoCAD index, as RGB).
-const corridor = (layer: string, utility: string, slug: string, colour: string) => ({
-  dwgLayer: `${NIUC}${layer}`,
+const corridorFor = (prefix: string, sheet: string) => (layer: string, utility: string, slug: string, colour: string) => ({
+  dwgLayer: `${prefix}${layer}`,
   infraFeatureClass: "pipeline" as const,
   explode: false,
   outputLayer: `corridor_${slug}`,
   fields: { NETWORKNAME: "network", SIZE_X: "size_m", SIZE_Y: "size_y_m", ELEV_FROM: "off_start_m", ELEV_TO: "off_end_m" },
-  size: { fixed: { mm: 150, source: "display only: corridor line of IUC-DWG-10000" } },
+  size: { fixed: { mm: 150, source: `display only: corridor line of ${sheet}` } },
   depth: { liftM: 1.0, source: "display only: corridor line lifted 1.0 m above the terrain to show above the road" },
   attributes: { utility, network: `Corridor - ${utility}`, conn_type: "Corridor line", corridor_layer: layer, colour },
 });
+const corridor = corridorFor(NIUC, "IUC-DWG-10000");
 export const PARSONS_NRJS_CORRIDORS_PROFILE: MappingProfile = {
   id: "parsons-nrjs-corridors",
   name: "Parsons / Al Narjis utility corridors (IUC)",
@@ -696,5 +731,258 @@ export const PARSONS_NRJS_CORRIDORS_PROFILE: MappingProfile = {
   assetKeys: AssetKeyConfig.parse({}),
 };
 
+/**
+ * Namar (DN, 10-2026 set) networks, from its own report LDIP-RCRC-SAP-03-DN-DES-RPT-00001 ("30% Concept
+ * Design Report for Dahiyat Namar"): §2.3.3 burial depth to the cable centre 0.65 m LV / 0.80 m MV, §2.3.9.3
+ * MV duct banks 200 mm, §2.3.12.2.4.1 street lighting ducts 110 mm O.D. uPVC, §5.3.14 water cover >= 1.2 m
+ * under traffic (AICC's choice for the road reserve), §8.2.2 irrigation mainline / secondary 1.2 m, §10.2.7
+ * storm soil cover >= 1.2 m. §17.2 describes the security ducts as microduct bundles in concrete duct banks
+ * (no depth, no single diameter): telecom and security keep the display size, on the terrain.
+ * Storm, security and much of irrigation sit on bare layer names (no xref prefix), and each sheet's legend
+ * draws a sample on those same names: the legend blocks are skipped (`skipBlocks`).
+ */
+const DN_REPORT = "LDIP-RCRC-SAP-03-DN-DES-RPT-00001";
+const netD = districtNet("Namar");
+const buriedD = buriedFor(DN_REPORT, "§2.3.3");
+const drawnPipeD = drawnPipeFor("Namar", "IRR-DWG-10000 legend: Ø 75mm HDPE pipe for tie-ins");
+const DN_STORM_COVER = { coverM: 1.2, source: `${DN_REPORT} §10.2.7 soil cover above top of pipe not less than 1.2 m` };
+const DN_WATER_COVER = { coverM: 1.2, source: `${DN_REPORT} §5.3.14: cover >= 1.2 m under traffic (AICC choice for pipes in the road reserve, 11 Nov 2026)` };
+const DN_IRR_COVER = { coverM: 1.2, source: `${DN_REPORT} §8.2.2: mainline and secondary lines 1.2 m (NWC)` };
+const DN_LEGENDS = ["*Legend*"];
+const DPW = "LDIP-N~1$0$"; // PWT-DWG-10000: the potable water xref (bound under its 8.3 name)
+
+/**
+ * Namar storm, water and irrigation fittings, and pipes as drawn (one profile, several packages: build
+ * each from its sheet, with --skip-layers for the outputs another package carries).
+ * - Storm (STO-DWG-10000-000, block system-01): pipes "…SW_Pipe Dia <mm>" (400-1100), manholes
+ *   SW_CI_Manhole1500 inserts, outfalls OUTFALL inserts on layer "outlet".
+ * - Water (PWT-DWG-10000-000): valves C-WATR-APPT, butterfly valves, air valve, washout (C-STRM-STRC in the
+ *   water xref), fire hydrants (the cover circle in each FH 2D block), pipes on "%%c160mm" / "%%c200mm" /
+ *   "%%c250mm".
+ * - Irrigation (IRR-DWG-10000-000, block "Irrigation Routing" with nested xrefs): buried gate valves
+ *   (BGV 110mm), butterfly, air and washout valves, pull boxes, quick couplings, the two-wire decoder
+ *   cable; pipes "Irrigation Network-HDPE-<mm>", 50 mm secondary, 75 mm tie-ins, the 160 mm transmission line.
+ * - Sewer (SWN-DWG-10000-000, "Xref Sewer"): pipes "…SS_Pipe Dia <mm>" beside the SewerGEMS model.
+ */
+export const PARSONS_DN_WET_PROFILE: MappingProfile = {
+  id: "parsons-dn-wet-utilities",
+  name: "Parsons / Namar storm drainage, water and irrigation fittings, drawn pipes",
+  team: "Parsons",
+  skipBlocks: DN_LEGENDS,
+  layers: [
+    {
+      dwgLayer: "*SW_Pipe Dia *",
+      infraFeatureClass: "pipeline",
+      outputLayer: "storm_pipes",
+      attributes: { ...netD("Storm") },
+      fields: { ...PIPE_COLUMNS, ...LINE_DEPTH_COLUMNS },
+      size: { fromLayer: String.raw`Dia\s*(\d+)` },
+      depth: DN_STORM_COVER,
+    },
+    { dwgLayer: "*SW_CI_Manhole*", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: netD("Storm", "Manhole"), fields: { ...CONNECTOR_COLUMNS, ...NODE_DEPTH_COLUMNS }, depth: { fromPipes: 2, source: DN_STORM_COVER.source } },
+    { dwgLayer: "outlet", infraFeatureClass: "pipe_connector", outputLayer: "storm_manholes", attributes: netD("Storm", "Outfall"), fields: { ...CONNECTOR_COLUMNS, ...NODE_DEPTH_COLUMNS }, depth: { fromPipes: 2, source: DN_STORM_COVER.source } },
+    { dwgLayer: `${DPW}C-WATR-APPT`, ...node, outputLayer: "water_valves", attributes: netD("Water", "Valve") },
+    { dwgLayer: `${DPW}C-PW-BUTTERFLY VALVE`, ...node, outputLayer: "water_valves", attributes: netD("Water", "Butterfly Valve") },
+    { dwgLayer: `${DPW}C-PW-AIR VALVE`, ...node, outputLayer: "water_valves", attributes: netD("Water", "Air Valve") },
+    { dwgLayer: `${DPW}C-STRM-STRC`, ...node, outputLayer: "water_valves", attributes: netD("Water", "Washout Valve") },
+    { dwgLayer: `${DPW}*C-PW-FIRE HYDRANT COVER CATCH`, ...node, asPoint: true, outputLayer: "water_hydrants", attributes: netD("Water", "Fire Hydrant") },
+    { dwgLayer: "NHC CAD$0$BGV 110mm", ...node, outputLayer: "irrigation_valves", attributes: netD("Irrigation", "Buried Gate Valve") },
+    { dwgLayer: "*C-IRR-BUTTERFLY VALVE", ...node, outputLayer: "irrigation_valves", attributes: netD("Irrigation", "Butterfly Valve") },
+    { dwgLayer: "Xref irrigation Network Plan$0$*C-PW-AIR VALVE", ...node, outputLayer: "irrigation_valves", attributes: netD("Irrigation", "Air Valve") },
+    { dwgLayer: "Xref irrigation Network Plan$0$*C-PW-WASHOUT VALVE", ...node, outputLayer: "irrigation_valves", attributes: netD("Irrigation", "Washout Valve") },
+    { dwgLayer: "Pull-box", ...node, outputLayer: "irrigation_structures_dwg", attributes: netD("Irrigation", "Pull Box") },
+    { dwgLayer: "XREF SUBMAIN$0$LI-EQPM-DRIP", ...node, outputLayer: "irrigation_structures_dwg", attributes: netD("Irrigation", "Quick Coupling") },
+    { dwgLayer: "NHC CAD$0$Xref Irrigation Network$0$IR-ELEC CABLE", ...cable, outputLayer: "irrigation_control_cable", attributes: netD("Irrigation", "Two-Wire Decoder Cable") },
+    { dwgLayer: `${DPW}%%c*mm`, ...drawnPipeD("Water", "water_pipes_dwg", String.raw`(\d+)mm`, DN_WATER_COVER) },
+    { dwgLayer: "Irrigation Network-HDPE-*", ...drawnPipeD("Irrigation", "irrigation_pipes_dwg", String.raw`HDPE-(\d+)`, DN_IRR_COVER) },
+    { dwgLayer: "XREF SUBMAIN$0$50mm HDPE SECONDARY*", ...drawnPipeD("Irrigation", "irrigation_pipes_dwg", String.raw`(\d+)mm`, DN_IRR_COVER) },
+    { dwgLayer: "transmiision line 160mm HDPE", ...drawnPipeD("Irrigation", "irrigation_pipes_dwg", String.raw`(\d+)mm`, DN_IRR_COVER) },
+    { dwgLayer: "Tie- ins", ...drawnPipeD("Irrigation", "irrigation_pipes_dwg", undefined, DN_IRR_COVER, 75) },
+    { dwgLayer: "Xref Sewer$0$*SS_Pipe Dia *", ...drawnPipeD("Sewer", "sewer_pipes_dwg", String.raw`Dia\s*(\d+)`) },
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
+/**
+ * Namar dry utilities: LV, MV, street lighting as Al Qairawan names them (xrefs "Xref_Nemar_LV / MV / SL
+ * Network"), telecom from TEL-DWG-10000 ("Nymar Overall Primary Telecom Network"; TEL-10100 repeats 841 of
+ * its 874 ducts), security from SEC-DWG-10000 (drawn in model space, no xref: primary ducts and handholes).
+ * The LV xref repeats the substations, the MV loop and the lighting panels: read from their own xrefs.
+ * Each pillar is an "LV Panel" dynamic block on MINI-PILLAR-0 holding the pillar symbol and its house
+ * connections (as Al Narjis): opened.
+ */
+const DLV = "Xref_Nemar_LV Network$0$";
+const DMV = "Xref_Nemar_MV Network$0$";
+const DSL = "Xref_Nemar_SL Network$0$";
+const DTEL = "Nymar Overall Primary Telecom Network$0$";
+export const PARSONS_DN_DRY_PROFILE: MappingProfile = {
+  id: "parsons-dn-dry-utilities",
+  name: "Parsons / Namar dry utilities (drawings)",
+  team: "Parsons",
+  skipBlocks: DN_LEGENDS,
+  layers: [
+    { dwgLayer: `${DLV}E-POWER-CABL*`, ...cable, ...buriedD(0.65, "LV"), outputLayer: "lv_cables", attributes: netD("Electrical LV") },
+    { dwgLayer: `${DLV}Electrical LV -HC`, ...cable, ...buriedD(0.65, "LV"), outputLayer: "lv_cables", attributes: netD("Electrical LV", "House Connection") },
+    { dwgLayer: `${DLV}E-POWR-MINI-PILLAR-0`, ...node, explode: true, outputLayer: "lv_pillars", attributes: netD("Electrical LV", "Mini Pillar") },
+    { dwgLayer: `${DLV}E-POWR-MINI-PILLAR-*`, ...node, outputLayer: "lv_pillars", attributes: netD("Electrical LV", "Mini Pillar") },
+    { dwgLayer: `${DLV}SSLPC`, infraFeatureClass: "unmapped" },
+    { dwgLayer: `${DLV}DSS`, infraFeatureClass: "unmapped" },
+    { dwgLayer: `${DLV}MV Cables*`, infraFeatureClass: "unmapped" },
+    { dwgLayer: `${DMV}MV Cables*`, ...cable, ...buriedD(0.8, "MV"), size: { fixed: { mm: 200, source: `${DN_REPORT} §2.3.9.3: MV cables in concrete encased duct banks, 200 mm diameter` } }, outputLayer: "mv_cables", attributes: netD("Electrical MV") },
+    { dwgLayer: `${DMV}DSS`, ...node, outputLayer: "substations", attributes: netD("Electrical MV", "Distribution Substation") },
+    {
+      dwgLayer: `${DSL}AAMSLCrdr`,
+      ...cable,
+      size: { fixed: { mm: 110, source: `${DN_REPORT} §2.3.12.2.4.1: street lighting duct banks, 110 mm O.D. uPVC` } },
+      outputLayer: "streetlight_cables",
+      attributes: netD("Street Lighting"),
+      symbols: { infraFeatureClass: "annotation", outputLayer: "street_lights", attributes: { conn_type: "Street Light" } },
+    },
+    // The poles are arrays of AAM inserts (anonymous blocks on AAMSLCrdr), 47 laid over another pole.
+    { dwgLayer: `${DSL}AAM`, infraFeatureClass: "annotation", outputLayer: "street_lights", dedupePoints: true, attributes: netD("Street Lighting", "Street Light") },
+    { dwgLayer: `${DSL}SSLPC`, ...node, outputLayer: "streetlight_panels", attributes: netD("Street Lighting", "Lighting Panel") },
+    { dwgLayer: `${DTEL}Primary Duct`, ...cable, outputLayer: "telecom_ducts", attributes: netD("Telecom", "Primary Duct") },
+    { dwgLayer: `${DTEL}Seconday Duct`, ...cable, outputLayer: "telecom_ducts", attributes: netD("Telecom", "Secondary Duct") },
+    { dwgLayer: `${DTEL}*TEL_HH`, ...node, outputLayer: "telecom_handholes", attributes: netD("Telecom", "Handhole") },
+    { dwgLayer: "Primary Duct", ...cable, outputLayer: "security_ducts", attributes: netD("Security", "Primary Duct") },
+    { dwgLayer: "*TEL_HH", ...node, outputLayer: "security_handholes", attributes: netD("Security", "Handhole") },
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
+/**
+ * Namar secondary security (SEC-DWG-10100-000): its own 111 ducts, drawn on "Primary Duct" in model space
+ * as SEC-10000 draws the primary ones (no duct is in both). Its handholes are SEC-10000's: left out here.
+ */
+export const PARSONS_DN_SECURITY_SECONDARY_PROFILE: MappingProfile = {
+  id: "parsons-dn-security-secondary",
+  name: "Parsons / Namar secondary security ducts (SEC-10100)",
+  team: "Parsons",
+  skipBlocks: DN_LEGENDS,
+  layers: [{ dwgLayer: "Primary Duct", ...cable, outputLayer: "security_ducts_secondary", attributes: netD("Security", "Secondary Duct") }],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
+/**
+ * Namar utility corridors (UTL-DWG-10000-000, bound "Xref-Ladun_Dahiyat Nemar_Utilities Corridor"): the Al
+ * Narjis corridor lines under that prefix, with the same layer colours; Namar adds the sewer force main and
+ * street lighting corridors and has no HV corridor.
+ */
+const dnCorridor = corridorFor("Xref-Ladun_Dahiyat Nemar_Utilities Corridor$0$", "UTL-DWG-10000");
+export const PARSONS_DN_CORRIDORS_PROFILE: MappingProfile = {
+  id: "parsons-dn-corridors",
+  name: "Parsons / Namar utility corridors (UTL)",
+  team: "Parsons",
+  layers: [
+    dnCorridor("-01- Storm Water", "Storm", "storm", "ACI 170 blue 0,0,255"),
+    dnCorridor("-01- Storm CB", "Storm Catch Basins", "storm_cb", "ACI 160 blue 0,63,255"),
+    dnCorridor("-02- Sewerage", "Sewer", "sewer", "ACI 210 magenta 255,0,255"),
+    dnCorridor("-02-Sewer FM", "Sewer Force Main", "sewer_fm", "ACI 222 dark crimson 165,0,82"),
+    dnCorridor("-04- Irrigation", "Irrigation", "irrigation", "ACI 90 green 0,255,0"),
+    dnCorridor("-04-Irrigation Secondary", "Irrigation Secondary", "irrigation_secondary", "ACI 94 dark green 0,153,0"),
+    dnCorridor("-05- Potable Water", "Water", "water", "ACI 140 sky blue 0,191,255"),
+    dnCorridor("-06- Street Lighting", "Street Lighting", "street_lighting", "ACI 8 grey 128,128,128"),
+    dnCorridor("07- Telecom", "Telecom", "telecom", "olive green 124,165,0"),
+    dnCorridor("-09- Electrical MV", "Electrical MV", "mv", "ACI 21 salmon 255,159,127"),
+    dnCorridor("-10- Electrical LV", "Electrical LV", "lv", "ACI 44 dark gold 153,115,0"),
+    dnCorridor("-15- House Connection", "House Connection", "house_connection", "ACI 242 crimson 204,0,51"),
+    dnCorridor("-00-Tree_SL", "Trees and Street Lighting", "trees_sl", "ACI 8 grey 128,128,128"),
+    dnCorridor("-00-Tree_IRS", "Trees and Irrigation", "trees_irs", "ACI 81 pale green 191,255,127"),
+    dnCorridor("-00-Tree_IRS_SL", "Trees, Irrigation and Street Lighting", "trees_irs_sl", "ACI 151 pale blue 127,191,255"),
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+};
+
+/**
+ * A Parsons district's road layout as its sheets bind it: one xref holding the layout (centrelines,
+ * right of way, asphalt, project boundary, plots) and the road names in another (MTEXT on
+ * "0-Alignment Name"). Layer names change per district, so they are parameters. Every rule names its
+ * layer with the layout xref's prefix: the sheets also carry a legend sample of each layer (bare
+ * "_CL", "__ROW"…) and a scaled copy of the layout in the title block's key plan, neither of which is
+ * design.
+ */
+export interface ParsonsDistrictLayout {
+  /** profile id stem, e.g. "parsons-dn" */
+  id: string;
+  /** district as written in profile names, e.g. "Namar" */
+  district: string;
+  /** bound layout xref, e.g. "Xref Road Layout Dahiyat Nemar" */
+  xref: string;
+  centreline: string;
+  row: string;
+  /** project boundary layer inside the xref (Namar: the legend xref's RD-PVT-MRK, nested) */
+  boundary: string;
+  asphalt?: string;
+  plots: string;
+  /** plot number texts (any xref): MP-PLT-TXT on every Parsons baseplan so far */
+  plotNumbers?: string;
+  green?: string;
+  /** how far a road name may sit from its centreline (m); default 10. Namar's labels stand 11-12 m off. */
+  labelDistance?: number;
+}
+
+/** Roads and areas from the layout sheet: named centrelines, blocks (closed ROW), road reserve, asphalt. */
+export function parsonsDistrictRoadsProfile(d: ParsonsDistrictLayout): MappingProfile {
+  const x = (layer: string) => `${d.xref}$0$${layer}`;
+  return {
+    id: `${d.id}-roads`,
+    name: `Parsons / ${d.district} road layout, blocks and road reserve`,
+    team: "Parsons",
+    layers: [
+      { dwgLayer: x(d.centreline), infraFeatureClass: "road_centerline", labels: { layers: ["0-Alignment Name"], attribute: "road_name", maxDistance: d.labelDistance ?? 10 } },
+      // the plots too: where no ROW line separates a row of plots from its road (Namar: 63 plots), no block forms
+      { dwgLayer: x(d.boundary), infraFeatureClass: "coverage", outputLayer: "road_reserve", subtract: [x(d.row), x(d.plots)] },
+      // blocks as drawn (closed ROW), plus those the project boundary closes where they hold plots
+      { dwgLayer: x(d.row), infraFeatureClass: "coverage", outputLayer: "blocks", polygonize: { closeGaps: 0.5, with: [x(d.boundary)], keep: [x(d.plots)], avoid: [x(d.centreline)] } },
+      ...(d.asphalt ? [{ dwgLayer: x(d.asphalt), infraFeatureClass: "coverage" as const, outputLayer: "asphalt" }] : []),
+    ],
+    reportJoins: [],
+    assetKeys: AssetKeyConfig.parse({}),
+  };
+}
+
+/** Plots (closed polylines in the layout xref) numbered by the baseplan's texts, and green space. */
+export function parsonsDistrictPlotsProfile(d: ParsonsDistrictLayout): MappingProfile {
+  const x = (layer: string) => `${d.xref}$0$${layer}`;
+  return {
+    id: `${d.id}-plots`,
+    name: `Parsons / ${d.district} plots`,
+    team: "Parsons",
+    layers: [
+      { dwgLayer: x(d.plots), infraFeatureClass: "parcel", outputLayer: "plots", joinKeyAttribute: "parcel_id" },
+      ...(d.green ? [{ dwgLayer: x(d.green), infraFeatureClass: "coverage" as const, outputLayer: "green_space" }] : []),
+    ],
+    reportJoins: [],
+    assetKeys: AssetKeyConfig.parse({ textLayers: [d.plotNumbers ?? "MP-PLT-TXT"], pattern: "^([A-Z]{1,2}-)?[0-9]{1,4}$" }),
+  };
+}
+
+/**
+ * Namar (Dahiyat Namar, Package 3, code DN, 10-2026 set). Layout xref "Xref Road Layout Dahiyat Nemar"
+ * (spelt "Nemar"), names in "Xref Dim_Names Dahiyat Nemar" (RD-01..RD-38, RD-M-01..03, RA-01, "WADI
+ * FATIMAH ROAD"). Centrelines `_CL`, ROW `__ROW`, asphalt `G-ASPHALT ROAD`, plots `Residential plots`,
+ * green space `GR`; the project boundary is the RD-PVT-MRK polyline of the legend xref nested in the
+ * layout ("PROJECT BOUNDARY" in the ROD-10200 legend). Roads from ROD-DWG-10200-000 (the only sheets with
+ * the names); plots from SLT-DWG-10000-000, whose baseplan carries the plot numbers (MP-PLT-TXT).
+ */
+export const NAMAR_LAYOUT: ParsonsDistrictLayout = {
+  id: "parsons-dn",
+  district: "Namar",
+  xref: "Xref Road Layout Dahiyat Nemar",
+  centreline: "_CL",
+  row: "__ROW",
+  boundary: "NOTES & LEGEND ROAD-NHC-DMM$0$RD-PVT-MRK",
+  asphalt: "G-ASPHALT ROAD",
+  plots: "Residential plots",
+  green: "GR",
+  labelDistance: 15,
+};
+export const PARSONS_DN_ROADS_PROFILE = parsonsDistrictRoadsProfile(NAMAR_LAYOUT);
+export const PARSONS_DN_PLOTS_PROFILE = parsonsDistrictPlotsProfile(NAMAR_LAYOUT);
+
 /** Profiles shipped with the tool: listed first, and never overwritten or deleted by a save. */
-export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_AREAS_PROFILE, PARSONS_NRJS_CORRIDORS_PROFILE];
+export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_AREAS_PROFILE, PARSONS_NRJS_CORRIDORS_PROFILE, PARSONS_DN_ROADS_PROFILE, PARSONS_DN_PLOTS_PROFILE, PARSONS_DN_WET_PROFILE, PARSONS_DN_DRY_PROFILE, PARSONS_DN_SECURITY_SECONDARY_PROFILE, PARSONS_DN_CORRIDORS_PROFILE];

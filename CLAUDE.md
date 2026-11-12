@@ -273,6 +273,14 @@ Qairawan, all in UTM 38N, checked by Gate G3 and seen in InfraWorks unless noted
   0 warnings (32 data sources). Not modelled: irrigation pull boxes, quick couplings, decoder cable,
   tie-ins; utility corridors (IUC). Open questions: `scripts/narjis/parsons-questions.md`.
 
+- Namar (Dahiyat Namar, Package 3, code DN, 10-2026 set; 12 Nov 2026, `scripts/namar/HANDOVER.md`): working copy
+  `C:\IW\Namar\Package 3 - Site 04 Dahiyat Namar.sqlite` (proposal master, 66 sources): sewer / water / irrigation
+  (covers 1.2 m from the Namar report), 41 component roads (template RD-M-03), 56 junctions with drawn kerb radii,
+  blocks, road reserve, 767 plots, storm, dry networks, fittings, drawn pipes, 15 corridors and bands in IUC colours.
+  Surfaces as LandXML (`pnpm surface:landxml`; Roads Surface from the Sep IFC). RA-01 is a plain crossing (D1, D2b:
+  no InfraWorks standard fits between the neighbouring junctions). G3 with --layout and every package PASS.
+  Questions: `scripts/namar/parsons-questions.md` (17).
+
 Open points: confirm the irrigation cover with Parsons; depths of telecom, security and
 street-lighting ducts (not in the Parsons documents, drawn on the terrain); the full Al Narjis road layout
 (`Xref Road Layout Al Narjis.dwg`) from Parsons; Al Narjis and other districts through the same path.
