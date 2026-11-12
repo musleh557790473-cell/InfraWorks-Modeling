@@ -394,3 +394,10 @@ package). The LV xref repeats the substations, the MV loop and the lighting pane
 - `scripts/narjis/corridor-check.mts --district namar` (district table added; Al Narjis' table unchanged, 24 of 24 rows
   identical): results and reading in `scripts/namar/corridor-check.md`. Drawn networks 88-96 % in their own corridor;
   WaterGEMS water 74 %, irrigation model 42 % (38 % in the MV place), control cable 12 %. Parsons questions 16, 17.
+
+### Last two imports (12 Nov 2026)
+
+- User re-imported `irrigation_structures_dwg` (Pipeline Connectors, source 70) and `street_lights` (Points of Interest,
+  source 71). model:names on a copy: NETWORKNAME 195 on the irrigation structures. G3 irrigation-dwg and dry PASS,
+  0 warnings; --layout PASS. Installed. Every package now passes; the only warnings left are G3-005 / G3-010 on the
+  10200 package for the road_centerline records merged or removed at RA-01 (D1).
