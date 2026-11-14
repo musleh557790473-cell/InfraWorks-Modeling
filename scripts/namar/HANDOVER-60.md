@@ -283,6 +283,28 @@ telecom 64 % and ICT 61 % (much of the rest in the house-connection place). Pars
   looked at the junctions. RD-M-01's Grading Limit stands at 5.1 if it was not set back. The base model's three roads
   ("15 m", "25m" x2) are still in the model.
 
+### Pits, unsupported junctions (14 Nov 2026, late night)
+
+- User's screenshots after the kerb radii: RA-01 built with its kerbs. Three faults:
+  1. "Intersection not supported" circles along RD-M-01 / RD-M-03 / RD-02: the base model's three roads ("15 m",
+     "25m" x2) lay on top of the Parsons roads and carried 96 junction arms (junction 41 belonged to "25m").
+  2. Pits (junction body and grading down to 400-650 m) at road ends on RD-M-01, e.g. near E 657 607 N 2 714 255: ten
+     side-road profiles end 6-67 mm off RD-M-01's centreline level (list in Parsons question 18).
+  3. T-junctions not built (one road lying over the other): InfraWorks builds them on a road edit.
+- On a scratchpad copy of the closed model: `--only RD-35,RD-02,RD-33,RD-M-03,RD-31,RD-30,RD-19,RD-04,RD-37 --tie-ends
+  <each>@RD-M-01` (deviation D3; RD-13, 10 mm, left: both its ends lie on RD-M-01). Then the three old roads deleted
+  (`removeRoad`, 141 rows) and `pruneDanglingIntersections`: 37 junctions on them removed, 71 body rows.
+- **Slip:** that copy was installed although G3 `--layout` failed (G3-021: 66 arm / region links to the deleted
+  roads; the install check looked at the packages only). Cause: `pruneDanglingIntersections` keeps a junction that
+  still joins two live roads ("kept, rebuild in InfraWorks"), dead arm included: 11 junctions (2 47 50 51 52 54 60 65
+  68 72 74). Fixed with the model still closed: `model:intersections --delete-junctions` for those 11, then G3
+  `--layout` PASS (1 warning, G3-020), all 12 packages PASS, integrity ok, installed (D0F17CC4... -> 04A5D8E8...).
+  Every install now requires layout PASS + packages PASS + integrity.
+- State: 40 roads (Parsons only), 34 intersections, 78 corners (67 at the drawn radius). The 48 deleted junctions come
+  back when InfraWorks rebuilds their roads (Grading Limit edit on RD-M-01, RD-M-03, RD-02, RD-01, RD-05 and the nine
+  tied roads); then rerun `--curb-returns` and G3 `--layout`. The template road "15 m" is gone: a later `model:roads`
+  write needs `--template-from "C:\IW\backup\Namar 60_20261114_205041\Namar 60.sqlite"`.
+
 ### CRS (Vol. 08)
 
 PMC comments on the 30 % package with Parsons' replies (7 sheets). Relevant: Roads CRS row 17 (RA-01 geometry, ER
