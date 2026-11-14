@@ -176,6 +176,17 @@ telecom 64 % and ICT 61 % (much of the rest in the house-connection place). Pars
   **Tested on a synthetic LandXML only: not yet run on Parsons' file.** Expect adjustments once the real export is read
   (alignment names, which ProfAlign is the design profile, RA-01's ring).
 
+### Working model moved to laptop `Musleh` (14 Nov 2026, user's decision)
+
+- `C:\IW\Namar 60\Namar 60.sqlite` + `.files` rebuilt here the same way: robocopy of the OneDrive base model (1 + 1 882
+  files, sqlite hash 64F8942C..., integrity ok, proposal `master`, `.files` clean, 9 data sources: two IMX surfaces and
+  the seven September NMR_* / SAP_* layers, 43 roads, 767 parcels). **This is now the one working copy; the copy on
+  AYNLAP1201 is not to be used** (delete it there when convenient).
+- ROD-DWG-10200-000 converted here with AutoCAD 2027's accoreconsole (`ACCORECONSOLE` set to its path) to
+  `C:\Temp\dxf\namar60`: EXPORTTOAUTOCAD did not crash on 2027 (it did on 2026). Layout: `_CL` 2 LWPOLYLINE + 1 LINE
+  (still no centrelines), `__ROW` 45, `__Curb` 141, `Road edge` 102.
+- Still to sync down on this laptop before the import: 8 of the 12 `Namar60-*` packages and the two surface LandXMLs.
+
 ### CRS (Vol. 08)
 
 PMC comments on the 30 % package with Parsons' replies (7 sheets). Relevant: Roads CRS row 17 (RA-01 geometry, ER
