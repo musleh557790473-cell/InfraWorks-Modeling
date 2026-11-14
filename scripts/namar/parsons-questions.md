@@ -46,4 +46,5 @@ not these questions; the answers below come from the 60 % files themselves.
 | 13 | Answered | SLT-MOD-90000-001 holds 312 poles once each (the second copy at 4 cm is the plan symbol) |
 | 14 | To check in the model | Blocks rebuilt from the 60 % layout (39) |
 | 15 | Open | ROD-10900-002 (new, "Roundabout-01 geometry checks") keeps the ring: ICD 40.40 m, island R12.00, ring 7.60 m, same centre. Neighbouring junctions to re-measure on the 60 % alignments |
-| 16, 17 | To re-run | Corridor check against the 60 % corridors and models (`corridor-check.mts`) |
+| 16 | Open, wider gap | `corridor-check-60.md`: PWT-10000 water pipes 94 % in the water corridor, the WaterGEMS model PW_Model-Rev 04 only 34 % (37 % in the Trees and Street Lighting place, 13 % in irrigation's) |
+| 17 | Open | Irrigation as drawn 90 % in its corridors; the WaterGEMS model 36 % (30 % in the LV place); the two-wire control cable 3 % (LV 32 %, Trees and Street Lighting 25 %) |

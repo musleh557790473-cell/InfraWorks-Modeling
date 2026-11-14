@@ -148,6 +148,13 @@ house-connection xref (161 per utility): service lines, not in the 30 % scope; S
 source); ROD-MOD-90000-001 NGL (the survey is the existing ground) and -004 (905 solids, no surface); hydrants from
 PWT-10000 (the WaterGEMS model has 75); the storm model's pond and 340 catchments.
 
+### Corridor check (14 Nov 2026)
+
+`corridor-check.mts --district namar60` (district `namar60`: each layer names its 60 % package; the 30 % Namar and Al
+Narjis reports are unchanged): `scripts/namar/corridor-check-60.md`. Drawn networks 85-94 % in their own corridor (storm
+model 95 %, sewer model 94 %); the WaterGEMS models are not: water 34 %, irrigation 36 %; irrigation control cable 3 %;
+telecom 64 % and ICT 61 % (much of the rest in the house-connection place). Parsons questions 16, 17 stay open.
+
 ### CRS (Vol. 08)
 
 PMC comments on the 30 % package with Parsons' replies (7 sheets). Relevant: Roads CRS row 17 (RA-01 geometry, ER
