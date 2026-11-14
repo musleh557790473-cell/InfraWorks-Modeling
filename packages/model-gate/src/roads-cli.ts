@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import {
   applySectionDecisions, assemblePvis, buildAlignments, buildRoundaboutSection, parseSectionDecisions, buildSection, classifySections, crossfallSides, loadLandXmlSurface, measureRoundabouts, orientRoads,
-  readDxfBlock, readProfileViews, type NamedStart, type Section,
+  readDxfBlock, readLandXmlRoads, readProfileViews, ringOf, type Alignment, type NamedStart, type ProfileView, type Pvi, type Section,
 } from "@infraworks/domain";
 
 import { junctionSteps, levelProblems, parseTieEnds, roadRows, tieLevels } from "./roads/checks.js";
@@ -39,6 +39,11 @@ model-roads - Parsons roads as InfraWorks component roads, written into a model 
                                   InfraWorks as intersections of the roads through their centres)
       [--tie-ends R.4.G.2@R.0.D.11,...]   (with --only: give the end of each road lying on the named road
                                   that road's level there, when the profiles disagree by up to 0.10 m)
+      [--alignments <Civil 3D LandXML of the alignments and profiles>]   (instead of --profiles: exact plan
+                                  geometry, names and PVIs from the designer's alignments; the layout still
+                                  gives the kerbs and right-of-way for the sections. Namar 60 %)
+      [--alignments-match <regex>] [--profile-name <regex>]   (which alignments are roads; which ProfAlign
+                                  is the design profile when an alignment carries several)
       [--to-centre RD-13@RD-M-01,...]   (with --only: carry a road ending on a roundabout ring (a centreline
                                   circle) straight on to the ring's centre, ending on the named through road
                                   at its level there; --merge joins two roads across such a ring)
@@ -79,20 +84,34 @@ function main(argv: string[]): number {
   const flag = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
   const model = args[0]!, template = flag("--template"), layoutPath = flag("--layout"), profilesPath = flag("--profiles"), surfacePath = flag("--surface");
   const dry = args.includes("--dry"), only = flag("--only")?.split(",").filter(Boolean);
-  if (!layoutPath || !profilesPath || !surfacePath || (!dry && !template)) { process.stderr.write("model-roads: --layout, --profiles, --surface and --template are required (see --help)\n"); return 2; }
+  const alignmentsPath = flag("--alignments");
+  if (!layoutPath || (!profilesPath && !alignmentsPath) || !surfacePath || (!dry && !template)) { process.stderr.write("model-roads: --layout, --profiles (or --alignments), --surface and --template are required (see --help)\n"); return 2; }
   try {
     const say = (s: string) => process.stdout.write(s + "\n");
-    const profEnts = readDxfBlock(readFileSync(profilesPath, "latin1"), flag("--profiles-block") ?? "Xref Al Qairawan Profiles");
-    const { views, errors } = readProfileViews(profEnts);
-    const pv = assemblePvis(profEnts, views);
-    say(`profiles: ${views.length} views, ${Object.keys(pv.roads).length} roads${errors.length ? `; not read: ${errors.join(", ")}` : ""}; PVI issues ${pv.issues.length}`);
     const layout = readDxfBlock(readFileSync(layoutPath, "latin1"), flag("--layout-block") ?? "Xref Road Layout Al Qairawan");
-    const pkg = flag("--package");
-    const al = buildAlignments(layout, views, pkg ? packageNames(pkg) : []);
-    say(`alignments: ${al.roads.length} of ${Object.keys(pv.roads).length} roads chained to their profile length`);
     const surface = loadLandXmlSurface(readFileSync(surfacePath, "utf8"), flag("--surface-name") ?? "Al_Qairawan_Mass Grading");
-    const or = orientRoads(al.roads, pv.roads, surface);
-    say(`direction: ${or.reversed.length} reversed (${or.reversed.join(" ")}); loops re-started: ${or.restarted.map((r) => r.name).join(" ") || "none"}`);
+    let views: ProfileView[] = [], al: { roads: Alignment[]; report: string[] }, pv: { roads: Record<string, Pvi[]>; issues: string[] }, or: { report: string[] } = { report: [] };
+    if (alignmentsPath) {
+      // the designer's own alignments: exact geometry, names and direction, so nothing is chained or turned
+      const rx = (n: string) => { const v = flag(n); return v ? new RegExp(v, "i") : undefined; };
+      const lx = readLandXmlRoads(readFileSync(alignmentsPath, "utf8"), { match: rx("--alignments-match"), profile: rx("--profile-name") });
+      al = { roads: lx.roads, report: [...lx.report, ...lx.skipped.map((s) => `${s.name}: NOT READ, ${s.why}`)] };
+      pv = { roads: lx.pvis, issues: [] };
+      say(`alignments (LandXML): ${lx.roads.length} roads with their profile; not read ${lx.skipped.length}`);
+      for (const s of lx.skipped) say(`  ${s.name}: ${s.why}`);
+    } else {
+      const profEnts = readDxfBlock(readFileSync(profilesPath!, "latin1"), flag("--profiles-block") ?? "Xref Al Qairawan Profiles");
+      const r = readProfileViews(profEnts);
+      views = r.views;
+      pv = assemblePvis(profEnts, views);
+      say(`profiles: ${views.length} views, ${Object.keys(pv.roads).length} roads${r.errors.length ? `; not read: ${r.errors.join(", ")}` : ""}; PVI issues ${pv.issues.length}`);
+      const pkg = flag("--package");
+      al = buildAlignments(layout, views, pkg ? packageNames(pkg) : []);
+      say(`alignments: ${al.roads.length} of ${Object.keys(pv.roads).length} roads chained to their profile length`);
+      const o = orientRoads(al.roads, pv.roads, surface);
+      or = o;
+      say(`direction: ${o.reversed.length} reversed (${o.reversed.join(" ")}); loops re-started: ${o.restarted.map((r) => r.name).join(" ") || "none"}`);
+    }
     const sections = classifySections(layout, al.roads);
     const decisions = flag("--section");
     if (decisions) {
@@ -124,6 +143,8 @@ function main(argv: string[]): number {
     }
     // roundabout rings drawn as centreline circles (Namar RA-01): --merge may cross one, --to-centre ends at its centre
     const rings: Ring[] = layout.filter((e) => e.type === "CIRCLE" && e.r && (e.layer === "_CL" || e.layer === "RD_CL" || e.layer.endsWith("RD_PR_CNRL"))).map((e) => ({ c: [e.x[0]!, e.y[0]!], r: e.r! }));
+    // ... or exported as a closed alignment of arcs (LandXML)
+    if (alignmentsPath) for (const a of al.roads) { const g = ringOf(a); if (g && !rings.some((q) => Math.hypot(q.c[0] - g.c[0], q.c[1] - g.c[1]) < 0.5)) rings.push(g); }
     const merges = parseMerges(flag("--merge") ?? "").map((m) => {
       const parts = m.parts.map((n) => {
         const a = al.roads.find((r) => r.name === n), v = pv.roads[n];

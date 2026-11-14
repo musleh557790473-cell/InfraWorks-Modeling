@@ -48,6 +48,7 @@ pnpm gate:model "<model>.sqlite" --package <package.zip>      # Gate G3, on a cl
 pnpm gate:model "<model>.sqlite" --layout <10200.dxf>         # G3 for a road model written by model:roads (G3-020..025)
 pnpm model:names "<model>.sqlite" --package <package.zip> [--out "<copy>.sqlite"]
 pnpm model:roads "<model>.sqlite" --template <guid> --layout <10200.dxf> --profiles <40000.dxf> --surface <grading.xml> [--package <road_centerline>] [--dry]
+#   Namar 60 %: --alignments <Civil 3D LandXML> instead of --profiles (exact alignments + PVIs; --alignments-match, --profile-name)
 #   Al Qairawan: add --section R.9.G.6=A1,R.9.G.7=A1 (AICC decision for the two roads the drawing does not type)
 pnpm model:intersections "<model>.sqlite" [--dry]               # drop intersections left on a deleted road
 #   --delete-junctions 125,136      delete junctions (rows + body); InfraWorks recreates them on a road edit

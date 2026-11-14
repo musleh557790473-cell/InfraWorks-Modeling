@@ -155,6 +155,27 @@ Narjis reports are unchanged): `scripts/namar/corridor-check-60.md`. Drawn netwo
 model 95 %, sewer model 94 %); the WaterGEMS models are not: water 34 %, irrigation 36 %; irrigation control cable 3 %;
 telecom 64 % and ICT 61 % (much of the rest in the house-connection place). Parsons questions 16, 17 stay open.
 
+## Session 2 (14 Nov 2026, laptop `Musleh`)
+
+- This laptop has no `C:\IW\Namar 60` and no `C:\Temp\dxf\namar60` (both on AYNLAP1201 only). OneDrive here showed
+  4 of the 12 `Namar60-*` packages (sewer, storm-model, water, irrigation) and no `inputs\namar-60\surfaces`: the rest
+  had not synced down yet. Nothing was written to a model in this session.
+- Civil 3D 2025 and 2027 are installed here too (`AutoCAD 2027\C3D`), so the LandXML export does not need AYNLAP1201.
+  It cannot be scripted: accoreconsole 2027 `/product C3D` opens the DWG (copy in the scratchpad) but has no
+  `-LANDXMLOUT` ("Unknown command"), also after `(arxload "AeccLandXmlCmd.crx")`. The export is done in the Civil 3D
+  window: Output tab > Export To LandXML (Autodesk Civil 3D help, "Export To LandXML Dialog Box").
+- `model:roads --alignments <LandXML>` (instead of `--profiles`): `readLandXmlRoads`
+  (`packages/domain/src/roads/landxml-alignments.ts`, tests `landxml-alignments.test.ts`) reads each `<Alignment>`
+  (lines and circular curves, points as northing easting, arcs split at 90 degrees, stations from `staStart`) with its
+  `<ProfAlign>` (PVI, ParaCurve, CircCurve lengths). No chaining and no direction check: the designer's alignment is
+  exact. Left out and named, never guessed: spirals, station equations, no design profile, several design profiles
+  (`--profile-name <regex>` chooses), unsymmetrical vertical curves, a profile starting after 0.3 m or ending past the
+  alignment; a profile ending short cuts the road there. `--alignments-match <regex>` keeps only the road alignments
+  (Civil 3D also exports offset and kerb-return alignments). A ring exported as a closed alignment of arcs counts as a
+  roundabout ring for `--merge` / `--to-centre`. The layout DXF still gives kerbs and right-of-way for the sections.
+  **Tested on a synthetic LandXML only: not yet run on Parsons' file.** Expect adjustments once the real export is read
+  (alignment names, which ProfAlign is the design profile, RA-01's ring).
+
 ### CRS (Vol. 08)
 
 PMC comments on the 30 % package with Parsons' replies (7 sheets). Relevant: Roads CRS row 17 (RA-01 geometry, ER
