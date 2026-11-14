@@ -144,6 +144,11 @@ with their reason; the session log is `scripts/road-pilot/HANDOVER.md`.
   Signatures come from the Qt metadata in `AIM_JavaScriptAPI.dll` (every method reports length 0).
   `RoadModel.readRoadModel(id)` takes the road's CONSTRAINED_DEFINITIONS.ID (RA-2: 299), not
   ROADS.ID (280, the "ID" in the properties panel): with 280 it returns false and stays empty.
+- Importing without the user (Namar 60, 14 Nov): computer-use clicks do not reach the Data Sources dock, but UI
+  Automation drives the Scripting console (editor `JSEdit`, "Start script", output `QTextEdit`), and
+  `app.GetDataProviders(".shp")[0].FileConnect(app.ActiveModel, path)[0]` + `TargetClassName` + `Import()` imports a
+  shapefile in under a second (42 files in 41 s; then `model:names`). Do NOT `FileConnect` a large LandXML this way
+  (hung 25 min): surfaces go through the GUI. Details in `scripts/namar/HANDOVER-60.md`.
 - InfraWorks' intersections point at roads by the road's CONSTRAINED_DEFINITIONS GUID
   (INTERSECTION_ARMS.FK_ASSET_GUID, INTERSECTION_REGIONS.FK_INCOMING/OUTGOING_ASSET_GUID), not
   ROADS.GUID. model:roads keeps both GUIDs when it replaces a road, so they stay valid.

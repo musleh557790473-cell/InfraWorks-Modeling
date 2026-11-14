@@ -241,6 +241,30 @@ telecom 64 % and ICT 61 % (much of the rest in the house-connection place). Pars
     for 25+ minutes, the raster provider logged an error first). Import LandXML surfaces through the GUI, or pick the
     LandXML provider only and try the small Site Grading file first.
 
+### Packages imported by script, names, roads (14 Nov 2026, night)
+
+- The user imported the two LandXML surfaces in the GUI (sources 6, 7: Site Grading (60), Roads Surface (60)); the model
+  opened cleanly after the forced stop.
+- All 42 shapefiles of the 12 packages imported through the Scripting console driven by UI Automation (`FileConnect`,
+  `TargetClassName`, `Import()`; default script `EXTERNAL_ID = FeatId`): 41 s in all, every `InsertedFeatureCount`
+  equal to the DBF record count (sources 9-49). A filter slip sent the whole list instead of one package, so blocks
+  came in twice ("blocks (2)", id 8): removed again with `cfg.Read(8); cfg.Remove()` (39 features). Result: 46 data
+  sources (2 IMX + 2 LandXML + 42 shp), coverages 40, parcels 878, pipelines 10 427, connectors 1 098, POIs 313.
+  InfraWorks did not redraw the new features in that session; it was closed normally (`.files` clean on `master`).
+- `model:names` chained over the 12 packages on scratchpad copies, integrity ok, G3 with each package PASS, 0 warnings;
+  installed (8F9CF7DF... -> 7293E701...).
+- Roads on a scratchpad copy, template = the base model's own component road "15 m" (definition
+  `82f93c74-ec4e-4609-9ab8-bc756b04913c`): 41 roads written (RD-11 and RD-14: first PVI at 6 / 36 mm, tangent extended to
+  0), 0 level problems, 0 junction steps >= 0.3 m. Then as deviation D1 (decided at 30 %, the ring is unchanged):
+  `--merge RD-M-01=RD-M-01+RD-M-02` (1 662.245 m, 14 PVIs, B1) and `--only RD-13,RD-32 --to-centre RD-13@RD-M-01,
+  RD-32@RD-M-01` (20.200 m each, level 766.273). G3 `--layout` PASS with 1 warning (G3-020: the 60 % layout has no
+  road-name labels to compare with); sewer package rechecked PASS. Installed (7293E701... -> 93A9A46A...).
+- State: 43 roads = 40 Parsons roads + the base model's three ("15 m", "25m", "25m", no data source; "15 m" is the
+  template: delete them in InfraWorks once the roads are seen). 2 old intersections only: InfraWorks has not built the
+  junctions yet (it does on a road edit), so no kerb returns yet (G3-025: 4 corners without a drawn arc). The two old
+  IMX terrains are still in the model beside the 60 % surfaces: the user decides the stack.
+- Not seen in InfraWorks yet: everything above is checked in the file only.
+
 ### CRS (Vol. 08)
 
 PMC comments on the 30 % package with Parsons' replies (7 sheets). Relevant: Roads CRS row 17 (RA-01 geometry, ER
