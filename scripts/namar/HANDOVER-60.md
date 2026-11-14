@@ -212,6 +212,35 @@ telecom 64 % and ICT 61 % (much of the rest in the house-connection place). Pars
   47.0 m on RD-M-02 against Urban Compact's 47.6 m: RD-M-02 is still 0.6 m short. Question 15 stays open.
 - Nothing written to the model yet: the user removes the September layers and imports first.
 
+### Imports started by Claude on the user's request (14 Nov 2026, evening; stopped by the user: too slow)
+
+- Backup before any change: `C:\IW\backup\Namar 60_20261114_205041` (sqlite 64F8942C..., 1 883 files). The surfaces and
+  the 12 packages' `shp` folders were pinned / read so that no file is OneDrive online-only (224 files).
+- **Done in the model:** the seven September sources removed in InfraWorks (Data Sources > Remove): SAP_Asphalt_Areas,
+  NMR_Plots_Residential_v02, SAP_Facilities, NMR_Survey_Wadi_Edges, NMR_Official_Boundary_S7, NMR_ROW_Areas_v02,
+  NMR_Road_Hierarchy_v02. Left: the two IMX terrains (`Namar Topo C3D - SURFACES`, `Dahiyat Namar Site Grading -
+  SURFACES`) and 3 roads without a data source. Then `blocks.shp` (areas package) imported as Coverage Areas: 39
+  features, source ID 5. **Do not import blocks again.**
+- **Not done:** the two LandXML surfaces and the other 41 shapefiles (list with target class and record counts:
+  runbook `C:\IW\data\namar60\InfraWorks-runbook.md` step 5; all Type + UTM84-38N only, then `model:names`).
+- State left: InfraWorks was stopped while a script hung (below); `Namar 60.lock` removed after checking no InfraWorks
+  ran; sqlite integrity ok, 3 data sources, 39 coverages. `.files` HEAD stands on `__undojournal__master` (InfraWorks'
+  undo branch of the interrupted session, last commit "Commit imported data."); InfraWorks merges it on the next open /
+  close. If the model does not open cleanly, restore the backup and repeat the removal.
+- Learned about driving InfraWorks 2026 without the user:
+  - Mouse clicks sent by computer use do not reach the Data Sources dock (tree rows, Add File); the ribbon and message
+    boxes do. Keyboard works once the dock has focus (Tab from "Group by" to the tree, Shift+Down, Delete).
+  - Windows UI Automation sees the docks (`alx::StudioDockWidget`): the Scripting console's editor (`JSEdit`, ValuePattern),
+    "Start script" (InvokePattern) and output pane (`QTextEdit`) can be driven from PowerShell, so a script runs and its
+    output is read without screenshots.
+  - Scripting API (unofficial): `app.GetDataProviders(".shp")[0].FileConnect(app.ActiveModel, path)[0]` gives an
+    `FdoImportConfig` with InfraWorks' defaults (source CS from the .prj, ImportScript `EXTERNAL_ID = FeatId`); set
+    `TargetClassName` (COVERAGES, PARCELS, PIPELINES, PIPE_CONNECTORS, POIS) and call `Import()`: blocks.shp took 0.8 s
+    and returned `InsertedFeatureCount`. `cfg.Read(id)` / `Remove()` exist too (not tried).
+  - **`FileConnect` on the 14.6 MB Roads Surface LandXML over all three `.xml` providers hung InfraWorks** (one core busy
+    for 25+ minutes, the raster provider logged an error first). Import LandXML surfaces through the GUI, or pick the
+    LandXML provider only and try the small Site Grading file first.
+
 ### CRS (Vol. 08)
 
 PMC comments on the 30 % package with Parsons' replies (7 sheets). Relevant: Roads CRS row 17 (RA-01 geometry, ER
