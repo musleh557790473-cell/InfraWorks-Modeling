@@ -187,6 +187,31 @@ telecom 64 % and ICT 61 % (much of the rest in the house-connection place). Pars
   (still no centrelines), `__ROW` 45, `__Curb` 141, `Road edge` 102.
 - Still to sync down on this laptop before the import: 8 of the 12 `Namar60-*` packages and the two surface LandXMLs.
 
+### Alignments LandXML read (14 Nov 2026)
+
+- `DATA_DIR\inputs\namar-60\Namar60-alignments.xml` (user's Civil 3D export, LandXML 1.2, EPSG 32638, alignments only;
+  copy in `C:\IW\data\namar60`): 174 alignments = 42 roads (RA-01, RD-01..38, RD-M-01..03) + 132 offset alignments
+  (`RD-01-Left-3.600`, also for LFT-01, LFT-06, Easement Access, which have no centre alignment in the file).
+  312 lines, 178 curves, no spirals, no station equations.
+- Each road carries two design profiles: `DESIGN-<road>` and `DESIGN-<road>-TOS` (RD-19 a third, `DESIGN-RD-19-TO`).
+  Against the 60 % Roads Surface along the centrelines (975 points): `DESIGN-<road>` median 0.000 (p10 / p90 0.000),
+  `-TOS` a constant -0.580 m. **The finished road is `DESIGN-<road>`**; TOS is 0.58 m below it.
+- Options for this file (run `node packages/model-gate/dist/roads-cli.js` directly: pnpm's cmd shim breaks on the `^ | ( )`
+  of the regexes): `--alignments-match "^(RD-(M-)?\d+|RA-\d+)$" --profile-name "^DESIGN-(RD|RA)-(M-)?\d+$"`,
+  `--layout-block "Xref Road Layout Dahiyat Nemar_1"`, `--surface-name "DN Roads Surface (60)"`.
+- `--dry`: 41 roads read with their profile. RD-15 (233.530 m) and RD-38 (83.200 m) are cut to their profile ends
+  (233.473 / 82.950 m). RA-01 is not read as a road (its profile has an unsymmetrical vertical curve at 7.654 m) but
+  its ring is: centre E 657 300.37 N 2 714 451.37, r 20.20, taken from the alignment for `--merge` / `--to-centre`
+  (fix on real data: `LandXmlRoads.rings`, with a test). Sections from the 60 % layout: B1 RD-M-01 / 02 / 03, A2
+  RD-13 / 19 / 25 / 26, A1 the other 34 (RD-35 from one side), as at 30 %. Crossfall from the Roads Surface: RD-13 and
+  RD-19 fall left, the three RD-M crowned, the other 36 fall right (to see in InfraWorks).
+- Junctions next to RA-01 on the 60 % alignments (road ends on each arm, distance from the ring centre): RD-M-01:
+  RD-M-03 at 63.8 m (30 %: 64.4); RD-M-02: RD-33 at 61.4 m (unchanged); RD-13: none before RD-15 at 123.2 m (30 %: one
+  at 61.1 m; LFT / Easement Access have no centre alignment, so a junction with one of them would not show here);
+  RD-32: none within 150 m. With InfraWorks' clamp (junction centre - 14.4 m) the arms would be 49.4 m on RD-M-01 and
+  47.0 m on RD-M-02 against Urban Compact's 47.6 m: RD-M-02 is still 0.6 m short. Question 15 stays open.
+- Nothing written to the model yet: the user removes the September layers and imports first.
+
 ### CRS (Vol. 08)
 
 PMC comments on the 30 % package with Parsons' replies (7 sheets). Relevant: Roads CRS row 17 (RA-01 geometry, ER

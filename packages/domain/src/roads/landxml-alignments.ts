@@ -22,6 +22,9 @@ export interface LandXmlRoads {
   /** one line per alignment read, with what was adjusted */
   report: string[];
   skipped: { name: string; why: string }[];
+  /** roundabout rings (closed alignments of arcs about one centre), also when their profile was not read:
+   *  Namar RA-01 carries an unsymmetrical vertical curve, and a ring is not written as a road anyway */
+  rings: { name: string; c: P2; r: number }[];
 }
 
 export interface LandXmlRoadOptions {
@@ -78,7 +81,7 @@ function profAlign(body: string, sta0: number): Pvi[] {
 }
 
 export function readLandXmlRoads(xml: string, opt: LandXmlRoadOptions = {}): LandXmlRoads {
-  const res: LandXmlRoads = { roads: [], pvis: {}, report: [], skipped: [] };
+  const res: LandXmlRoads = { roads: [], pvis: {}, report: [], skipped: [], rings: [] };
   for (const m of xml.matchAll(/<Alignment\b([^>]*)>([\s\S]*?)<\/Alignment>/g)) {
     const a = attrs(m[1]!), name = (a.name ?? "").trim(), body = m[2]!;
     if (!name || (opt.match && !opt.match.test(name))) continue;
@@ -90,6 +93,8 @@ export function readLandXmlRoads(xml: string, opt: LandXmlRoadOptions = {}): Lan
       let segs = cg ? coordGeom(cg[1]!) : [];
       if (!segs.length) throw new Error("no geometry");
       segs.forEach((g, i) => { if (i && !near(segs[i - 1]!.b, g.a, 0.005)) throw new Error(`a gap of ${dist(segs[i - 1]!.b, g.a).toFixed(3)} m before element ${i + 1}`); });
+      const ring = ringOf({ name, length: 0, segs });
+      if (ring) res.rings.push({ name, ...ring });
       const profs = [...body.matchAll(/<ProfAlign\b([^>]*)>([\s\S]*?)<\/ProfAlign>/g)].map((p) => ({ name: attrs(p[1]!).name ?? "", body: p[2]! }));
       if (!profs.length) throw new Error("no design profile");
       const named = opt.profile ? profs.filter((p) => opt.profile!.test(p.name)) : profs;

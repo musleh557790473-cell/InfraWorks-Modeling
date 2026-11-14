@@ -61,6 +61,10 @@ test("LandXML alignments: a ring exported as one full-circle curve is split into
   assert.equal(ra.segs.length, 4);
   assert.ok(ra.segs.every((g) => g.bulge < 0), "cw");
   assert.ok(Math.abs(pieceLen(ra.segs) - 2 * Math.PI * 20.2) < 1e-6);
+  // the ring is known even when its profile cannot be read (Namar RA-01: an unsymmetrical vertical curve)
+  const bad = readLandXmlRoads(xml.replace('<PVI>0. 766.</PVI>', '<PVI>0. 766.</PVI><UnsymParaCurve lengthIn="5." lengthOut="8.">7.65 766.1</UnsymParaCurve>'));
+  assert.match(bad.skipped.find((s) => s.name === "RA-01")!.why, /unsymmetrical/);
+  assert.deepEqual(bad.rings.map((q) => [q.name, +q.r.toFixed(3)]), [["RA-01", 20.2]]);
   const g = ringOf(ra)!;
   assert.ok(Math.abs(g.c[0] - 500) < 1e-6 && Math.abs(g.c[1]) < 1e-6 && Math.abs(g.r - 20.2) < 1e-6);
 });

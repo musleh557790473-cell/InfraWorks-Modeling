@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import {
   applySectionDecisions, assemblePvis, buildAlignments, buildRoundaboutSection, parseSectionDecisions, buildSection, classifySections, crossfallSides, loadLandXmlSurface, measureRoundabouts, orientRoads,
-  readDxfBlock, readLandXmlRoads, readProfileViews, ringOf, type Alignment, type NamedStart, type ProfileView, type Pvi, type Section,
+  readDxfBlock, readLandXmlRoads, readProfileViews, type Alignment, type NamedStart, type ProfileView, type Pvi, type Section,
 } from "@infraworks/domain";
 
 import { junctionSteps, levelProblems, parseTieEnds, roadRows, tieLevels } from "./roads/checks.js";
@@ -91,12 +91,14 @@ function main(argv: string[]): number {
     const layout = readDxfBlock(readFileSync(layoutPath, "latin1"), flag("--layout-block") ?? "Xref Road Layout Al Qairawan");
     const surface = loadLandXmlSurface(readFileSync(surfacePath, "utf8"), flag("--surface-name") ?? "Al_Qairawan_Mass Grading");
     let views: ProfileView[] = [], al: { roads: Alignment[]; report: string[] }, pv: { roads: Record<string, Pvi[]>; issues: string[] }, or: { report: string[] } = { report: [] };
+    let lxRings: { name: string; c: [number, number]; r: number }[] = [];
     if (alignmentsPath) {
       // the designer's own alignments: exact geometry, names and direction, so nothing is chained or turned
       const rx = (n: string) => { const v = flag(n); return v ? new RegExp(v, "i") : undefined; };
       const lx = readLandXmlRoads(readFileSync(alignmentsPath, "utf8"), { match: rx("--alignments-match"), profile: rx("--profile-name") });
       al = { roads: lx.roads, report: [...lx.report, ...lx.skipped.map((s) => `${s.name}: NOT READ, ${s.why}`)] };
       pv = { roads: lx.pvis, issues: [] };
+      lxRings = lx.rings;
       say(`alignments (LandXML): ${lx.roads.length} roads with their profile; not read ${lx.skipped.length}`);
       for (const s of lx.skipped) say(`  ${s.name}: ${s.why}`);
     } else {
@@ -144,7 +146,7 @@ function main(argv: string[]): number {
     // roundabout rings drawn as centreline circles (Namar RA-01): --merge may cross one, --to-centre ends at its centre
     const rings: Ring[] = layout.filter((e) => e.type === "CIRCLE" && e.r && (e.layer === "_CL" || e.layer === "RD_CL" || e.layer.endsWith("RD_PR_CNRL"))).map((e) => ({ c: [e.x[0]!, e.y[0]!], r: e.r! }));
     // ... or exported as a closed alignment of arcs (LandXML)
-    if (alignmentsPath) for (const a of al.roads) { const g = ringOf(a); if (g && !rings.some((q) => Math.hypot(q.c[0] - g.c[0], q.c[1] - g.c[1]) < 0.5)) rings.push(g); }
+    for (const g of lxRings) if (!rings.some((q) => Math.hypot(q.c[0] - g.c[0], q.c[1] - g.c[1]) < 0.5)) { rings.push({ c: g.c, r: g.r }); say(`ring ${g.name}: centre E ${g.c[0].toFixed(2)} N ${g.c[1].toFixed(2)}, r ${g.r.toFixed(2)} (from the alignments)`); }
     const merges = parseMerges(flag("--merge") ?? "").map((m) => {
       const parts = m.parts.map((n) => {
         const a = al.roads.find((r) => r.name === n), v = pv.roads[n];
