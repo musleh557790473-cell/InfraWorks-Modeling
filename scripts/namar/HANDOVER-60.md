@@ -265,6 +265,24 @@ telecom 64 % and ICT 61 % (much of the rest in the house-connection place). Pars
   IMX terrains are still in the model beside the 60 % surfaces: the user decides the stack.
 - Not seen in InfraWorks yet: everything above is checked in the file only.
 
+### Seen in InfraWorks, junctions, kerb returns (14 Nov 2026, late)
+
+- User's screenshots: roads, plots and networks in place. Tall yellow walls at the south-west edge (down to 0-600 m)
+  came from the survey `NAMAR` being switched off (`TERRAIN_SURFACES.LAYERS` visibility false): the site surfaces
+  alone leave the features past their edge without ground. Fixed by the user in Surface Layers: NAMAR on (bottom),
+  the September `Nemar Mass Grading` off; stack now Roads Surface (60) / Site Grading (60) / NAMAR. Walls gone.
+- A Grading Limit edit on RD-M-01 (5.0 -> 5.1) built junction 81 at RA-01 (plain intersection, D2b). After the session
+  the file holds 82 intersections (309 arms, 275 regions), no roundabout.
+- `model:intersections --curb-returns <10200> --layout-block "Xref Road Layout Dahiyat Nemar_1"` on a scratchpad copy
+  (dry run first): 80 corners on 35 junctions; 62 set (10 m x56, 12 m x3, 18.3, 20.2, 12.2 m), 1 already at the drawn
+  value, 11 without a drawn arc, 6 ambiguous (the nearer drawn radius taken). G3 `--layout --layout-block ...`: PASS, 1
+  warning (G3-020, no road-name labels in the 60 % layout); G3-025: 69 of 80 corners at the drawn radius, 11 without
+  a drawn arc. Installed (6F26DEEF... -> FF61FEBE...); G3 with each of the 12 packages PASS, 0 warnings.
+- Open: only 35 of the 82 junctions gave corners to the kerb tool (30 %: 118 corners on 55 junctions): the others
+  probably get their corner regions when InfraWorks rebuilds their roads; rerun `--curb-returns` after the user has
+  looked at the junctions. RD-M-01's Grading Limit stands at 5.1 if it was not set back. The base model's three roads
+  ("15 m", "25m" x2) are still in the model.
+
 ### CRS (Vol. 08)
 
 PMC comments on the 30 % package with Parsons' replies (7 sheets). Relevant: Roads CRS row 17 (RA-01 geometry, ER
