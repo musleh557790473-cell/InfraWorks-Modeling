@@ -22,3 +22,28 @@ says what the model uses until Parsons answers. Report = LDIP-RCRC-SAP-03-DN-DES
 | 15 | RA-01 roundabout | The junctions next to RA-01 stand 61-64 m from its centre (junction of RD-M-01 at 61.4 and 64.4 m, of RD-13 at 61.1 m). InfraWorks' roundabout standards need about 48 m of arm before the next junction's body, so RA-01 could not be built as a roundabout in the model. Can the neighbouring junctions move, or the ring change? | Modelled as a plain intersection (deviations D1, D2b) |
 | 16 | Water model vs drawing | The WaterGEMS model PW_CD_Model lies in the potable water corridor (UTL-DWG-10000) for 74 % of its length (15 % in the LV corridor's place), the PWT-DWG-10000 pipes for 96 %. Is the model a schematic of the drawn network? | Both kept; the drawn pipes show the corridor position (corridor-check.md) |
 | 17 | Irrigation position | The irrigation WaterGEMS model is in an irrigation corridor for 42 % of its length and in the MV corridor's place for 38 %; the two-wire control cable in the MV place for 48 %. Which line is right: the corridor plan or the model / cable? | Both kept as issued |
+
+## Status against the 60 % Detailed Design submission (Nov 2026)
+
+Checked on 13-14 Nov 2026 against the 60 % package (`01 Submission Folder 60%`: drawings, hydraulic models, report
+LDIP-RCRC-SAP-03-DN-DES-RPT-00003, CRS sheets of Vol. 08); log `HANDOVER-60.md`. The CRS sheets answer PMC comments,
+not these questions; the answers below come from the 60 % files themselves.
+
+| # | 60 % status | Evidence |
+| --- | --- | --- |
+| 1 | Answered | ROD-MOD-90000-003 converts now (287 471 faces); Parsons' own LandXML `Namar Roads Design Surface.xml` (28 Oct, EPSG 32638) ships in the storm model package and matches it |
+| 2 | Answered | The 60 % baseplan carries 774 plot numbers on 774 plots, none repeated (ROD-10200 baseplan; the layout xref holds no plots any more) |
+| 3 | Open until the alignments are read | ROD-10200 / 10300 hold the centrelines as Civil 3D alignments only (`C3D_Nemar_Aligments_Profiles.dwg`) |
+| 4 | Partly | Blocks: 35 closed `__ROW` + 4 closed by the boundary (39); asphalt and green space not re-checked |
+| 5 | Open | Sewer `Sewage Model-Rev 04`: manhole DC-2 has no usable rim |
+| 6 | Answered | Irrigation model (60 %): no pipe label used twice |
+| 7 | Answered | Irrigation sizes 50 / 75 / 90 / 110 / 160 mm; no 71 mm pipe |
+| 8 | Answered in effect | The 113 water valves of PWT-10000 (60 %) all fall on the network inside the site |
+| 9 | Partly | Telecom: Parsons' TEL-MOD IFC puts the duct axis 0.50 m below the finished road (report §14.5.1: 600 mm trench); LV IFC 0.68 m (as §3.3.3). ICT / security (MIFON) and street lighting: still no depth |
+| 10 | Superseded | No SEC sheets at 60 %: security / smart city / ICT ducts are the ICT-10000 / 10100 sheets (report §14). Open: ICT-10100 repeats 781 of ICT-10000's secondary ducts and draws 125 "Primary Duct" lines against 43 |
+| 11 | Answered | TEL-10100 is the secondary civil network (776 cables on its own layer); TEL-10000 the primary (83 ducts) |
+| 12 | Answered | All street lights and panels of the 60 % model lie on site |
+| 13 | Answered | SLT-MOD-90000-001 holds 312 poles once each (the second copy at 4 cm is the plan symbol) |
+| 14 | To check in the model | Blocks rebuilt from the 60 % layout (39) |
+| 15 | Open | ROD-10900-002 (new, "Roundabout-01 geometry checks") keeps the ring: ICD 40.40 m, island R12.00, ring 7.60 m, same centre. Neighbouring junctions to re-measure on the 60 % alignments |
+| 16, 17 | To re-run | Corridor check against the 60 % corridors and models (`corridor-check.mts`) |

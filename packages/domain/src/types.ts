@@ -92,7 +92,7 @@ export const LayerMapping = z.object({
    * Keep one point where the drawing places this rule's symbol twice on the same spot (within 1 cm):
    * Namar's street lights are arrays of pole inserts, 47 of them laid over another pole (SLT-10000).
    */
-  dedupePoints: z.boolean().optional(),
+  dedupePoints: z.union([z.boolean(), z.number().positive()]).optional(),
   /**
    * Build this rule's areas from separate lines: the faces the lines enclose, as for plots drawn
    * as single LINE segments. `closeGaps` joins line ends that stop short of another line by up to
@@ -898,6 +898,160 @@ export const PARSONS_DN_CORRIDORS_PROFILE: MappingProfile = {
 };
 
 /**
+ * Namar 60 % Detailed Design (Nov 2026, sheets `...-DN-<DISC>-DWG-<nnnnn>-<sss>-00`, report
+ * LDIP-RCRC-SAP-03-DN-DES-RPT-00003): §3.3.3 burial depth to the cable centre 0.65 m LV / 0.80 m MV, §3.3.9.3 MV
+ * duct banks 200 mm, §3.3.12.2.4.1 street lighting ducts 110 mm O.D. uPVC, §6.3.14 water cover >= 1.2 m under
+ * traffic, §14.5.1 telecom trenches 600 mm deep. EXPORTTOAUTOCAD wraps each sheet's design in an
+ * "AecObjExplode_<sheet>_Vport_<n>" block with the xrefs nested inside, and several layers moved: one small
+ * profile per sheet, since bare names such as TEL_HH mean telecom on TEL sheets and ICT on ICT sheets.
+ * Log: scripts/namar/HANDOVER-60.md.
+ */
+const DN60_REPORT = "LDIP-RCRC-SAP-03-DN-DES-RPT-00003";
+const buriedD60 = buriedFor(DN60_REPORT, "§3.3.3");
+const DN60_TEL_DEPTH = {
+  centreM: 0.5,
+  source: `LDIP-RCRC-SAP-03-DN-TEL-MOD-90000-001.ifc: duct axis 0.50 m below the 60 % Roads Surface (1 400 points); ${DN60_REPORT} §14.5.1 trench 600 mm deep`,
+};
+const DN60_WATER_COVER = { coverM: 1.2, source: `${DN60_REPORT} §6.3.14: cover >= 1.2 m under traffic (AICC choice, 11 Nov 2026)` };
+const DN60_IRR_COVER = { coverM: 1.2, source: `${DN60_REPORT} §8.2.2: mainline and secondary lines 1.2 m (NWC)` };
+const drawnPipeD60 = drawnPipeFor("Namar", "IRR-DWG-10000 (60 %)");
+const sheet60 = (id: string, name: string, layers: MappingProfile["layers"]): MappingProfile => ({
+  id: `parsons-dn60-${id}`,
+  name: `Parsons / Namar 60 % ${name}`,
+  team: "Parsons",
+  skipBlocks: DN_LEGENDS,
+  layers,
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+});
+const DMV60 = `${DMV}Xref_Nemar_MV Network_Correct Corr$0$`;
+
+/** LV (ELV-10000-000) and MV (EMV-10000-000). The MV xref binds its cables again inside "…_Correct Corr". */
+export const PARSONS_DN60_POWER_PROFILE = sheet60("power", "LV and MV (ELV / EMV-10000)", [
+  { dwgLayer: `${DLV}E-POWER-CABL*`, ...cable, ...buriedD60(0.65, "LV"), outputLayer: "lv_cables", attributes: netD("Electrical LV") },
+  { dwgLayer: `${DLV}Electrical LV -HC`, ...cable, ...buriedD60(0.65, "LV"), outputLayer: "lv_cables", attributes: netD("Electrical LV", "House Connection") },
+  { dwgLayer: `${DLV}E-POWR-MINI-PILLAR-0`, ...node, explode: true, outputLayer: "lv_pillars", attributes: netD("Electrical LV", "Mini Pillar") },
+  { dwgLayer: `${DLV}E-POWR-MINI-PILLAR-*`, ...node, outputLayer: "lv_pillars", attributes: netD("Electrical LV", "Mini Pillar") },
+  { dwgLayer: `${DLV}*`, infraFeatureClass: "unmapped" },
+  {
+    dwgLayer: `${DMV60}Xref_MV Network$0$MV Cables*`,
+    ...cable,
+    ...buriedD60(0.8, "MV"),
+    size: { fixed: { mm: 200, source: `${DN60_REPORT} §3.3.9.3: MV cables in concrete encased duct banks, 200 mm diameter` } },
+    outputLayer: "mv_cables",
+    attributes: netD("Electrical MV"),
+  },
+  { dwgLayer: `${DMV}DSS`, ...node, outputLayer: "substations", attributes: netD("Electrical MV", "Distribution Substation") },
+  { dwgLayer: `${DMV}RMU`, ...node, outputLayer: "substations", attributes: netD("Electrical MV", "Ring Main Unit") },
+  { dwgLayer: `${DMV}*`, infraFeatureClass: "unmapped" },
+]);
+
+/**
+ * Street lighting from Parsons' SLT-MOD-90000-001 DWG: its sheet SLT-10000-000 binds the network three times
+ * (one exploded viewport each) with the cables on layer 0; the model draws them once, on SL-Namar_CABL (60),
+ * the poles as PRN_PR_SL_SLPL inserts and the panels as 3D_PR_SL_PAN solids.
+ */
+export const PARSONS_DN60_STREETLIGHTING_PROFILE = sheet60("streetlighting", "street lighting (SLT-MOD-90000-001)", [
+  {
+    dwgLayer: "SL-Namar_CABL",
+    ...cable,
+    size: { fixed: { mm: 110, source: `${DN60_REPORT} §3.3.12.2.4.1: street lighting duct banks, 110 mm O.D. uPVC` } },
+    outputLayer: "streetlight_cables",
+    attributes: netD("Street Lighting"),
+  },
+  // each pole twice, 4 cm apart: the 3D block "SL6_ Model" and the plan symbol "SL1 PLAN"
+  { dwgLayer: "PRN_PR_SL_SLPL", infraFeatureClass: "annotation", outputLayer: "street_lights", dedupePoints: 0.1, attributes: netD("Street Lighting", "Street Light") },
+  { dwgLayer: "3D_PR_SL_PAN", ...node, outputLayer: "streetlight_panels", attributes: netD("Street Lighting", "Lighting Panel") },
+]);
+
+/** Telecom primary (TEL-10000-000, block "Ladun Dahiyat Nemar Primary Telecom"), depth from Parsons' IFC. */
+export const PARSONS_DN60_TELECOM_PROFILE = sheet60("telecom", "telecom primary (TEL-10000)", [
+  { dwgLayer: "Primary telecom x", ...cable, fields: { ...cable.fields, ...LINE_DEPTH_COLUMNS }, depth: DN60_TEL_DEPTH, outputLayer: "telecom_ducts", attributes: netD("Telecom", "Primary Duct") },
+  { dwgLayer: "TEL_HH", ...node, outputLayer: "telecom_handholes", attributes: netD("Telecom", "Handhole") },
+]);
+
+/** Telecom secondary civil network (TEL-10100-000): its cables only (the handholes repeat TEL-10000's). */
+export const PARSONS_DN60_TELECOM_SECONDARY_PROFILE = sheet60("telecom-secondary", "telecom secondary (TEL-10100)", [
+  { dwgLayer: "Telecom cable 01", ...cable, fields: { ...cable.fields, ...LINE_DEPTH_COLUMNS }, depth: DN60_TEL_DEPTH, outputLayer: "telecom_ducts_secondary", attributes: netD("Telecom", "Secondary Duct") },
+]);
+
+/**
+ * ICT / smart city / security (ICT-10000-000; report §14: 2 x 7-way 20/16 mm microducts, MIFON in concrete
+ * encased duct banks, no depth): on the terrain at the display size, as the 30 % security network.
+ */
+export const PARSONS_DN60_ICT_PROFILE = sheet60("ict", "ICT and smart city ducts (ICT-10000)", [
+  { dwgLayer: "Primary Duct", ...cable, outputLayer: "ict_ducts", attributes: netD("ICT", "Primary Duct") },
+  { dwgLayer: "Smart Primary Duct", ...cable, outputLayer: "ict_ducts", attributes: netD("ICT", "Smart Primary Duct") },
+  { dwgLayer: "Seconday Duct", ...cable, outputLayer: "ict_ducts", attributes: netD("ICT", "Secondary Duct") },
+  { dwgLayer: "Primary Security_OM", ...cable, outputLayer: "ict_ducts", attributes: netD("ICT", "Security Primary Duct") },
+  { dwgLayer: "TEL_HH", ...node, outputLayer: "ict_handholes", attributes: netD("ICT", "Handhole") },
+]);
+
+/**
+ * Water and irrigation fittings and pipes as drawn (PWT-10000-000 xref "Ladun Dahiyat Namar Potable Water";
+ * IRR-10000-000 on bare CI-Ss_55_70_42 layers). Hydrants come from the WaterGEMS model (75), not the sheet.
+ */
+const DPW60 = "Ladun Dahiyat Namar Potable Water$0$";
+export const PARSONS_DN60_FITTINGS_PROFILE = sheet60("fittings", "water and irrigation fittings, pipes as drawn (PWT / IRR-10000)", [
+  { dwgLayer: `${DPW60}C-WATR-APPT`, ...node, outputLayer: "water_valves", attributes: netD("Water", "Valve") },
+  { dwgLayer: `${DPW60}C-PW-AIR VALVE`, ...node, outputLayer: "water_valves", attributes: netD("Water", "Air Valve") },
+  { dwgLayer: `${DPW60}C-STRM-STRC`, ...node, outputLayer: "water_valves", attributes: netD("Water", "Washout Valve") },
+  { dwgLayer: `${DPW60}CI-Ss_55_70_95_50-M-PW_Potable Distribution *`, ...drawnPipeD60("Water", "water_pipes_dwg", String.raw`Distribution (\d+)`, DN60_WATER_COVER) },
+  { dwgLayer: "CI-Ss_55_70_42-M-IR_Gate Valve", ...node, outputLayer: "irrigation_valves", attributes: netD("Irrigation", "Gate Valve") },
+  { dwgLayer: "CI-Ss_55_70_42-P-IR_Wash out Chamber", ...node, outputLayer: "irrigation_valves", attributes: netD("Irrigation", "Washout Chamber") },
+  { dwgLayer: "Pull-box", ...node, outputLayer: "irrigation_structures_dwg", attributes: netD("Irrigation", "Pull Box") },
+  { dwgLayer: "XREF SUBMAIN$0$LI-EQPM-DRIP", ...node, asPoint: true, outputLayer: "irrigation_structures_dwg", attributes: netD("Irrigation", "Quick Coupling") },
+  { dwgLayer: "NHC CAD$0$Xref Irrigation Network$0$IR-ELEC CABLE", ...cable, outputLayer: "irrigation_control_cable", attributes: netD("Irrigation", "Two-Wire Decoder Cable") },
+  { dwgLayer: "CI-Ss_55_70_42-P-IR_Irrigation Distribution *", ...drawnPipeD60("Irrigation", "irrigation_pipes_dwg", String.raw`Distribution (\d+)$`, DN60_IRR_COVER) },
+]);
+
+/**
+ * Plots, blocks and road reserve from ROD-10200-000 (60 %). The layout xref no longer holds plots, and its
+ * centrelines are Civil 3D alignments (not in the DXF): plots are the baseplan's MP-PLT-LIN lines (1 075 LINEs
+ * + 80 ARCs) made into areas, numbered by MP-PLT-TXT; blocks are the closed __ROW lines, plus the faces the
+ * project boundary (baseplan MP-PRJ-BND) closes where they hold plots, unless they hold a road edge.
+ */
+const BP60 = "Ladun Dahiyat Namar Baseplan$0$";
+const RL60 = "Xref Road Layout Dahiyat Nemar$0$";
+export const PARSONS_DN60_AREAS_PROFILE: MappingProfile = {
+  id: "parsons-dn60-areas",
+  name: "Parsons / Namar 60 % plots, blocks and road reserve (ROD-10200)",
+  team: "Parsons",
+  layers: [
+    { dwgLayer: `${BP60}MP-PLT-LIN`, infraFeatureClass: "parcel", outputLayer: "plots", joinKeyAttribute: "parcel_id", polygonize: { closeGaps: 0.5 } },
+    { dwgLayer: `${RL60}__ROW`, infraFeatureClass: "coverage", outputLayer: "blocks", polygonize: { closeGaps: 0.5, with: [`${BP60}MP-PRJ-BND`], keep: [`${BP60}MP-PLT-LIN`], avoid: [`${RL60}Road edge`] } },
+    { dwgLayer: `${BP60}MP-PRJ-BND`, infraFeatureClass: "coverage", outputLayer: "road_reserve", subtract: [`${RL60}__ROW`, `${BP60}MP-PLT-LIN`] },
+  ],
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({ textLayers: ["MP-PLT-TXT"], pattern: "^([A-Z]{1,2}-)?[0-9]{1,4}$" }),
+};
+
+/** Utility corridors (UTL-10000-000): the 30 % lines, now bound as "Ladun_Dahiyat Nemar_Utilities Corridor". */
+const dn60Corridor = corridorFor("Ladun_Dahiyat Nemar_Utilities Corridor$0$", "UTL-DWG-10000 (60 %)");
+export const PARSONS_DN60_CORRIDORS_PROFILE: MappingProfile = {
+  id: "parsons-dn60-corridors",
+  name: "Parsons / Namar 60 % utility corridors (UTL-10000)",
+  team: "Parsons",
+  reportJoins: [],
+  assetKeys: AssetKeyConfig.parse({}),
+  layers: [
+    dn60Corridor("-01- Storm Water", "Storm", "storm", "ACI 170 blue 0,0,255"),
+    dn60Corridor("-01- Storm CB", "Storm Catch Basins", "storm_cb", "ACI 160 blue 0,63,255"),
+    dn60Corridor("-02- Sewerage", "Sewer", "sewer", "ACI 210 magenta 255,0,255"),
+    dn60Corridor("-02-Sewer FM", "Sewer Force Main", "sewer_fm", "ACI 222 dark crimson 165,0,82"),
+    dn60Corridor("-04- Irrigation", "Irrigation", "irrigation", "ACI 90 green 0,255,0"),
+    dn60Corridor("-04-Irrigation Secondary", "Irrigation Secondary", "irrigation_secondary", "ACI 94 dark green 0,153,0"),
+    dn60Corridor("-05- Potable Water", "Water", "water", "ACI 140 sky blue 0,191,255"),
+    dn60Corridor("07- Telecom", "Telecom", "telecom", "olive green 124,165,0"),
+    dn60Corridor("-09- Electrical MV", "Electrical MV", "mv", "ACI 21 salmon 255,159,127"),
+    dn60Corridor("-10- Electrical LV", "Electrical LV", "lv", "ACI 44 dark gold 153,115,0"),
+    dn60Corridor("-15- House Connection", "House Connection", "house_connection", "ACI 242 crimson 204,0,51"),
+    dn60Corridor("-00-Tree_SL", "Trees and Street Lighting", "trees_sl", "ACI 8 grey 128,128,128"),
+    dn60Corridor("-00-Tree_IRS", "Trees and Irrigation", "trees_irs", "ACI 81 pale green 191,255,127"),
+  ],
+};
+
+/**
  * A Parsons district's road layout as its sheets bind it: one xref holding the layout (centrelines,
  * right of way, asphalt, project boundary, plots) and the road names in another (MTEXT on
  * "0-Alignment Name"). Layer names change per district, so they are parameters. Every rule names its
@@ -985,4 +1139,4 @@ export const PARSONS_DN_ROADS_PROFILE = parsonsDistrictRoadsProfile(NAMAR_LAYOUT
 export const PARSONS_DN_PLOTS_PROFILE = parsonsDistrictPlotsProfile(NAMAR_LAYOUT);
 
 /** Profiles shipped with the tool: listed first, and never overwritten or deleted by a save. */
-export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_AREAS_PROFILE, PARSONS_NRJS_CORRIDORS_PROFILE, PARSONS_DN_ROADS_PROFILE, PARSONS_DN_PLOTS_PROFILE, PARSONS_DN_WET_PROFILE, PARSONS_DN_DRY_PROFILE, PARSONS_DN_SECURITY_SECONDARY_PROFILE, PARSONS_DN_CORRIDORS_PROFILE];
+export const BUILTIN_PROFILES: MappingProfile[] = [DEFAULT_MAPPING_PROFILE, PARSONS_LDIP_ROADS_PROFILE, PARSONS_LDIP_WET_PROFILE, PARSONS_LDIP_DRY_PROFILE, PARSONS_NRJS_WET_PROFILE, PARSONS_NRJS_DRY_PROFILE, PARSONS_NRJS_AREAS_PROFILE, PARSONS_NRJS_CORRIDORS_PROFILE, PARSONS_DN_ROADS_PROFILE, PARSONS_DN_PLOTS_PROFILE, PARSONS_DN_WET_PROFILE, PARSONS_DN_DRY_PROFILE, PARSONS_DN_SECURITY_SECONDARY_PROFILE, PARSONS_DN_CORRIDORS_PROFILE, PARSONS_DN60_POWER_PROFILE, PARSONS_DN60_STREETLIGHTING_PROFILE, PARSONS_DN60_TELECOM_PROFILE, PARSONS_DN60_TELECOM_SECONDARY_PROFILE, PARSONS_DN60_ICT_PROFILE, PARSONS_DN60_FITTINGS_PROFILE, PARSONS_DN60_AREAS_PROFILE, PARSONS_DN60_CORRIDORS_PROFILE];

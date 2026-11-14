@@ -49,6 +49,15 @@ test("a SewerGEMS model: pipes and manholes in metres, deleted pipes left out, s
   assert.ok(net.notes.some((n) => /1 node\(s\) have no usable rim level/.test(n)));
 });
 
+test("a storm SewerGEMS model (--utility Storm) ships storm_pipes / storm_manholes, as storm packages from drawings", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "iw-storm-")), "Nemar-SWD.stsw.sqlite");
+  makeSewerModel(path);
+  const net = await readHydraulicModel(path, "Nemar-SWD.stsw.sqlite", { utility: "Storm" });
+  assert.equal(net.features.filter((f) => f.outputLayer === "storm_pipes").length, 2);
+  assert.equal(net.features.filter((f) => f.outputLayer === "storm_manholes").length, 4);
+  assert.ok(net.features.every((f) => f.attributes.network === "Storm - Nemar-SWD"));
+});
+
 test("a SewerGEMS model builds a package: Pipelines and Pipeline Connectors, with the InfraWorks columns to fill", async () => {
   const dir = mkdtempSync(join(tmpdir(), "iw-sewer-"));
   const path = join(dir, "Al Qairawan.stsw.sqlite");

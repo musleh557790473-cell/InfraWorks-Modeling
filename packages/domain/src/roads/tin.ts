@@ -12,24 +12,73 @@ export type Tri = [[number, number, number], [number, number, number], [number, 
 
 const num = (s: string | undefined) => Number(s);
 
-/** 3DFACEs of a DXF's ENTITIES section (a quad with a 4th corner off the 3rd gives two triangles). */
+/**
+ * 3DFACEs of a DXF's ENTITIES section (a quad with a 4th corner off the 3rd gives two triangles).
+ * When ENTITIES holds none, the faces of the blocks inserted there, placed by each INSERT (position,
+ * scale, rotation about Z): the 60 % Namar surface models (ROD-MOD-90000-001..003, Nov 2026) come out
+ * of EXPORTTOAUTOCAD with the TIN inside an "AecObjExplode_<drawing>_Vport_<n>" block.
+ */
 export function readDxfFaces(text: string): Tri[] {
   const L = text.split(/\r?\n/);
-  const tris: Tri[] = [];
-  let inEnt = false;
-  for (let i = 0; i + 1 < L.length; i += 2) {
-    const c = L[i]!.trim(), v = L[i + 1]!.trim();
-    if (c === "2" && L[i - 1]?.trim() === "SECTION") inEnt = v === "ENTITIES";
-    if (!inEnt || c !== "0" || v !== "3DFACE") continue;
-    const p: Record<string, number> = {};
+  const top: Tri[] = [];
+  const blocks = new Map<string, { base: [number, number, number]; tris: Tri[] }>();
+  const inserts: { name: string; at: [number, number, number]; scale: [number, number, number]; rot: number }[] = [];
+  let sec = "";
+  let block: { base: [number, number, number]; tris: Tri[] } | undefined;
+  const group = (i: number) => {
+    const p: Record<string, string> = {};
     for (let j = i + 2; j + 1 < L.length; j += 2) {
       const cc = L[j]!.trim();
       if (cc === "0") break;
-      p[cc] = num(L[j + 1]);
+      if (!(cc in p)) p[cc] = L[j + 1]!.trim();
     }
-    const v4 = [0, 1, 2, 3].map((k) => [p[`1${k}`]!, p[`2${k}`]!, p[`3${k}`]!] as [number, number, number]);
-    tris.push([v4[0]!, v4[1]!, v4[2]!]);
-    if (!v4[3]!.every((x, k) => Math.abs(x - v4[2]![k]!) < 1e-9)) tris.push([v4[0]!, v4[2]!, v4[3]!]);
+    return p;
+  };
+  for (let i = 0; i + 1 < L.length; i += 2) {
+    const c = L[i]!.trim(), v = L[i + 1]!.trim();
+    if (c === "2" && L[i - 1]?.trim() === "SECTION") sec = v;
+    if (c !== "0" || (sec !== "ENTITIES" && sec !== "BLOCKS")) continue;
+    if (sec === "BLOCKS" && v === "BLOCK") {
+      const p = group(i);
+      block = { base: [num(p["10"] ?? "0"), num(p["20"] ?? "0"), num(p["30"] ?? "0")], tris: [] };
+      blocks.set(p["2"] ?? "", block);
+      continue;
+    }
+    if (sec === "BLOCKS" && v === "ENDBLK") {
+      block = undefined;
+      continue;
+    }
+    if (sec === "ENTITIES" && v === "INSERT") {
+      const p = group(i);
+      inserts.push({
+        name: p["2"] ?? "",
+        at: [num(p["10"] ?? "0"), num(p["20"] ?? "0"), num(p["30"] ?? "0")],
+        scale: [num(p["41"] ?? "1"), num(p["42"] ?? "1"), num(p["43"] ?? "1")],
+        rot: (num(p["50"] ?? "0") * Math.PI) / 180,
+      });
+      continue;
+    }
+    if (v !== "3DFACE") continue;
+    const into = sec === "ENTITIES" ? top : block?.tris;
+    if (!into) continue;
+    const p = group(i);
+    const v4 = [0, 1, 2, 3].map((k) => [num(p[`1${k}`]), num(p[`2${k}`]), num(p[`3${k}`])] as [number, number, number]);
+    into.push([v4[0]!, v4[1]!, v4[2]!]);
+    if (!v4[3]!.every((x, k) => Math.abs(x - v4[2]![k]!) < 1e-9)) into.push([v4[0]!, v4[2]!, v4[3]!]);
+  }
+  let tris = top;
+  if (!tris.length) {
+    tris = [];
+    for (const ins of inserts) {
+      const b = blocks.get(ins.name);
+      if (!b?.tris.length) continue;
+      const cos = Math.cos(ins.rot), sin = Math.sin(ins.rot);
+      const place = (q: [number, number, number]): [number, number, number] => {
+        const x = (q[0] - b.base[0]) * ins.scale[0], y = (q[1] - b.base[1]) * ins.scale[1];
+        return [ins.at[0] + x * cos - y * sin, ins.at[1] + x * sin + y * cos, ins.at[2] + (q[2] - b.base[2]) * ins.scale[2]];
+      };
+      for (const t of b.tris) tris.push([place(t[0]), place(t[1]), place(t[2])]);
+    }
   }
   return tris.filter((t) => t.every((q) => q.every(Number.isFinite)));
 }

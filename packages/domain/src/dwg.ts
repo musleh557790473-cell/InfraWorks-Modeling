@@ -998,16 +998,27 @@ export function parseDxf(text: string, filename: string, profile: MappingProfile
   };
 }
 
-/** Points of rules with `dedupePoints` that repeat an earlier point of the same output layer (to 1 cm) are dropped. */
+/**
+ * Points of rules with `dedupePoints` that repeat an earlier point of the same output layer are dropped:
+ * within 1 cm for `true`, within the given metres otherwise (Namar 60 % street lights: a 3D model block and a
+ * plan symbol per pole, 4 cm apart).
+ */
 function dedupeRulePoints(r: { features: DomainFeature[]; notes: string[] }, profile: MappingProfile): { features: DomainFeature[]; notes: string[] } {
   if (!profile.layers.some((l) => l.dedupePoints)) return r;
-  const seen = new Set<string>();
+  const seen = new Map<string, number[][]>();
   const dropped = new Map<string, number>();
   const features = r.features.filter((f) => {
-    if (f.geometry.type !== "Point" || !findLayerMapping(profile, f.provenance.sourceLayer ?? "")?.dedupePoints) return true;
-    const [x, y] = f.geometry.coordinates as number[];
-    const k = `${f.outputLayer ?? ""}|${Math.round(x! * 100)}|${Math.round(y! * 100)}`;
-    if (!seen.has(k)) { seen.add(k); return true; }
+    const rule = f.geometry.type === "Point" ? findLayerMapping(profile, f.provenance.sourceLayer ?? "") : undefined;
+    if (!rule?.dedupePoints) return true;
+    const tol = typeof rule.dedupePoints === "number" ? rule.dedupePoints : 0.01;
+    const [x, y] = f.geometry.coordinates as [number, number];
+    const cx = Math.floor(x / tol), cy = Math.floor(y / tol);
+    const near = [-1, 0, 1].some((dx) => [-1, 0, 1].some((dy) => (seen.get(`${f.outputLayer ?? ""}|${cx + dx}|${cy + dy}`) ?? []).some((p) => Math.hypot(p[0]! - x, p[1]! - y) <= tol)));
+    if (!near) {
+      const k = `${f.outputLayer ?? ""}|${cx}|${cy}`;
+      seen.set(k, [...(seen.get(k) ?? []), [x, y]]);
+      return true;
+    }
     const l = f.outputLayer ?? f.provenance.sourceLayer ?? "";
     dropped.set(l, (dropped.get(l) ?? 0) + 1);
     return false;

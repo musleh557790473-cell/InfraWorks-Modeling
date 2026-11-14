@@ -19,6 +19,25 @@ test("readDxfFaces: 3DFACE quads split in two, triangles kept whole", () => {
   assert.deepEqual(t[2], [[10, 0, 101], [20, 0, 102], [10, 10, 101]]);
 });
 
+test("readDxfFaces: a TIN inside an exploded viewport block (Namar 60 % ROD-MOD) is placed by its INSERT", () => {
+  const blockDxf = [
+    "0", "SECTION", "2", "BLOCKS",
+    "0", "BLOCK", "8", "0", "2", "AecObjExplode_X_Vport_72", "70", "0", "10", "0", "20", "0", "30", "0",
+    ...face([[0, 0, 100], [10, 0, 101], [10, 10, 101], [10, 10, 101]]),
+    "0", "ENDBLK",
+    "0", "BLOCK", "8", "0", "2", "Logo", "10", "0", "20", "0", "30", "0",
+    "0", "ENDBLK",
+    "0", "ENDSEC",
+    "0", "SECTION", "2", "ENTITIES",
+    "0", "INSERT", "8", "0", "2", "AecObjExplode_X_Vport_72", "10", "657000", "20", "2714000", "30", "0", "50", "90",
+    "0", "INSERT", "8", "0", "2", "Logo", "10", "5", "20", "5", "30", "0",
+    "0", "ENDSEC", "0", "EOF",
+  ].join("\n");
+  const t = readDxfFaces(blockDxf);
+  assert.equal(t.length, 1);
+  assert.deepEqual(t[0]!.map((q) => q.map((v) => Math.round(v * 1000) / 1000)), [[657000, 2714000, 100], [657000, 2714010, 101], [656990, 2714010, 101]], "rotated 90 degrees and moved");
+});
+
 // An IFC thin solid as Civil 3D exports a surface (Namar MOD-00003): top face up, a copy 1 mm lower
 // facing down, and an edge wall.
 const ifc = [
