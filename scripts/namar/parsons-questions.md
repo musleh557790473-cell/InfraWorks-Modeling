@@ -35,7 +35,7 @@ not these questions; the answers below come from the 60 % files themselves.
 | 1 | Answered | ROD-MOD-90000-003 converts now (287 471 faces); Parsons' own LandXML `Namar Roads Design Surface.xml` (28 Oct, EPSG 32638) ships in the storm model package and matches it |
 | 2 | Answered | The 60 % baseplan carries 774 plot numbers on 774 plots, none repeated (ROD-10200 baseplan; the layout xref holds no plots any more) |
 | 3 | Answered in effect | `C3D_Nemar_Aligments_Profiles.dwg` (60 %) holds 42 road alignments, every one named (RA-01, RD-01..38, RD-M-01..03); the three unnamed pieces remain only as leftovers on `_CL` in the layout xref (2 polylines, 1 line) |
-| 4 | Partly | Blocks: 35 closed `__ROW` + 4 closed by the boundary (39); asphalt and green space not re-checked |
+| 4 | Answered in effect | Blocks: 35 closed `__ROW` + 4 closed by the boundary (39). The 60 % ROD-10200 layout xref no longer carries the asphalt (`G-ASPHALT ROAD`) or green space (`GR`) layers at all (checked 15 Nov), so nothing open is left to close; the road surface itself comes from the component roads |
 | 5 | Open | Sewer `Sewage Model-Rev 04`: manhole DC-2 has no usable rim |
 | 6 | Answered | Irrigation model (60 %): no pipe label used twice |
 | 7 | Answered | Irrigation sizes 50 / 75 / 90 / 110 / 160 mm; no 71 mm pipe |
@@ -45,7 +45,7 @@ not these questions; the answers below come from the 60 % files themselves.
 | 11 | Answered | TEL-10100 is the secondary civil network (776 cables on its own layer); TEL-10000 the primary (83 ducts) |
 | 12 | Answered | All street lights and panels of the 60 % model lie on site |
 | 13 | Answered | SLT-MOD-90000-001 holds 312 poles once each (the second copy at 4 cm is the plan symbol) |
-| 14 | To check in the model | Blocks rebuilt from the 60 % layout (39) |
+| 14 | Open, changed | Checked 15 Nov against the 39 blocks built from the 60 % layout: 64 of the 774 numbered plots (and 6 unnumbered faces) lie in no block, in groups around E 657 200-657 300 N 2 714 300-2 714 500 and E 657 400-657 800 N 2 714 100-2 714 300 (the 30 % gap at E 657 556-657 621 is among them). Please add the `__ROW` lines that close these blocks |
 | 15 | Open | ROD-10900-002 (new, "Roundabout-01 geometry checks") keeps the ring: ICD 40.40 m, island R12.00, ring 7.60 m, same centre. On the 60 % alignments the next junctions stand 63.8 m (RD-M-03 on RD-M-01) and 61.4 m (RD-33 on RD-M-02) from the centre; RD-13 has none before RD-15 at 123.2 m (30 %: 61.1 m) and RD-32 none within 150 m. RD-M-02's arm is still 0.6 m short of InfraWorks' Urban Compact (47.0 against 47.6 m) |
 | 16 | Open, wider gap | `corridor-check-60.md`: PWT-10000 water pipes 94 % in the water corridor, the WaterGEMS model PW_Model-Rev 04 only 34 % (37 % in the Trees and Street Lighting place, 13 % in irrigation's) |
 | 17 | Open | Irrigation as drawn 90 % in its corridors; the WaterGEMS model 36 % (30 % in the LV place); the two-wire control cable 3 % (LV 32 %, Trees and Street Lighting 25 %) |

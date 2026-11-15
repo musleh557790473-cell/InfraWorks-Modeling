@@ -318,6 +318,28 @@ telecom 64 % and ICT 61 % (much of the rest in the house-connection place). Pars
 - The UI Automation helper (`uia.txt`: `RunJs`, `ImportPkg`) lived in the session scratchpad and is not in the
   repository; the method is described above.
 
+### Junctions rebuilt, kerb returns, install on AYNLAP1201 (15 Nov 2026)
+
+- Model unpacked to `C:\IW\Namar 60` (04A5D8E8..., integrity ok); the 13 Nov base copy renamed `C:\IW\Namar 60 (old
+  base)` (64F8942C...; it still holds the template definition `82f93c74-...`, CONSTRAINED_DEFINITIONS ID 2430: use
+  `--template-from "C:\IW\Namar 60 (old base)\Namar 60.sqlite"` for any later `model:roads` write here).
+- The user made the Grading Limit edits (5.0 -> 5.1 -> 5.0) on RD-M-01, RD-M-03, RD-02, RD-01, RD-05 and the nine tied
+  roads and closed the model (AA3D614C...). The file now holds 52 intersections (was 34), 116 corners, no roundabout.
+- **This laptop's 10200 DXF** (`C:\Temp\dxf\namar60\sheets\...10200-000-00.dxf`, direct DXFOUT) names the layout block
+  `Xref Road Layout Dahiyat Nemar` (no `_1`; Musleh's EXPORTTOAUTOCAD copy renamed it). With `_1` the block reads as
+  empty: G3-025 then reports every corner "without a drawn arc" and the layout checks pass on nothing. Use the name
+  without `_1` here.
+- `model:intersections --curb-returns <10200> --layout-block "Xref Road Layout Dahiyat Nemar"` on a scratchpad copy
+  (dry first): 116 corners on 52 junctions; 33 set (10 m x28, 12 m x4, 20.2 m), 64 already at the drawn value (kept
+  through the rebuild, MANUALLY_CHANGED), 18 without a drawn arc, 1 ambiguous (junction 10: 19.1 m taken, 15 also
+  drawn). G3 `--layout`: PASS, 1 warning (G3-020); G3-025 98 of 116 at the drawn radius. G3 with each of the 12
+  packages PASS, 0 warnings; integrity ok; working file unchanged and no `.lock`: installed (AA3D614C... -> 2E5D0969...).
+- Pits, in the file: no junction body or grading row (`PRIMITIVES`, `TERRAIN_OPERATIONS`, 3 370 rows) goes below
+  740 m (the pits went down to 400-650 m); junction centres lie at 756-779 m. No further `--tie-ends` needed; D3 /
+  question 18 unchanged (nine ends tied). To be confirmed on the user's screenshots.
+- Questions 4 (answered in effect: no asphalt / green layers in the 60 % layout) and 14 (still open: 64 numbered plots
+  in no block) updated. Crossfall (RD-13 / RD-19 left, RD-M crowned, 36 right) still to be seen in InfraWorks.
+
 ### CRS (Vol. 08)
 
 PMC comments on the 30 % package with Parsons' replies (7 sheets). Relevant: Roads CRS row 17 (RA-01 geometry, ER

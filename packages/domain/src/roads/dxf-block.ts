@@ -113,10 +113,36 @@ function readModelSpace(text: string): DxfEnt[] {
   return out;
 }
 
-function readOneBlock(text: string, block: string): DxfEnt[] {
+/** Names of every BLOCK in the BLOCKS section (L: trimmed lines, s0..e0 the section). */
+function blockNames(L: string[], s0: number, e0: number): Set<string> {
+  const names = new Set<string>();
+  for (let i = s0 + 1; i < e0; i += 2) {
+    if (L[i] !== "0" || L[i + 1] !== "BLOCK") continue;
+    for (let j = i + 2; j < e0 && L[j] !== "0"; j += 2) if (L[j] === "2") { names.add(L[j + 1]!); break; }
+  }
+  return names;
+}
+
+/**
+ * The block a name means in this DXF. EXPORTTOAUTOCAD may rename a bound xref with a "_<n>" suffix and a
+ * direct DXFOUT does not ("Xref Road Layout Dahiyat Nemar_1" on one laptop, "... Nemar" on the other, Namar
+ * 60 %, 15 Nov 2026): the exact name wins, else the one block that differs only by that suffix. A name that
+ * matches nothing is an error, never an empty block (checks on an empty layout "pass" on nothing).
+ */
+export function resolveBlockName(names: ReadonlySet<string>, block: string): string {
+  if (names.has(block)) return block;
+  const base = block.replace(/_\d+$/, "");
+  const alike = [...names].filter((n) => n.replace(/_\d+$/, "") === base);
+  if (alike.length === 1) return alike[0]!;
+  const near = [...names].filter((n) => n.toLowerCase().includes(base.toLowerCase().split(/\s+/).slice(0, 3).join(" "))).slice(0, 8);
+  throw new Error(`block "${block}" is not in the DXF${alike.length > 1 ? ` (several match: ${alike.join(", ")})` : ""}${near.length ? `; blocks like it: ${near.join(", ")}` : ""}`);
+}
+
+function readOneBlock(text: string, wanted: string): DxfEnt[] {
   const L = text.split(/\r?\n/).map((x) => x.trim());
   const s0 = L.indexOf("BLOCKS"), e0 = L.indexOf("ENTITIES");
   if (s0 < 0 || e0 < 0) throw new Error("not a DXF with BLOCKS and ENTITIES sections");
+  const block = resolveBlockName(blockNames(L, s0, e0), wanted);
   const out: DxfEnt[] = [];
   let blk: string | null = null;
   for (let i = s0 + 1; i < e0; i += 2) {

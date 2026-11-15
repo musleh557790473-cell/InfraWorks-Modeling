@@ -21,6 +21,15 @@ test("DXF block reader keeps bulges per vertex and drops the xref layer prefix",
   assert.deepEqual(e!.bulge, [0.5, 0]);
 });
 
+test("DXF block reader accepts the xref name with or without AutoCAD's _<n> suffix, and refuses a missing one (Namar 60 %)", () => {
+  const dxf = (name: string) => ["0", "SECTION", "2", "BLOCKS", "0", "BLOCK", "2", name, "0", "LWPOLYLINE", "8", `${name}$0$__Curb`, "10", "0", "20", "0", "10", "10", "20", "0",
+    "0", "ENDBLK", "0", "ENDSEC", "0", "SECTION", "2", "ENTITIES", "0", "ENDSEC", "0", "EOF"].join("\n");
+  // direct DXFOUT (AYNLAP1201) keeps the name; EXPORTTOAUTOCAD (Musleh) renamed it with _1
+  assert.equal(readDxfBlock(dxf("Xref Road Layout Dahiyat Nemar"), "Xref Road Layout Dahiyat Nemar_1").length, 1);
+  assert.equal(readDxfBlock(dxf("Xref Road Layout Dahiyat Nemar_1"), "Xref Road Layout Dahiyat Nemar").length, 1);
+  assert.throws(() => readDxfBlock(dxf("Xref Road Layout Dahiyat Nemar"), "Xref Road Layout Al Qairawan"), /not in the DXF/);
+});
+
 test("trimTo cuts an arc at the profile end (R.0.D.5: plan 0+416.889, profile 0+375)", () => {
   const half: Seg[] = [{ a: [0, 0], b: [20, 0], bulge: 1 }]; // half circle, radius 10, length 10*pi
   const t = trimTo(half, 10);
