@@ -339,6 +339,10 @@ telecom 64 % and ICT 61 % (much of the rest in the house-connection place). Pars
   question 18 unchanged (nine ends tied). To be confirmed on the user's screenshots.
 - Questions 4 (answered in effect: no asphalt / green layers in the 60 % layout) and 14 (still open: 64 numbered plots
   in no block) updated. Crossfall (RD-13 / RD-19 left, RD-M crowned, 36 right) still to be seen in InfraWorks.
+- User's screenshots after the install (6): every road and junction built, kerbs and plots in place, no pits, no
+  "Intersection not supported", no walls at the site edge. One fault: a staggered crossing on a divided road shows a
+  stepped fan of grading slivers between its two junction bodies (location to be given by the user; candidates are
+  the double-centre junctions 15, 19, 27, 82).
 
 ### CRS (Vol. 08)
 
