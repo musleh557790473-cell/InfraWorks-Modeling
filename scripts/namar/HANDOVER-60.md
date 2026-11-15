@@ -305,6 +305,19 @@ telecom 64 % and ICT 61 % (much of the rest in the house-connection place). Pars
   tied roads); then rerun `--curb-returns` and G3 `--layout`. The template road "15 m" is gone: a later `model:roads`
   write needs `--template-from "C:\IW\backup\Namar 60_20261114_205041\Namar 60.sqlite"`.
 
+### Hand-over to AYNLAP1201 (15 Nov 2026)
+
+- The working model, closed and unchanged since the last install (sqlite 04A5D8E8...), is packed as
+  `DATA_DIR\models\Namar60-model-04A5D8E8.zip` (55 MB, 3 138 entries, zip hash 65FEE71B...; made with `tar -a -c`).
+  On AYNLAP1201: delete or rename the old `C:\IW\Namar 60` there (the untouched base copy of 13 Nov), then
+  `tar -x -f <zip> -C C:\IW`, check the sqlite hash, and work there. **After that the copy on laptop `Musleh` is not to
+  be used.** The Grading Limit edits asked of the user (below) were not done yet.
+- Only on laptop `Musleh`: `C:\Temp\dxf\namar60\LDIP-RCRC-SAP-03-DN-ROD-DWG-10200-000-00.dxf` (AutoCAD 2027,
+  EXPORTTOAUTOCAD worked). AYNLAP1201 has its own 10200 DXF (direct DXFOUT, 13 Nov) in the same folder: its counts
+  differ slightly (`__ROW` 44, kerbs 143), so rerun `--curb-returns --dry` there before trusting the corner numbers.
+- The UI Automation helper (`uia.txt`: `RunJs`, `ImportPkg`) lived in the session scratchpad and is not in the
+  repository; the method is described above.
+
 ### CRS (Vol. 08)
 
 PMC comments on the 30 % package with Parsons' replies (7 sheets). Relevant: Roads CRS row 17 (RA-01 geometry, ER
