@@ -17,6 +17,7 @@ import { missingDrawnRoads } from "./merge.js";
  *   G3-023 roundabout type and ROUNDABOUTS row agree on every junction
  *   G3-024 roundabout arms are built (a blend point offset and no failed status)
  *   G3-025 kerb returns are the drawn radii (D8)
+ *   G3-027 every arm of a built intersection has a blend point (an unbuilt arm leaves grading slivers)
  *   G3-026 every road reaching a roundabout centre has an arm there (RA-3 lost its R.0.D.11 arm when a
  *          Grading Limit edit on R.9.G.5 cascaded through R.0.D.12 / R.0.D.15, 9 Nov 2026)
  */
@@ -110,6 +111,17 @@ export function roadModelFindings(db: DatabaseSync, layout: readonly DxfEnt[], o
   out.push(arms.length
     ? f("G3-024", "Roundabout arms built", "warning", `${arms.length} roundabout arm(s) not built: ${arms.map((a) => `junction ${a.id} arm ${a.ix ?? "?"} (offset ${a.o ?? "null"}, status ${a.st ?? "null"})`).join("; ")}`)
     : f("G3-024", "Roundabout arms built", "info", "Every roundabout arm has a blend point and a clean status."));
+
+  /* G3-027 intersection arms built: in a junction InfraWorks has built (some arm has a blend point), an arm
+     without one was not built and leaves a fan of grading slivers (Namar 60 %, junction 81 / RD-32, 15 Nov 2026).
+     A junction with no blend point at all has not been built yet (written in the file): not reported. */
+  const halfBuilt = db.prepare(`select i.ID id, a.FK_ASSET_GUID g from INTERSECTION_ARMS a join INTERSECTIONS i on i.GUID = a.FK_PARENT_GUID
+    where i.INTERSECTION_TYPE = 0 and (a.BLEND_POINT_ENTRY_OFFSET is null or a.BLEND_POINT_ENTRY_OFFSET <= 0)
+      and exists (select 1 from INTERSECTION_ARMS b where b.FK_PARENT_GUID = i.GUID and b.BLEND_POINT_ENTRY_OFFSET > 0) order by i.ID`).all() as { id: number; g: string }[];
+  const roadOf = (g: string) => (db.prepare("select NAME n from ROADS where FK_PARENT_GUID = ? and NAME is not null").get(g) as { n: string } | undefined)?.n ?? g;
+  out.push(halfBuilt.length
+    ? f("G3-027", "Intersection arms built", "warning", `${halfBuilt.length} arm(s) of built intersections without a blend point (rebuild that road: Grading Limit edit): ${halfBuilt.map((a) => `junction ${a.id} ${roadOf(a.g)}`).join("; ")}`)
+    : f("G3-027", "Intersection arms built", "info", "Every arm of a built intersection has a blend point."));
 
   /* G3-025 kerb returns as drawn */
   if (has("INTERSECTION_REGIONS")) {
