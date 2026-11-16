@@ -347,12 +347,12 @@ test("a join column that does not exist fails with the real column names", async
 test("team profiles are saved, listed after the built-in ones, and built-in profiles cannot be overwritten", () => {
   const store = createFileStore(tmp());
   store.saveProfile({ ...DEFAULT_MAPPING_PROFILE, id: "parsons", name: "Parsons", team: "Parsons" });
-  assert.deepEqual(store.listProfiles().map((p) => p.id), ["ldip-default", "parsons-ldip-roads", "parsons-ldip-wet-utilities", "parsons-ldip-dry-utilities", "parsons-nrjs-wet-utilities", "parsons-nrjs-dry-utilities", "parsons-nrjs-areas", "parsons-nrjs-corridors", "parsons-dn-roads", "parsons-dn-plots", "parsons-dn-wet-utilities", "parsons-dn-dry-utilities", "parsons-dn-security-secondary", "parsons-dn-corridors", "parsons"]);
+  assert.deepEqual(store.listProfiles().map((p) => p.id), ["ldip-default", "parsons-ldip-roads", "parsons-ldip-wet-utilities", "parsons-ldip-dry-utilities", "parsons-nrjs-wet-utilities", "parsons-nrjs-dry-utilities", "parsons-nrjs-areas", "parsons-nrjs-corridors", "parsons-dn-roads", "parsons-dn-plots", "parsons-dn-wet-utilities", "parsons-dn-dry-utilities", "parsons-dn-security-secondary", "parsons-dn-corridors", "parsons-dn60-power", "parsons-dn60-streetlighting", "parsons-dn60-telecom", "parsons-dn60-telecom-secondary", "parsons-dn60-ict", "parsons-dn60-fittings", "parsons-dn60-areas", "parsons-dn60-corridors", "parsons"]);
   assert.throws(() => store.saveProfile(DEFAULT_MAPPING_PROFILE), /cannot be overwritten/);
   assert.throws(() => store.saveProfile(store.getProfile("parsons-ldip-roads")!), /cannot be overwritten/);
   assert.equal(store.deleteProfile("parsons"), true);
   assert.equal(store.deleteProfile("parsons-ldip-roads"), false, "built-in profiles are not stored, so not deleted");
-  assert.deepEqual(store.listProfiles().map((p) => p.id), ["ldip-default", "parsons-ldip-roads", "parsons-ldip-wet-utilities", "parsons-ldip-dry-utilities", "parsons-nrjs-wet-utilities", "parsons-nrjs-dry-utilities", "parsons-nrjs-areas", "parsons-nrjs-corridors", "parsons-dn-roads", "parsons-dn-plots", "parsons-dn-wet-utilities", "parsons-dn-dry-utilities", "parsons-dn-security-secondary", "parsons-dn-corridors"]);
+  assert.deepEqual(store.listProfiles().map((p) => p.id), ["ldip-default", "parsons-ldip-roads", "parsons-ldip-wet-utilities", "parsons-ldip-dry-utilities", "parsons-nrjs-wet-utilities", "parsons-nrjs-dry-utilities", "parsons-nrjs-areas", "parsons-nrjs-corridors", "parsons-dn-roads", "parsons-dn-plots", "parsons-dn-wet-utilities", "parsons-dn-dry-utilities", "parsons-dn-security-secondary", "parsons-dn-corridors", "parsons-dn60-power", "parsons-dn60-streetlighting", "parsons-dn60-telecom", "parsons-dn60-telecom-secondary", "parsons-dn60-ict", "parsons-dn60-fittings", "parsons-dn60-areas", "parsons-dn60-corridors"]);
 });
 
 test("layer names are suggested in English NCS style and in Arabic", () => {

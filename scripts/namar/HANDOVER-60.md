@@ -1,0 +1,358 @@
+# Namar 60 % DD: session log
+
+Goal: a NEW InfraWorks 2026 model of Namar (Dahiyat Namar, Package 3, code DN) from Parsons' 60 % Detailed Design
+submission, from the best source per element (route agreed by the user, 13 Nov 2026). The 30 % run (`HANDOVER.md`,
+model `C:\IW\Namar`) is the template and stays untouched as the reference.
+
+## Session 1 (13 Nov 2026)
+
+Branch `feat/namar-60` from main `2e1b2a0` (PR #29).
+
+### Where the data is
+
+OneDrive `Documents\03 WIP\TAWAZUN PROGRAM\03_Parsons\Submission\Namar\01 Submission Folder 60%` (1 479 files). Sheet
+names `LDIP-RCRC-SAP-03-DN-<DISC>-DWG-<nnnnn>-<sss>-<rev>` (rev `00`). Al Narjis files mixed in (NRJS) are left out.
+
+| Volume | Content used | Not modelled (reason) |
+| --- | --- | --- |
+| 01 Drawings | ROD 10200..10900, 30000, 30100, 40000 (13); SWN, STO, PWT, IRR, ELV, EMV, SLT, TEL, ICT, TRF, UTL plans (-000 + cut sheets) | ARC, Building-Mechanical, STR, MEP, ICA, FLS: buildings (irrigation pump station, sewage lift stations SLS-1/2), not InfraWorks infrastructure layers |
+| 02 Reports | `LDIP-RCRC-SAP-03-DN-DES-RPT-00003-001-00.pdf` (60 % DD report, 12 Nov 2026, 609 pages) | STR calculation report |
+| 04 Models | hydraulic models (4), `Roads Profiles\C3D_Nemar_Aligments_Profiles.dwg`, ROD-MOD-90000-001..004, utility MOD-90000 DWG / IFC | Federated NWD, NWC, DWFx (viewing formats); building RVT |
+| 08 CRS | PMC comments on the 30 % package with Parsons' replies | |
+
+### Hydraulic models (13 Nov 2026)
+
+7-Zip is not installed, but Windows' own `tar` (bsdtar 3.8.9, libarchive) reads the `.7z` archives: extracted with
+`tar -xf` to `DATA_DIR\inputs\namar-60\hydraulic\<sewer|water|irrigation|storm>`.
+
+| Model | Package | Content | Warnings |
+| --- | --- | --- | --- |
+| Sewer `Sewage Model-Rev 04.stsw.sqlite` | `Namar60-sewer-shp-v1` | 168 pipes (9.21 km), 171 manholes / outfalls | ASSET_ID_DUPLICATE CO-27 (2 pipes) |
+| Storm `Dahiyat Nemar-SWD-DD60-R00.stsw.sqlite` (new: none at 30 %) | `Namar60-storm-model-shp-v1` | 111 pipes (4.75 km), 111 manholes + 4 outfalls; 1 pond and 340 catchments not shipped | |
+| Water `PW_Model-Rev 04.wtg.sqlite`, cover 1.2 m | `Namar60-water-shp-v1` | 195 pipes (10.82 km), 76 structures (reservoir + hydrants) | ASSET_ID_DUPLICATE FH-75 |
+| Irrigation `Nemer Hydraulic Model.wtg.sqlite` (differs from 30 %), cover 1.2 m | `Namar60-irrigation-shp-v1` | 233 pipes (8.97 km), 8 structures | |
+
+Fix on real data: the SewerGEMS reader named every layer `sewer_*`; with `--utility Storm` it now ships `storm_pipes` /
+`storm_manholes` (prefix from the utility, as the WaterGEMS reader; test in `sewer.test.ts`).
+
+The storm package also holds two Civil 3D LandXML road surfaces, both "TOP ROADS_COMBINED": `C3D_Nemar Land_Main Design
+File 9.xml` (19 Sep, no CRS, one point at Z -0.147) and `Namar Roads Design Surface.xml` (28 Oct, EPSG 32638 stated).
+
+### Covers and depths: 60 % report (13 Nov 2026)
+
+Text pulled with the new `scripts/pdf-text.cjs` (ToUnicode maps, object streams; no PDF tool on this laptop).
+
+| Item | Value | Section | Change from 30 % |
+| --- | --- | --- | --- |
+| LV / MV burial depth (cable centre) | 0.65 / 0.80 m | §3.3.3 | none (was §2.3.3) |
+| Potable water cover | >= 1.2 m under traffic, >= 1.0 m outside | §6.3.14 | none (was §5.3.14) |
+| Sewer cover to the pipe top | 1.5 m without protection, 0.5 m with (Table 8.2) | §7.3.1.2 | 1.2 -> 1.5 m (model has inverts) |
+| Irrigation cover | mainline and secondary 1.2 m (NWC), tertiary 0.6 m | §8.2.2 | none |
+| Storm soil cover over the crown | >= 1.2 m | §10.2.7 | none (model has inverts) |
+| Telecom trenches | 600 mm deep, concrete backfill above the conduits (STC) | §14.5.1 | new |
+| MIFON / security ducts | microduct bundles in concrete-encased duct banks, no depth | §14.7.2 | no depth still |
+
+Water and irrigation keep the user's 30 % choice of 1.2 m (AICC, 11 Nov 2026).
+
+### New model, DXF conversion (13-14 Nov 2026)
+
+- `C:\IW\Namar 60\Namar 60.sqlite` + `.files`: robocopy of the OneDrive base model `TAWAZUN PROGRAM\Infraworks\Package 3 -
+  Site 04 Dahiyat Namar` (1 + 1 882 files; sqlite hash 64F8942C..., the same base as the 30 % copy), renamed. Integrity ok,
+  proposal `master`, `.files` clean. Still holds the September layers (sources 5-18, 43 roads, 767 parcels): for the user
+  to remove (Data Sources panel, Remove Data Source).
+- 39 sheets (plans -000, ROD 30000 / 30100 / 40000, UTL 30000) and the 14 DN model DWGs copied to `C:\Temp\namar60-dwg`,
+  converted with `dwg-to-dxf.cjs` to `C:\Temp\dxf\namar60` (log `C:\Temp\dxf\namar60-convert.log`).
+
+### Surfaces (14 Nov 2026)
+
+- ROD-MOD-90000-001 (190 553 faces, NGL), -002 Site Grading (62 420), -003 Roads Surface (287 471; it crashed
+  accoreconsole at 30 %, converts now), -004 905 3DSOLIDs (no surface: not used). EXPORTTOAUTOCAD leaves each TIN inside an
+  `AecObjExplode_<drawing>_Vport_<n>` block, so `readDxfFaces` read nothing: it now takes the faces of blocks inserted in
+  ENTITIES, placed by the insert (test in `tin.test.ts`).
+- `C:\IW\data\namar60\DN-ROD-MOD-90000-002 Site Grading (60).xml` ("DN Site Grading (60)"): 30 795 points, 59 740 faces,
+  the same counts as the 30 % file: Site Grading unchanged.
+- `C:\IW\data\namar60\DN-ROD-MOD-90000-003 Roads Surface (60).xml` ("DN Roads Surface (60)"): 146 457 points, 270 338 faces.
+- Against the hydraulic rims (`rim - surface`): sewer 166 rims med 0.000 (-0.670..0.000) on the Roads Surface, med +0.697
+  on the Site Grading; storm 108 rims med 0.000 (-0.495..+0.039) on the Roads Surface. **At 60 % the manhole rims sit on the
+  finished roads surface** (at 30 % on the mass grading). Parsons' own LandXML `Namar Roads Design Surface.xml` (28 Oct,
+  in the storm package) equals the converted -003 (grid of 4 524 points: med 0.000, max 2.50 m at a few edge cells).
+- Proposed stack: Roads Surface (60) on top, Site Grading (60) below, survey `NAMAR` at the bottom (visible). Pipe offsets
+  (water / irrigation cover 1.2 m) are then from the finished road, which is the "under traffic" case of §6.3.14.
+
+### Roads: the 60 % layout (14 Nov 2026)
+
+ROD-10200-000 (direct DXFOUT: EXPORTTOAUTOCAD crashed) binds `Xref Road Layout Dahiyat Nemar` and `Xref Dim_Names Dahiyat
+Nemar` as at 30 %, but the layout xref's `_CL` holds 1 LWPOLYLINE + 1 LINE (47 at 30 %): the centrelines are now Civil 3D
+alignments, which a DXF does not carry (the 30 % profile `parsons-dn-roads` finds 2). Kerbs `__Curb` 143, `__ROW` 44,
+`Road edge` 105, RA-01 still drawn (circles on `__Curb` and `Road edge`). Roads therefore come from the alignments
+(LandXML export of `C3D_Nemar_Aligments_Profiles.dwg`, asked of the user 13 Nov; the EXPORTTOAUTOCAD DXF of that DWG holds
+them exploded, with 1 078 FG / EG profile labels, as the fall-back).
+
+Plots: the baseplan xref `Ladun Dahiyat Namar Baseplan` bound into 10200 draws plot lines as 1 075 LINEs + 80 ARCs
+(`MP-PLT-LIN`), 774 plot numbers (`MP-PLT-TXT`), villa footprints (`MP-VIL-FTP`, 3 017) and new facility footprints:
+sewage lift stations `PS-SL1-FTP` / `PS-SL2-FTP`, irrigation pump station `PS-IRR-FTP`.
+
+ROD-10300-000 ("Overall road centerline setting-out plan") has no centreline geometry either: same xrefs as 10200.
+
+Sheet titles (from the PDFs, `pdf-text.cjs`): 10200 road layout with curb setting-out, 10300 centreline setting-out, 10400
+existing contours, 10500 road grading contours, 10600 roads cut and fill, 10700 sections, 10800 rough grading cut / fill
+stake-out, 10900-001 intersection visibility, **10900-002 "Roundabout geometric design check, Roundabout-01"** (new);
+ICT-10000 / 10100 = ICT and smart-city microducts (primary 2 x 7-way 20/16 mm, secondary 1 x 2-way); TEL-10100 = telecom
+secondary civil network. STO-10000-000 and ROD-10900 converted in a second run (`C:\Temp\dxf\namar60\sheets2`; the first
+filter missed sheet names without the revision suffix).
+
+RA-01 at 60 % (ROD-10900-002, xref `Xref Round about Checks Nemar`): same centre E 657 300.4 N 2 714 451.4, ICD 40.40 m,
+ring centreline r 20.20, island kerb r 12.00 (road edge 12.30), ring carriageway 7.60 m, lane line r 16.10, entry / exit
+radii R15 / R20 / R25, fastest-path radii R22.85-R49.45: the ring is unchanged from 30 %. Question 15 depends on whether
+the neighbouring junctions moved (to check on the 60 % alignments).
+
+### Dry networks: models vs drawings (14 Nov 2026)
+
+- 3D model DWGs (ELV / EMV / SLT / TEL-MOD) after EXPORTTOAUTOCAD: the cables are flat 2D LINE / ARC pieces
+  (`PRN_PR_LV_CAB`, `PRN_PR_MV_CAB`, `PRN_PR_SL_CAB`, `PI_PR_TE_DCT`); only the pillars, substations and panels are solids
+  standing on the ground. No depths there; the drawings stay the source of the routes.
+- The IFCs carry levels. Against the 60 % Roads Surface (IFC points inside the site, after `IFCRIGIDOPERATION`): LV cable
+  segments (3 273 IfcPipeSegment, EPSG 32638) p10-p90 -0.72..-0.61 m, median -0.68 (report §3.3.3: 0.65 m to the cable
+  centre); **telecom ducts (1 319, EPSG 32738 = UTM 38 South, wrong hemisphere as AICC's review found; the offsets are
+  the 38N values) a constant -0.50 m**; irrigation (785) median -1.04 m. Street lighting and water IFCs place their
+  points relative to local placements (no site offset): not read.
+- So telecom depth (Parsons question 9) has an answer in Parsons' own model: duct axis 0.50 m below the finished road,
+  inside the report's 600 mm trench (§14.5.1).
+- The 30 % dry profile on the 60 % sheets finds LV 4 434 lines (49.58 km), 215 pillars, 18 substations, 3 lighting
+  panels, 43 security ducts / 104 handholes, but no MV, street lighting or telecom: the 60 % sheets wrap the design in an
+  `AecObjExplode_<sheet>_Vport_<n>` block with the xrefs nested inside, and layers moved (MV cables now
+  `Xref_Nemar_MV Network$0$Xref_Nemar_MV Network_Correct Corr$0$Xref_MV Network$0$MV Cables - Loop1 (PSS)`, 21; telecom on
+  `Primary telecom x` / `TelNetPrimary`; ICT on `Primary Duct` 43, `Seconday Duct` 783, `Smart Primary Duct` 16; the
+  corridors under `Ladun_Dahiyat Nemar_Utilities Corridor$0$` instead of `Xref-Ladun_...`). New 60 % profiles needed.
+
+### 60 % drawing profiles and packages (14 Nov 2026)
+
+One profile per sheet (types.ts, `parsons-dn60-*`; tests `namar60.test.ts`): bare layer names repeat across sheets
+(TEL_HH is telecom on TEL sheets, ICT on ICT sheets), and the 30 % layer names moved. Fix on real data: `dedupePoints`
+takes a tolerance in metres (each street-light pole is a 3D block and a plan symbol 4 cm apart).
+
+| Package (`DATA_DIR\exports`) | Source | Content |
+| --- | --- | --- |
+| `Namar60-power-shp-v1` | ELV + EMV-10000-000 | LV 4 434 lines (49.58 km; cables + house connections, 0.65 m), 215 pillars; MV 21 cables (7.03 km, 0.80 m, 200 mm), 18 substations + 1 RMU |
+| `Namar60-streetlighting-shp-v1` | SLT-MOD-90000-001 DWG | 60 cables (12.96 km, 110 mm, on the terrain), 313 street lights (POI), 4 panels |
+| `Namar60-telecom-shp-v1` | TEL-10000-000 | 83 primary ducts (8.39 km, 0.50 m from the IFC), 60 handholes |
+| `Namar60-telecom-secondary-shp-v1` | TEL-10100-000 | 776 secondary cables (52.48 km, 0.50 m) |
+| `Namar60-ict-shp-v1` | ICT-10000-000 | 842 ducts (66.63 km: primary, smart primary, secondary, security), 44 handholes; on the terrain |
+| `Namar60-fittings-shp-v1` | PWT + IRR-10000-000 | water valves 113, water pipes as drawn 493 (11.04 km, 1.2 m); irrigation gate valves + washouts 121, pull boxes + quick couplings 152, control cable 635 (9.08 km), pipes as drawn 725 (9.21 km; 23 without size) |
+| `Namar60-areas-shp-v1` | ROD-10200-000 | plots 878 (774 numbered, no number twice; 104 unnumbered faces), blocks 39, road reserve 1 |
+| `Namar60-corridors-shp-v1` | UTL-10000-000 | 13 corridor layers (no street-lighting or Tree_IRS_SL corridor at 60 %) |
+
+Left out, with reason: ICT-10100 (repeats ICT-10000's secondary ducts; question 10); irrigation valve chambers (55, they
+house the gate valves); water house connections (`Xref-Potable Water HC`, 3 442 lines, new at 60 %) and the corridors'
+house-connection xref (161 per utility): service lines, not in the 30 % scope; STO-DWG-10000 (the storm model is the
+source); ROD-MOD-90000-001 NGL (the survey is the existing ground) and -004 (905 solids, no surface); hydrants from
+PWT-10000 (the WaterGEMS model has 75); the storm model's pond and 340 catchments.
+
+### Corridor check (14 Nov 2026)
+
+`corridor-check.mts --district namar60` (district `namar60`: each layer names its 60 % package; the 30 % Namar and Al
+Narjis reports are unchanged): `scripts/namar/corridor-check-60.md`. Drawn networks 85-94 % in their own corridor (storm
+model 95 %, sewer model 94 %); the WaterGEMS models are not: water 34 %, irrigation 36 %; irrigation control cable 3 %;
+telecom 64 % and ICT 61 % (much of the rest in the house-connection place). Parsons questions 16, 17 stay open.
+
+## Session 2 (14 Nov 2026, laptop `Musleh`)
+
+- This laptop has no `C:\IW\Namar 60` and no `C:\Temp\dxf\namar60` (both on AYNLAP1201 only). OneDrive here showed
+  4 of the 12 `Namar60-*` packages (sewer, storm-model, water, irrigation) and no `inputs\namar-60\surfaces`: the rest
+  had not synced down yet. Nothing was written to a model in this session.
+- Civil 3D 2025 and 2027 are installed here too (`AutoCAD 2027\C3D`), so the LandXML export does not need AYNLAP1201.
+  It cannot be scripted: accoreconsole 2027 `/product C3D` opens the DWG (copy in the scratchpad) but has no
+  `-LANDXMLOUT` ("Unknown command"), also after `(arxload "AeccLandXmlCmd.crx")`. The export is done in the Civil 3D
+  window: Output tab > Export To LandXML (Autodesk Civil 3D help, "Export To LandXML Dialog Box").
+- `model:roads --alignments <LandXML>` (instead of `--profiles`): `readLandXmlRoads`
+  (`packages/domain/src/roads/landxml-alignments.ts`, tests `landxml-alignments.test.ts`) reads each `<Alignment>`
+  (lines and circular curves, points as northing easting, arcs split at 90 degrees, stations from `staStart`) with its
+  `<ProfAlign>` (PVI, ParaCurve, CircCurve lengths). No chaining and no direction check: the designer's alignment is
+  exact. Left out and named, never guessed: spirals, station equations, no design profile, several design profiles
+  (`--profile-name <regex>` chooses), unsymmetrical vertical curves, a profile starting after 0.3 m or ending past the
+  alignment; a profile ending short cuts the road there. `--alignments-match <regex>` keeps only the road alignments
+  (Civil 3D also exports offset and kerb-return alignments). A ring exported as a closed alignment of arcs counts as a
+  roundabout ring for `--merge` / `--to-centre`. The layout DXF still gives kerbs and right-of-way for the sections.
+  **Tested on a synthetic LandXML only: not yet run on Parsons' file.** Expect adjustments once the real export is read
+  (alignment names, which ProfAlign is the design profile, RA-01's ring).
+
+### Working model moved to laptop `Musleh` (14 Nov 2026, user's decision)
+
+- `C:\IW\Namar 60\Namar 60.sqlite` + `.files` rebuilt here the same way: robocopy of the OneDrive base model (1 + 1 882
+  files, sqlite hash 64F8942C..., integrity ok, proposal `master`, `.files` clean, 9 data sources: two IMX surfaces and
+  the seven September NMR_* / SAP_* layers, 43 roads, 767 parcels). **This is now the one working copy; the copy on
+  AYNLAP1201 is not to be used** (delete it there when convenient).
+- ROD-DWG-10200-000 converted here with AutoCAD 2027's accoreconsole (`ACCORECONSOLE` set to its path) to
+  `C:\Temp\dxf\namar60`: EXPORTTOAUTOCAD did not crash on 2027 (it did on 2026). Layout: `_CL` 2 LWPOLYLINE + 1 LINE
+  (still no centrelines), `__ROW` 45, `__Curb` 141, `Road edge` 102.
+- Still to sync down on this laptop before the import: 8 of the 12 `Namar60-*` packages and the two surface LandXMLs.
+
+### Alignments LandXML read (14 Nov 2026)
+
+- `DATA_DIR\inputs\namar-60\Namar60-alignments.xml` (user's Civil 3D export, LandXML 1.2, EPSG 32638, alignments only;
+  copy in `C:\IW\data\namar60`): 174 alignments = 42 roads (RA-01, RD-01..38, RD-M-01..03) + 132 offset alignments
+  (`RD-01-Left-3.600`, also for LFT-01, LFT-06, Easement Access, which have no centre alignment in the file).
+  312 lines, 178 curves, no spirals, no station equations.
+- Each road carries two design profiles: `DESIGN-<road>` and `DESIGN-<road>-TOS` (RD-19 a third, `DESIGN-RD-19-TO`).
+  Against the 60 % Roads Surface along the centrelines (975 points): `DESIGN-<road>` median 0.000 (p10 / p90 0.000),
+  `-TOS` a constant -0.580 m. **The finished road is `DESIGN-<road>`**; TOS is 0.58 m below it.
+- Options for this file (run `node packages/model-gate/dist/roads-cli.js` directly: pnpm's cmd shim breaks on the `^ | ( )`
+  of the regexes): `--alignments-match "^(RD-(M-)?\d+|RA-\d+)$" --profile-name "^DESIGN-(RD|RA)-(M-)?\d+$"`,
+  `--layout-block "Xref Road Layout Dahiyat Nemar_1"`, `--surface-name "DN Roads Surface (60)"`.
+- `--dry`: 41 roads read with their profile. RD-15 (233.530 m) and RD-38 (83.200 m) are cut to their profile ends
+  (233.473 / 82.950 m). RA-01 is not read as a road (its profile has an unsymmetrical vertical curve at 7.654 m) but
+  its ring is: centre E 657 300.37 N 2 714 451.37, r 20.20, taken from the alignment for `--merge` / `--to-centre`
+  (fix on real data: `LandXmlRoads.rings`, with a test). Sections from the 60 % layout: B1 RD-M-01 / 02 / 03, A2
+  RD-13 / 19 / 25 / 26, A1 the other 34 (RD-35 from one side), as at 30 %. Crossfall from the Roads Surface: RD-13 and
+  RD-19 fall left, the three RD-M crowned, the other 36 fall right (to see in InfraWorks).
+- Junctions next to RA-01 on the 60 % alignments (road ends on each arm, distance from the ring centre): RD-M-01:
+  RD-M-03 at 63.8 m (30 %: 64.4); RD-M-02: RD-33 at 61.4 m (unchanged); RD-13: none before RD-15 at 123.2 m (30 %: one
+  at 61.1 m; LFT / Easement Access have no centre alignment, so a junction with one of them would not show here);
+  RD-32: none within 150 m. With InfraWorks' clamp (junction centre - 14.4 m) the arms would be 49.4 m on RD-M-01 and
+  47.0 m on RD-M-02 against Urban Compact's 47.6 m: RD-M-02 is still 0.6 m short. Question 15 stays open.
+- Nothing written to the model yet: the user removes the September layers and imports first.
+
+### Imports started by Claude on the user's request (14 Nov 2026, evening; stopped by the user: too slow)
+
+- Backup before any change: `C:\IW\backup\Namar 60_20261114_205041` (sqlite 64F8942C..., 1 883 files). The surfaces and
+  the 12 packages' `shp` folders were pinned / read so that no file is OneDrive online-only (224 files).
+- **Done in the model:** the seven September sources removed in InfraWorks (Data Sources > Remove): SAP_Asphalt_Areas,
+  NMR_Plots_Residential_v02, SAP_Facilities, NMR_Survey_Wadi_Edges, NMR_Official_Boundary_S7, NMR_ROW_Areas_v02,
+  NMR_Road_Hierarchy_v02. Left: the two IMX terrains (`Namar Topo C3D - SURFACES`, `Dahiyat Namar Site Grading -
+  SURFACES`) and 3 roads without a data source. Then `blocks.shp` (areas package) imported as Coverage Areas: 39
+  features, source ID 5. **Do not import blocks again.**
+- **Not done:** the two LandXML surfaces and the other 41 shapefiles (list with target class and record counts:
+  runbook `C:\IW\data\namar60\InfraWorks-runbook.md` step 5; all Type + UTM84-38N only, then `model:names`).
+- State left: InfraWorks was stopped while a script hung (below); `Namar 60.lock` removed after checking no InfraWorks
+  ran; sqlite integrity ok, 3 data sources, 39 coverages. `.files` HEAD stands on `__undojournal__master` (InfraWorks'
+  undo branch of the interrupted session, last commit "Commit imported data."); InfraWorks merges it on the next open /
+  close. If the model does not open cleanly, restore the backup and repeat the removal.
+- Learned about driving InfraWorks 2026 without the user:
+  - Mouse clicks sent by computer use do not reach the Data Sources dock (tree rows, Add File); the ribbon and message
+    boxes do. Keyboard works once the dock has focus (Tab from "Group by" to the tree, Shift+Down, Delete).
+  - Windows UI Automation sees the docks (`alx::StudioDockWidget`): the Scripting console's editor (`JSEdit`, ValuePattern),
+    "Start script" (InvokePattern) and output pane (`QTextEdit`) can be driven from PowerShell, so a script runs and its
+    output is read without screenshots.
+  - Scripting API (unofficial): `app.GetDataProviders(".shp")[0].FileConnect(app.ActiveModel, path)[0]` gives an
+    `FdoImportConfig` with InfraWorks' defaults (source CS from the .prj, ImportScript `EXTERNAL_ID = FeatId`); set
+    `TargetClassName` (COVERAGES, PARCELS, PIPELINES, PIPE_CONNECTORS, POIS) and call `Import()`: blocks.shp took 0.8 s
+    and returned `InsertedFeatureCount`. `cfg.Read(id)` / `Remove()` exist too (not tried).
+  - **`FileConnect` on the 14.6 MB Roads Surface LandXML over all three `.xml` providers hung InfraWorks** (one core busy
+    for 25+ minutes, the raster provider logged an error first). Import LandXML surfaces through the GUI, or pick the
+    LandXML provider only and try the small Site Grading file first.
+
+### Packages imported by script, names, roads (14 Nov 2026, night)
+
+- The user imported the two LandXML surfaces in the GUI (sources 6, 7: Site Grading (60), Roads Surface (60)); the model
+  opened cleanly after the forced stop.
+- All 42 shapefiles of the 12 packages imported through the Scripting console driven by UI Automation (`FileConnect`,
+  `TargetClassName`, `Import()`; default script `EXTERNAL_ID = FeatId`): 41 s in all, every `InsertedFeatureCount`
+  equal to the DBF record count (sources 9-49). A filter slip sent the whole list instead of one package, so blocks
+  came in twice ("blocks (2)", id 8): removed again with `cfg.Read(8); cfg.Remove()` (39 features). Result: 46 data
+  sources (2 IMX + 2 LandXML + 42 shp), coverages 40, parcels 878, pipelines 10 427, connectors 1 098, POIs 313.
+  InfraWorks did not redraw the new features in that session; it was closed normally (`.files` clean on `master`).
+- `model:names` chained over the 12 packages on scratchpad copies, integrity ok, G3 with each package PASS, 0 warnings;
+  installed (8F9CF7DF... -> 7293E701...).
+- Roads on a scratchpad copy, template = the base model's own component road "15 m" (definition
+  `82f93c74-ec4e-4609-9ab8-bc756b04913c`): 41 roads written (RD-11 and RD-14: first PVI at 6 / 36 mm, tangent extended to
+  0), 0 level problems, 0 junction steps >= 0.3 m. Then as deviation D1 (decided at 30 %, the ring is unchanged):
+  `--merge RD-M-01=RD-M-01+RD-M-02` (1 662.245 m, 14 PVIs, B1) and `--only RD-13,RD-32 --to-centre RD-13@RD-M-01,
+  RD-32@RD-M-01` (20.200 m each, level 766.273). G3 `--layout` PASS with 1 warning (G3-020: the 60 % layout has no
+  road-name labels to compare with); sewer package rechecked PASS. Installed (7293E701... -> 93A9A46A...).
+- State: 43 roads = 40 Parsons roads + the base model's three ("15 m", "25m", "25m", no data source; "15 m" is the
+  template: delete them in InfraWorks once the roads are seen). 2 old intersections only: InfraWorks has not built the
+  junctions yet (it does on a road edit), so no kerb returns yet (G3-025: 4 corners without a drawn arc). The two old
+  IMX terrains are still in the model beside the 60 % surfaces: the user decides the stack.
+- Not seen in InfraWorks yet: everything above is checked in the file only.
+
+### Seen in InfraWorks, junctions, kerb returns (14 Nov 2026, late)
+
+- User's screenshots: roads, plots and networks in place. Tall yellow walls at the south-west edge (down to 0-600 m)
+  came from the survey `NAMAR` being switched off (`TERRAIN_SURFACES.LAYERS` visibility false): the site surfaces
+  alone leave the features past their edge without ground. Fixed by the user in Surface Layers: NAMAR on (bottom),
+  the September `Nemar Mass Grading` off; stack now Roads Surface (60) / Site Grading (60) / NAMAR. Walls gone.
+- A Grading Limit edit on RD-M-01 (5.0 -> 5.1) built junction 81 at RA-01 (plain intersection, D2b). After the session
+  the file holds 82 intersections (309 arms, 275 regions), no roundabout.
+- `model:intersections --curb-returns <10200> --layout-block "Xref Road Layout Dahiyat Nemar_1"` on a scratchpad copy
+  (dry run first): 80 corners on 35 junctions; 62 set (10 m x56, 12 m x3, 18.3, 20.2, 12.2 m), 1 already at the drawn
+  value, 11 without a drawn arc, 6 ambiguous (the nearer drawn radius taken). G3 `--layout --layout-block ...`: PASS, 1
+  warning (G3-020, no road-name labels in the 60 % layout); G3-025: 69 of 80 corners at the drawn radius, 11 without
+  a drawn arc. Installed (6F26DEEF... -> FF61FEBE...); G3 with each of the 12 packages PASS, 0 warnings.
+- Open: only 35 of the 82 junctions gave corners to the kerb tool (30 %: 118 corners on 55 junctions): the others
+  probably get their corner regions when InfraWorks rebuilds their roads; rerun `--curb-returns` after the user has
+  looked at the junctions. RD-M-01's Grading Limit stands at 5.1 if it was not set back. The base model's three roads
+  ("15 m", "25m" x2) are still in the model.
+
+### Pits, unsupported junctions (14 Nov 2026, late night)
+
+- User's screenshots after the kerb radii: RA-01 built with its kerbs. Three faults:
+  1. "Intersection not supported" circles along RD-M-01 / RD-M-03 / RD-02: the base model's three roads ("15 m",
+     "25m" x2) lay on top of the Parsons roads and carried 96 junction arms (junction 41 belonged to "25m").
+  2. Pits (junction body and grading down to 400-650 m) at road ends on RD-M-01, e.g. near E 657 607 N 2 714 255: ten
+     side-road profiles end 6-67 mm off RD-M-01's centreline level (list in Parsons question 18).
+  3. T-junctions not built (one road lying over the other): InfraWorks builds them on a road edit.
+- On a scratchpad copy of the closed model: `--only RD-35,RD-02,RD-33,RD-M-03,RD-31,RD-30,RD-19,RD-04,RD-37 --tie-ends
+  <each>@RD-M-01` (deviation D3; RD-13, 10 mm, left: both its ends lie on RD-M-01). Then the three old roads deleted
+  (`removeRoad`, 141 rows) and `pruneDanglingIntersections`: 37 junctions on them removed, 71 body rows.
+- **Slip:** that copy was installed although G3 `--layout` failed (G3-021: 66 arm / region links to the deleted
+  roads; the install check looked at the packages only). Cause: `pruneDanglingIntersections` keeps a junction that
+  still joins two live roads ("kept, rebuild in InfraWorks"), dead arm included: 11 junctions (2 47 50 51 52 54 60 65
+  68 72 74). Fixed with the model still closed: `model:intersections --delete-junctions` for those 11, then G3
+  `--layout` PASS (1 warning, G3-020), all 12 packages PASS, integrity ok, installed (D0F17CC4... -> 04A5D8E8...).
+  Every install now requires layout PASS + packages PASS + integrity.
+- State: 40 roads (Parsons only), 34 intersections, 78 corners (67 at the drawn radius). The 48 deleted junctions come
+  back when InfraWorks rebuilds their roads (Grading Limit edit on RD-M-01, RD-M-03, RD-02, RD-01, RD-05 and the nine
+  tied roads); then rerun `--curb-returns` and G3 `--layout`. The template road "15 m" is gone: a later `model:roads`
+  write needs `--template-from "C:\IW\backup\Namar 60_20261114_205041\Namar 60.sqlite"`.
+
+### Hand-over to AYNLAP1201 (15 Nov 2026)
+
+- The working model, closed and unchanged since the last install (sqlite 04A5D8E8...), is packed as
+  `DATA_DIR\models\Namar60-model-04A5D8E8.zip` (55 MB, 3 138 entries, zip hash 65FEE71B...; made with `tar -a -c`).
+  On AYNLAP1201: delete or rename the old `C:\IW\Namar 60` there (the untouched base copy of 13 Nov), then
+  `tar -x -f <zip> -C C:\IW`, check the sqlite hash, and work there. **After that the copy on laptop `Musleh` is not to
+  be used.** The Grading Limit edits asked of the user (below) were not done yet.
+- Only on laptop `Musleh`: `C:\Temp\dxf\namar60\LDIP-RCRC-SAP-03-DN-ROD-DWG-10200-000-00.dxf` (AutoCAD 2027,
+  EXPORTTOAUTOCAD worked). AYNLAP1201 has its own 10200 DXF (direct DXFOUT, 13 Nov) in the same folder: its counts
+  differ slightly (`__ROW` 44, kerbs 143), so rerun `--curb-returns --dry` there before trusting the corner numbers.
+- The UI Automation helper (`uia.txt`: `RunJs`, `ImportPkg`) lived in the session scratchpad and is not in the
+  repository; the method is described above.
+
+### Junctions rebuilt, kerb returns, install on AYNLAP1201 (15 Nov 2026)
+
+- Model unpacked to `C:\IW\Namar 60` (04A5D8E8..., integrity ok); the 13 Nov base copy renamed `C:\IW\Namar 60 (old
+  base)` (64F8942C...; it still holds the template definition `82f93c74-...`, CONSTRAINED_DEFINITIONS ID 2430: use
+  `--template-from "C:\IW\Namar 60 (old base)\Namar 60.sqlite"` for any later `model:roads` write here).
+- The user made the Grading Limit edits (5.0 -> 5.1 -> 5.0) on RD-M-01, RD-M-03, RD-02, RD-01, RD-05 and the nine tied
+  roads and closed the model (AA3D614C...). The file now holds 52 intersections (was 34), 116 corners, no roundabout.
+- **This laptop's 10200 DXF** (`C:\Temp\dxf\namar60\sheets\...10200-000-00.dxf`, direct DXFOUT) names the layout block
+  `Xref Road Layout Dahiyat Nemar` (no `_1`; Musleh's EXPORTTOAUTOCAD copy renamed it). With `_1` the block reads as
+  empty: G3-025 then reports every corner "without a drawn arc" and the layout checks pass on nothing. Use the name
+  without `_1` here.
+- `model:intersections --curb-returns <10200> --layout-block "Xref Road Layout Dahiyat Nemar"` on a scratchpad copy
+  (dry first): 116 corners on 52 junctions; 33 set (10 m x28, 12 m x4, 20.2 m), 64 already at the drawn value (kept
+  through the rebuild, MANUALLY_CHANGED), 18 without a drawn arc, 1 ambiguous (junction 10: 19.1 m taken, 15 also
+  drawn). G3 `--layout`: PASS, 1 warning (G3-020); G3-025 98 of 116 at the drawn radius. G3 with each of the 12
+  packages PASS, 0 warnings; integrity ok; working file unchanged and no `.lock`: installed (AA3D614C... -> 2E5D0969...).
+- Pits, in the file: no junction body or grading row (`PRIMITIVES`, `TERRAIN_OPERATIONS`, 3 370 rows) goes below
+  740 m (the pits went down to 400-650 m); junction centres lie at 756-779 m. No further `--tie-ends` needed; D3 /
+  question 18 unchanged (nine ends tied). To be confirmed on the user's screenshots.
+- Questions 4 (answered in effect: no asphalt / green layers in the 60 % layout) and 14 (still open: 64 numbered plots
+  in no block) updated. Crossfall (RD-13 / RD-19 left, RD-M crowned, 36 right) still to be seen in InfraWorks.
+- User's screenshots after the install (6): every road and junction built, kerbs and plots in place, no pits, no
+  "Intersection not supported", no walls at the site edge. One fault: a staggered crossing on a divided road shows a
+  stepped fan of grading slivers between its two junction bodies (location to be given by the user; candidates are
+  the double-centre junctions 15, 19, 27, 82).
+- The fault was junction 81 (RA-01 as a plain crossing, D2b), on RD-32's side. A Grading Limit edit on RD-32 (5.0 ->
+  5.1 -> 5.0) rebuilt it clean (user's screenshot). Its arm rows did not change: in this model 52 of the 53 plain
+  intersections keep every arm without a blend point, and junction 81 alone has three arms with old values (47.0 /
+  19.2 / 73.5 m, status 1). A G3 rule written on the empty RD-32 arm (b9fc354) named the wrong arm and was reverted.
+  After that edit InfraWorks had also built junction 101 (53 junctions, 118 corners).
+- Closed model (14C76DC6...) on a scratchpad copy: `--curb-returns` set 2 corners (12 m), 96 already at the drawn
+  value, 19 without a drawn arc; G3 `--layout` PASS (1 warning, G3-020), 99 of 118 corners at the drawn radius; all 12
+  packages PASS; integrity ok; installed (14C76DC6... -> 99D423C5...).
+
+### CRS (Vol. 08)
+
+PMC comments on the 30 % package with Parsons' replies (7 sheets). Relevant: Roads CRS row 17 (RA-01 geometry, ER
+7.12(c)): "a Roundabout geometry check drawing will be added in the next submission", status Open.

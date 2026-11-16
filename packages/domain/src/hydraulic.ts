@@ -97,8 +97,10 @@ function readSewer(db: Db, filename: string, opts: HydraulicOptions): HydraulicN
   for (const t of ["HMIModelingElement", "Conduit", "BaseLink_HmiDataSetGeometry_Data", "BaseLink_HMIDataSetTopology_Data", "BaseNode_HmiDataSetGeometry_Data"]) {
     if (!tables.has(t)) throw new Error(`${filename} is not a SewerGEMS model database (no ${t} table)`);
   }
-  const prefix = opts.prefix ?? "sewer";
   const utility = opts.utility ?? "Sewer";
+  // A StormCAD / SewerGEMS storm model (Namar 60 %, --utility Storm) ships storm_pipes / storm_manholes,
+  // the layer names the storm packages built from drawings use (G3 matches them by name).
+  const prefix = opts.prefix ?? utility.toLowerCase().replace(/[^a-z0-9]+/g, "_");
   const network = opts.network ?? `${utility} - ${basename(filename).replace(/\.(stsw|wtg)\.sqlite$/i, "")}`;
   const optional = (t: string, sql: string) => (tables.has(t) ? q(sql) : []);
 

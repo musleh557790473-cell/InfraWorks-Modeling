@@ -31,12 +31,37 @@ const DISTRICTS = {
     sheets: { water: "PWT-DWG-10000", irr: "IRR-DWG-10000", sewer: "SWN-DWG-10000", storm: "STO-DWG-10000", mv: "EMV-DWG-10000", lv: "ELV-DWG-10000", tel: "TEL-DWG-10000", sec: "SEC-DWG-10000 / 10100", sl: "SLT-DWG-10000" },
     models: { water: "PW_CD_Model", irr: "Nemer Hydraulic Model", sewer: "Rev.01_Op.4" },
   },
+  // Namar 60 % DD (scripts/namar/HANDOVER-60.md): one package per sheet, so each layer names its package
+  namar60: {
+    title: "Namar (60 % DD)", p: "Namar60", corridors: "Namar60-corridors-shp-v1", sheet: "UTL-DWG-10000 (60 %)",
+    sheets: { water: "PWT-DWG-10000", irr: "IRR-DWG-10000", sewer: "", storm: "StormCAD model DD60-R00", mv: "EMV-DWG-10000", lv: "ELV-DWG-10000", tel: "TEL-DWG-10000", sec: "ICT-DWG-10000", sl: "SLT-MOD-90000-001" },
+    models: { water: "PW_Model-Rev 04", irr: "Nemer Hydraulic Model (60 %)", sewer: "Sewage Model-Rev 04" },
+    layers: {
+      "pipes-dwg/water_pipes_dwg": ["Namar60-fittings-shp-v1", "water_pipes_dwg"],
+      "pipes-dwg/irrigation_pipes_dwg": ["Namar60-fittings-shp-v1", "irrigation_pipes_dwg"],
+      "irrigation-dwg/irrigation_control_cable": ["Namar60-fittings-shp-v1", "irrigation_control_cable"],
+      "pipes-dwg/sewer_pipes_dwg": null,
+      "storm/storm_pipes": ["Namar60-storm-model-shp-v1", "storm_pipes"],
+      "dry/lv_cables": ["Namar60-power-shp-v1", "lv_cables"],
+      "dry/mv_cables": ["Namar60-power-shp-v1", "mv_cables"],
+      "dry/streetlight_cables": ["Namar60-streetlighting-shp-v1", "streetlight_cables"],
+      "dry/telecom_ducts": ["Namar60-telecom-shp-v1", "telecom_ducts"],
+      "dry/security_ducts": ["Namar60-ict-shp-v1", "ict_ducts"],
+    },
+  },
 } as const;
 const dArg = process.argv.indexOf("--district");
 const D = DISTRICTS[(dArg >= 0 ? process.argv[dArg + 1] : "narjis") as keyof typeof DISTRICTS];
 if (!D) throw new Error(`--district: one of ${Object.keys(DISTRICTS).join(", ")}`);
 const pkg = (name: string) => `${D.p}-${name}-shp-v1`;
-const has = (p: string, name: string) => { try { return readdirSync(join(exportsDir, p, "layers")).includes(`${name}.geojson`); } catch { return false; } };
+const exists = (p: string, name: string) => { try { return readdirSync(join(exportsDir, p, "layers")).includes(`${name}.geojson`); } catch { return false; } };
+/** A layer by its 30 % package key, or where the district's own map puts it (null: no such layer). */
+const where = (key: string, name: string): readonly [string, string] | null => {
+  const map = ("layers" in D ? D.layers : {}) as Record<string, readonly [string, string] | null>;
+  return `${key}/${name}` in map ? map[`${key}/${name}`]! : [pkg(key), name];
+};
+const has = (key: string, name: string) => { const w = where(key, name); return w !== null && exists(w[0], w[1]); };
+const L = (key: string, name: string): Feature[] => { const w = where(key, name); return w && exists(w[0], w[1]) ? layer(w[0], w[1]) : []; };
 
 const corridorPkg = D.corridors;
 const corridors: NamedLine[] = readdirSync(join(exportsDir, corridorPkg, "layers"))
@@ -44,30 +69,30 @@ const corridors: NamedLine[] = readdirSync(join(exportsDir, corridorPkg, "layers
   .flatMap((f) => layer(corridorPkg, f.replace(/\.geojson$/, "")))
   .flatMap((f) => lines([f]).map((line) => ({ name: String(f.properties.network), line })));
 
-const lv = layer(pkg("dry"), "lv_cables");
+const lv = L("dry", "lv_cables");
 const IRR = ["Corridor - Irrigation", "Corridor - Irrigation Secondary", "Corridor - Trees and Irrigation", "Corridor - Trees, Irrigation and Street Lighting"];
 const S = D.sheets, M = D.models;
 const groups: { network: string; own: string[]; sources: { kind: string; from: string; features: Feature[] }[] }[] = [
   { network: "Potable water", own: ["Corridor - Water"], sources: [
-    { kind: "Drawing", from: S.water, features: layer(pkg("pipes-dwg"), "water_pipes_dwg") },
-    { kind: "WaterGEMS model", from: M.water, features: layer(pkg("water"), "water_pipes") }] },
+    { kind: "Drawing", from: S.water, features: L("pipes-dwg", "water_pipes_dwg") },
+    { kind: "WaterGEMS model", from: M.water, features: L("water", "water_pipes") }] },
   { network: "Irrigation", own: IRR, sources: [
-    { kind: "Drawing", from: `${S.irr} (main, secondary, tie-ins)`, features: layer(pkg("pipes-dwg"), "irrigation_pipes_dwg") },
-    { kind: "Drawing", from: `${S.irr} control cable`, features: layer(pkg("irrigation-dwg"), "irrigation_control_cable") },
-    { kind: "WaterGEMS model", from: M.irr, features: layer(pkg("irrigation"), "irrigation_pipes") }] },
+    { kind: "Drawing", from: `${S.irr} (main, secondary, tie-ins)`, features: L("pipes-dwg", "irrigation_pipes_dwg") },
+    { kind: "Drawing", from: `${S.irr} control cable`, features: L("irrigation-dwg", "irrigation_control_cable") },
+    { kind: "WaterGEMS model", from: M.irr, features: L("irrigation", "irrigation_pipes") }] },
   // Namar draws a sewer force main corridor (-02-Sewer FM) beside the gravity one
   { network: "Sewer", own: ["Corridor - Sewer", ...(D.p === "Namar" ? ["Corridor - Sewer FM"] : [])], sources: [
-    { kind: "Drawing", from: S.sewer, features: layer(pkg("pipes-dwg"), "sewer_pipes_dwg") },
-    { kind: "SewerGEMS model", from: M.sewer, features: layer(pkg("sewer"), "sewer_pipes") }] },
+    { kind: "Drawing", from: S.sewer, features: L("pipes-dwg", "sewer_pipes_dwg") },
+    { kind: "SewerGEMS model", from: M.sewer, features: L("sewer", "sewer_pipes") }] },
   { network: "Storm", own: ["Corridor - Storm", "Corridor - Storm Catch Basins"], sources: [
-    { kind: "Drawing", from: `${S.storm} (no model issued)`, features: layer(pkg("storm"), "storm_pipes") }] },
-  { network: "Electrical MV", own: ["Corridor - Electrical MV"], sources: [{ kind: "Drawing", from: S.mv, features: layer(pkg("dry"), "mv_cables") }] },
+    { kind: "Drawing", from: D.p === "Namar60" ? S.storm : `${S.storm} (no model issued)`, features: L("storm", "storm_pipes") }] },
+  { network: "Electrical MV", own: ["Corridor - Electrical MV"], sources: [{ kind: "Drawing", from: S.mv, features: L("dry", "mv_cables") }] },
   { network: "Electrical LV", own: ["Corridor - Electrical LV"], sources: [{ kind: "Drawing", from: `${S.lv} cables`, features: lv.filter((f) => f.properties.conn_type !== "House Connection") }] },
   { network: "LV house connections", own: ["Corridor - House Connection", "Corridor - Electrical LV"], sources: [{ kind: "Drawing", from: S.lv, features: lv.filter((f) => f.properties.conn_type === "House Connection") }] },
-  ...(has(pkg("dry"), "streetlight_cables") ? [{ network: "Street lighting", own: ["Corridor - Street Lighting", "Corridor - Trees and Street Lighting", "Corridor - Trees, Irrigation and Street Lighting"], sources: [{ kind: "Drawing", from: S.sl, features: layer(pkg("dry"), "streetlight_cables") }] }] : []),
-  { network: "Telecom", own: ["Corridor - Telecom"], sources: [{ kind: "Drawing", from: S.tel, features: layer(pkg("dry"), "telecom_ducts") }] },
+  ...(has("dry", "streetlight_cables") ? [{ network: "Street lighting", own: ["Corridor - Street Lighting", "Corridor - Trees and Street Lighting", "Corridor - Trees, Irrigation and Street Lighting"], sources: [{ kind: "Drawing", from: S.sl, features: L("dry", "streetlight_cables") }] }] : []),
+  { network: "Telecom", own: ["Corridor - Telecom"], sources: [{ kind: "Drawing", from: S.tel, features: L("dry", "telecom_ducts") }] },
   { network: "Security (no corridor of its own: telecom's)", own: ["Corridor - Telecom"], sources: [
-    { kind: "Drawing", from: S.sec, features: [...layer(pkg("dry"), "security_ducts"), ...(has(pkg("security-secondary"), "security_ducts_secondary") ? layer(pkg("security-secondary"), "security_ducts_secondary") : [])] }] },
+    { kind: "Drawing", from: S.sec, features: [...L("dry", "security_ducts"), ...(has("security-secondary", "security_ducts_secondary") ? L("security-secondary", "security_ducts_secondary") : [])] }] },
 ];
 
 const pct = (v: number, of: number) => (of ? `${((v / of) * 100).toFixed(0)} %` : "-");
@@ -78,7 +103,7 @@ const rows: string[] = [
 for (const g of groups) {
   const mine = corridors.filter((c) => g.own.includes(c.name));
   rows.push(`| **${g.network}** | Corridor | ${D.sheet}: ${g.own.map((n) => n.replace("Corridor - ", "")).join(", ")} | ${lengthOf(mine.map((c) => c.line)).toFixed(0)} | | | |`);
-  for (const s of g.sources) {
+  for (const s of g.sources.filter((x) => x.features.length)) {
     const a = corridorAssignment(lines(s.features), corridors, g.own, { outside: 2 });
     const others = Object.entries(a.others).sort((p, q) => q[1] - p[1]).slice(0, 3).map(([n, v]) => `${n.replace("Corridor - ", "")} ${pct(v, a.length)}`).join(", ");
     rows.push(`| | ${s.kind} | ${s.from} | ${a.length.toFixed(0)} | ${pct(a.own, a.length)} | ${others || "-"} | ${pct(a.outside, a.length)} |`);
