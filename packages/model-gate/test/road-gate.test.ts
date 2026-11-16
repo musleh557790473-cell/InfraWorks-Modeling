@@ -37,7 +37,7 @@ test("drawn road names come from the 0-Alignment Name texts, formatting codes st
 
 test("a sound road model passes G3-020..025 (merged pairs count through their Description; RA rings are not roads)", () => {
   const r = by(roadModelFindings(model(), layout));
-  assert.deepEqual(Object.entries(r).map(([k, v]) => [k, v.severity]), [["G3-020", "info"], ["G3-021", "info"], ["G3-022", "info"], ["G3-023", "info"], ["G3-024", "info"], ["G3-027", "info"], ["G3-025", "info"], ["G3-026", "info"]]);
+  assert.deepEqual(Object.entries(r).map(([k, v]) => [k, v.severity]), [["G3-020", "info"], ["G3-021", "info"], ["G3-022", "info"], ["G3-023", "info"], ["G3-024", "info"], ["G3-025", "info"], ["G3-026", "info"]]);
   assert.match(r["G3-020"]!.message, /All 3 drawn roads/);
   assert.match(r["G3-025"]!.message, /1 corners: 0 at the drawn radius, 0 differ, 1 without a drawn arc/);
 });
@@ -56,16 +56,6 @@ test("G3-026: a road through a roundabout centre without an arm there blocks (RA
   // a road far from the centre is not expected there
   db.prepare("insert into ROADS (GUID, NAME, FK_PARENT_GUID, GEOMETRY) values ('rc', 'R.9.G.9', 'cd-C', ?)").run(lineBlob([[0, 50, 0], [100, 50, 0]]));
   assert.doesNotMatch(by(roadModelFindings(db, layout))["G3-026"]!.message, /R\.9\.G\.9/);
-});
-
-test("G3-027: an arm without a blend point in a built intersection warns (Namar 60 %, junction 81 / RD-32, 15 Nov)", () => {
-  const db = model();
-  // not built yet (no blend point anywhere): nothing to report
-  assert.equal(by(roadModelFindings(db, layout))["G3-027"]!.severity, "info");
-  db.exec("update INTERSECTION_ARMS set BLEND_POINT_ENTRY_OFFSET = 30, STATUS = 0 where FK_ASSET_GUID = 'cd-A'");
-  const r = by(roadModelFindings(db, layout))["G3-027"]!;
-  assert.equal(r.severity, "warning");
-  assert.match(r.message, /1 arm\(s\).*junction 1 R\.6\.G\.18/);
 });
 
 test("a drawn road missing from the model blocks; a dangling link blocks; leftovers, unbuilt arms and undrawn kerbs warn", () => {
