@@ -343,6 +343,14 @@ telecom 64 % and ICT 61 % (much of the rest in the house-connection place). Pars
   "Intersection not supported", no walls at the site edge. One fault: a staggered crossing on a divided road shows a
   stepped fan of grading slivers between its two junction bodies (location to be given by the user; candidates are
   the double-centre junctions 15, 19, 27, 82).
+- The fault was junction 81 (RA-01 as a plain crossing, D2b), on RD-32's side. A Grading Limit edit on RD-32 (5.0 ->
+  5.1 -> 5.0) rebuilt it clean (user's screenshot). Its arm rows did not change: in this model 52 of the 53 plain
+  intersections keep every arm without a blend point, and junction 81 alone has three arms with old values (47.0 /
+  19.2 / 73.5 m, status 1). A G3 rule written on the empty RD-32 arm (b9fc354) named the wrong arm and was reverted.
+  After that edit InfraWorks had also built junction 101 (53 junctions, 118 corners).
+- Closed model (14C76DC6...) on a scratchpad copy: `--curb-returns` set 2 corners (12 m), 96 already at the drawn
+  value, 19 without a drawn arc; G3 `--layout` PASS (1 warning, G3-020), 99 of 118 corners at the drawn radius; all 12
+  packages PASS; integrity ok; installed (14C76DC6... -> 99D423C5...).
 
 ### CRS (Vol. 08)
 
